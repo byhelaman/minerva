@@ -1,0 +1,48 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        {
+          "path": "$DOWNLOAD/**"
+        },
+        {
+          "path": "$DOCUMENT/**"
+        },
+        {
+          "path": "$DESKTOP/**"
+        }
+      ]
+    },
+    "opener:allow-open-url",
+    "dialog:default",
+    "fs:default",
+    "fs:allow-write-text-file",
+    {
+      "identifier": "fs:allow-write-file",
+      "allow": [
+        {
+          "path": "$DOWNLOAD/**"
+        },
+        {
+          "path": "$DOCUMENT/**"
+        },
+        {
+          "path": "$DESKTOP/**"
+        }
+      ]
+    },
+    "fs:allow-read-text-file",
+    "fs:allow-applocaldata-read",
+    "fs:allow-applocaldata-write",
+    "fs:allow-applocaldata-meta"
+  ]
+}

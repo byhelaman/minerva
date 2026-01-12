@@ -1,0 +1,104 @@
+{
+    "common": {
+        "save": "Sauvegarder",
+        "cancel": "Annuler",
+        "delete": "Supprimer",
+        "edit": "Modifier",
+        "unknown": "Inconnu"
+    },
+    "profile": {
+        "title": "Profil",
+        "subtitle": "Gérez les paramètres de votre compte et vos préférences.",
+        "account_info": "Informations du Compte",
+        "account_info_desc": "Vos détails de compte personnels.",
+        "display_name": "Nom d'affichage",
+        "display_name_desc": "Ceci est votre nom public.",
+        "email": "Email",
+        "danger_zone": "Zone de Danger",
+        "danger_zone_desc": "Actions irréversibles pour votre compte.",
+        "delete_account_warning": "Une fois que vous supprimez votre compte, il n'y a pas de retour en arrière. Soyez certain.",
+        "delete_account": "Supprimer le Compte",
+        "preferences": "Préférences",
+        "preferences_desc": "Gérez vos paramètres régionaux.",
+        "language": "Langue",
+        "language_desc": "Sélectionnez votre langue préférée.",
+        "security": "Sécurité",
+        "security_desc": "Gérez votre mot de passe et vos questions de sécurité.",
+        "current_password": "Mot de passe actuel",
+        "new_password": "Nouveau mot de passe",
+        "confirm_password": "Confirmer le mot de passe",
+        "password_desc": "Le mot de passe doit contenir au moins 8 caractères.",
+        "update_password": "Mettre à jour le mot de passe"
+    },
+    "settings": {
+        "title": "Paramètres",
+        "subtitle": "Préférences et intégrations.",
+        "appearance": {
+            "title": "Apparence",
+            "desc": "Personnalisez l'apparence de l'application.",
+            "theme": "Thème",
+            "theme_desc": "Sélectionnez votre thème préféré.",
+            "theme_light": "Clair",
+            "theme_dark": "Sombre",
+            "theme_system": "Système",
+            "respect_filters": "Les actions respectent les filtres",
+            "respect_filters_desc": "Appliquer les actions (Exporter, Copier) uniquement aux données filtrées."
+        },
+        "notifications": {
+            "title": "Notifications",
+            "desc": "Configurez comment vous souhaitez être notifié.",
+            "weekly_digest": "Résumé Hebdomadaire",
+            "weekly_digest_desc": "Recevez un résumé hebdomadaire des changements d'horaire.",
+            "realtime_alerts": "Alertes en Temps Réel",
+            "realtime_alerts_desc": "Soyez notifié immédiatement des conflits."
+        },
+        "automation": {
+            "title": "Automatisation",
+            "desc": "Configurez les comportements automatisés et les sauvegardes.",
+            "auto_save": "Sauvegarde Automatique",
+            "auto_save_desc": "Sauvegarder automatiquement les modifications."
+        },
+        "storage": {
+            "title": "Stockage et Exportation",
+            "desc": "Gérez où et comment vos fichiers sont enregistrés.",
+            "default_export_path": "Chemin d'exportation par défaut",
+            "export_path_desc": "Emplacement pour les fichiers Excel exportés.",
+            "backups_location": "Emplacement des sauvegardes",
+            "backups_desc": "Stockage pour les sauvegardes automatisées.",
+            "open_after_export": "Ouvrir après l'exportation",
+            "open_after_export_desc": "Ouvrir automatiquement le fichier après l'exportation.",
+            "quick_export": "Exportation Rapide",
+            "quick_export_desc": "Ignorer la boîte de dialogue et enregistrer directement.",
+            "quick_export_note": "Note :",
+            "quick_export_warning": "Le chemin d'exportation doit être dans Téléchargements, Documents ou Bureau pour fonctionner.",
+            "browse": "Parcourir..."
+        },
+        "permissions": {
+            "title": "Permissions",
+            "desc": "Votre niveau d'accès et vos capacités"
+        },
+        "zoom": {
+            "title": "Intégration Zoom",
+            "desc": "Connectez le compte Zoom de votre organisation",
+            "not_connected": "Non Connecté",
+            "no_account_linked": "Aucun compte lié",
+            "connect_button": "Connecter Zoom"
+        },
+        "system": {
+            "title": "Système",
+            "desc": "Voir les détails de la version, gérer le cache local et effectuer la maintenance.",
+            "local_storage": "Stockage Local",
+            "local_storage_desc": "Gérer le cache des données locales (horaires, paramètres).",
+            "clear_cache_btn": "Vider le Cache",
+            "clear_cache_modal_title": "Effacer toutes les données locales ?",
+            "clear_cache_modal_desc": "Cela supprimera tous les horaires enregistrés et réinitialisera les paramètres. Cette action est irréversible.",
+            "software_update": "Mise à jour Logicielle",
+            "software_update_desc": "Vérifier la dernière version de Minerva.",
+            "check_updates_btn": "Vérifier les Mises à jour",
+            "version": "Version",
+            "environment": "Environnement",
+            "build": "Build",
+            "tauri": "Tauri"
+        }
+    }
+}

@@ -1,0 +1,104 @@
+{
+    "common": {
+        "save": "Save",
+        "cancel": "Cancel",
+        "delete": "Delete",
+        "edit": "Edit",
+        "unknown": "Unknown"
+    },
+    "profile": {
+        "title": "Profile",
+        "subtitle": "Manage your account settings and preferences.",
+        "account_info": "Account Information",
+        "account_info_desc": "Your personal account details.",
+        "display_name": "Display Name",
+        "display_name_desc": "This is your public display name.",
+        "email": "Email",
+        "danger_zone": "Danger Zone",
+        "danger_zone_desc": "Irreversible actions for your account.",
+        "delete_account_warning": "Once you delete your account, there is no going back. Please be certain.",
+        "delete_account": "Delete Account",
+        "preferences": "Preferences",
+        "preferences_desc": "Manage your regional settings.",
+        "language": "Language",
+        "language_desc": "Select your preferred language.",
+        "security": "Security",
+        "security_desc": "Manage your password and security questions.",
+        "current_password": "Current Password",
+        "new_password": "New Password",
+        "confirm_password": "Confirm Password",
+        "password_desc": "Password must be at least 8 characters long.",
+        "update_password": "Update Password"
+    },
+    "settings": {
+        "title": "Settings",
+        "subtitle": "Preferences and integrations.",
+        "appearance": {
+            "title": "Appearance",
+            "desc": "Customize the look and feel of the application.",
+            "theme": "Theme",
+            "theme_desc": "Select your preferred theme.",
+            "theme_light": "Light",
+            "theme_dark": "Dark",
+            "theme_system": "System",
+            "respect_filters": "Actions Respect Filters",
+            "respect_filters_desc": "Apply actions (Export, Copy) only to the currently filtered data."
+        },
+        "notifications": {
+            "title": "Notifications",
+            "desc": "Configure how you want to be notified.",
+            "weekly_digest": "Weekly Digest",
+            "weekly_digest_desc": "Receive a weekly summary of schedule changes.",
+            "realtime_alerts": "Real-time Alerts",
+            "realtime_alerts_desc": "Get notified immediately about conflicts."
+        },
+        "automation": {
+            "title": "Automation",
+            "desc": "Configure automated behaviors and safeguards.",
+            "auto_save": "Auto Save",
+            "auto_save_desc": "Automatically save changes to local storage."
+        },
+        "storage": {
+            "title": "Storage & Export",
+            "desc": "Manage where and how your files are saved.",
+            "default_export_path": "Default Export Path",
+            "export_path_desc": "Location for exported Excel files.",
+            "backups_location": "Backups Location",
+            "backups_desc": "Storage for automated backups.",
+            "open_after_export": "Open After Export",
+            "open_after_export_desc": "Automatically open the file after exporting.",
+            "quick_export": "Quick Export",
+            "quick_export_desc": "Skip file dialog and save directly to default path.",
+            "quick_export_note": "Note:",
+            "quick_export_warning": "Export Path must be set to a folder within Downloads, Documents, or Desktop for this to work.",
+            "browse": "Browse..."
+        },
+        "permissions": {
+            "title": "Permissions",
+            "desc": "Your access level and capabilities"
+        },
+        "zoom": {
+            "title": "Zoom Integration",
+            "desc": "Connect your organization's Zoom account",
+            "not_connected": "Not Connected",
+            "no_account_linked": "No account linked",
+            "connect_button": "Connect Zoom"
+        },
+        "system": {
+            "title": "System",
+            "desc": "View version details, manage local data cache, and perform maintenance tasks.",
+            "local_storage": "Local Storage",
+            "local_storage_desc": "Manage local data cache (schedules, settings).",
+            "clear_cache_btn": "Clear Cache",
+            "clear_cache_modal_title": "Clear all local data?",
+            "clear_cache_modal_desc": "This will delete all saved schedules and reset your settings to defaults. This action cannot be undone.",
+            "software_update": "Software Update",
+            "software_update_desc": "Check for the latest version of Minerva.",
+            "check_updates_btn": "Check for Updates",
+            "version": "Version",
+            "environment": "Environment",
+            "build": "Build",
+            "tauri": "Tauri"
+        }
+    }
+}
