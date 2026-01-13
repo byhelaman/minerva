@@ -17,6 +17,7 @@ import {
     Field,
     FieldDescription,
     FieldError,
+    FieldGroup,
     FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -166,57 +167,59 @@ export function SignupDialog({ open, onOpenChange }: SignupDialogProps) {
                                 Enter your information to create your account.
                             </DialogDescription>
                         </DialogHeader>
-                        <form onSubmit={signupForm.handleSubmit(handleSignupSubmit)} className="space-y-6 pt-2">
-                            <Field data-invalid={!!signupForm.formState.errors.name}>
-                                <FieldLabel htmlFor="signup-name">Full Name</FieldLabel>
-                                <Input
-                                    id="signup-name"
-                                    type="text"
-                                    placeholder="John Doe"
-                                    {...signupForm.register("name")}
-                                    aria-invalid={!!signupForm.formState.errors.name}
-                                    disabled={isLoading}
-                                />
-                                <FieldError errors={[signupForm.formState.errors.name]} />
-                            </Field>
-                            <Field data-invalid={!!signupForm.formState.errors.email}>
-                                <FieldLabel htmlFor="signup-email">Email</FieldLabel>
-                                <Input
-                                    id="signup-email"
-                                    type="email"
-                                    placeholder="m@example.com"
-                                    {...signupForm.register("email")}
-                                    aria-invalid={!!signupForm.formState.errors.email}
-                                    disabled={isLoading}
-                                />
-                                <FieldDescription>We will not share your email with anyone else.</FieldDescription>
-                                <FieldError errors={[signupForm.formState.errors.email]} />
-                            </Field>
-                            <Field data-invalid={!!signupForm.formState.errors.password}>
-                                <FieldLabel htmlFor="signup-password">Password</FieldLabel>
-                                <Input
-                                    id="signup-password"
-                                    type="password"
-                                    {...signupForm.register("password")}
-                                    aria-invalid={!!signupForm.formState.errors.password}
-                                    disabled={isLoading}
-                                />
-                                <FieldDescription>Must be at least 8 characters long.</FieldDescription>
-                                <FieldError errors={[signupForm.formState.errors.password]} />
-                            </Field>
-                            <Field data-invalid={!!signupForm.formState.errors.confirmPassword}>
-                                <FieldLabel htmlFor="signup-confirm">Confirm Password</FieldLabel>
-                                <Input
-                                    id="signup-confirm"
-                                    type="password"
-                                    {...signupForm.register("confirmPassword")}
-                                    aria-invalid={!!signupForm.formState.errors.confirmPassword}
-                                    disabled={isLoading}
-                                />
-                                <FieldDescription>Please confirm your password.</FieldDescription>
-                                <FieldError errors={[signupForm.formState.errors.confirmPassword]} />
-                            </Field>
-                            <DialogFooter className="pt-1">
+                        <form onSubmit={signupForm.handleSubmit(handleSignupSubmit)}>
+                            <FieldGroup>
+                                <Field data-invalid={!!signupForm.formState.errors.name}>
+                                    <FieldLabel htmlFor="signup-name">Full Name</FieldLabel>
+                                    <Input
+                                        id="signup-name"
+                                        type="text"
+                                        placeholder="John Doe"
+                                        {...signupForm.register("name")}
+                                        aria-invalid={!!signupForm.formState.errors.name}
+                                        disabled={isLoading}
+                                    />
+                                    <FieldError errors={[signupForm.formState.errors.name]} />
+                                </Field>
+                                <Field data-invalid={!!signupForm.formState.errors.email}>
+                                    <FieldLabel htmlFor="signup-email">Email</FieldLabel>
+                                    <Input
+                                        id="signup-email"
+                                        type="email"
+                                        placeholder="m@example.com"
+                                        {...signupForm.register("email")}
+                                        aria-invalid={!!signupForm.formState.errors.email}
+                                        disabled={isLoading}
+                                    />
+                                    <FieldDescription>We will not share your email with anyone else.</FieldDescription>
+                                    <FieldError errors={[signupForm.formState.errors.email]} />
+                                </Field>
+                                <Field data-invalid={!!signupForm.formState.errors.password}>
+                                    <FieldLabel htmlFor="signup-password">Password</FieldLabel>
+                                    <Input
+                                        id="signup-password"
+                                        type="password"
+                                        {...signupForm.register("password")}
+                                        aria-invalid={!!signupForm.formState.errors.password}
+                                        disabled={isLoading}
+                                    />
+                                    <FieldDescription>Must be at least 8 characters long.</FieldDescription>
+                                    <FieldError errors={[signupForm.formState.errors.password]} />
+                                </Field>
+                                <Field data-invalid={!!signupForm.formState.errors.confirmPassword}>
+                                    <FieldLabel htmlFor="signup-confirm">Confirm Password</FieldLabel>
+                                    <Input
+                                        id="signup-confirm"
+                                        type="password"
+                                        {...signupForm.register("confirmPassword")}
+                                        aria-invalid={!!signupForm.formState.errors.confirmPassword}
+                                        disabled={isLoading}
+                                    />
+                                    <FieldDescription>Please confirm your password.</FieldDescription>
+                                    <FieldError errors={[signupForm.formState.errors.confirmPassword]} />
+                                </Field>
+                            </FieldGroup>
+                            <DialogFooter className="mt-6">
                                 <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
                                     Cancel
                                 </Button>

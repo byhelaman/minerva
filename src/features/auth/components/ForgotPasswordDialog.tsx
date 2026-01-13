@@ -16,6 +16,7 @@ import {
 import {
     Field,
     FieldError,
+    FieldGroup,
     FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -209,20 +210,22 @@ export function ForgotPasswordDialog({
                                 Enter your email and we'll send you a verification code.
                             </DialogDescription>
                         </DialogHeader>
-                        <form onSubmit={emailForm.handleSubmit(handleEmailSubmit)} className="space-y-4 pt-2">
-                            <Field data-invalid={!!emailForm.formState.errors.email}>
-                                <FieldLabel htmlFor="reset-email">Email</FieldLabel>
-                                <Input
-                                    id="reset-email"
-                                    type="email"
-                                    placeholder="m@example.com"
-                                    {...emailForm.register("email")}
-                                    disabled={isLoading}
-                                    aria-invalid={!!emailForm.formState.errors.email}
-                                />
-                                <FieldError errors={[emailForm.formState.errors.email]} />
-                            </Field>
-                            <DialogFooter className="pt-3">
+                        <form onSubmit={emailForm.handleSubmit(handleEmailSubmit)}>
+                            <FieldGroup>
+                                <Field data-invalid={!!emailForm.formState.errors.email}>
+                                    <FieldLabel htmlFor="reset-email">Email</FieldLabel>
+                                    <Input
+                                        id="reset-email"
+                                        type="email"
+                                        placeholder="m@example.com"
+                                        {...emailForm.register("email")}
+                                        disabled={isLoading}
+                                        aria-invalid={!!emailForm.formState.errors.email}
+                                    />
+                                    <FieldError errors={[emailForm.formState.errors.email]} />
+                                </Field>
+                            </FieldGroup>
+                            <DialogFooter className="mt-6">
                                 <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
                                     Cancel
                                 </Button>
@@ -314,8 +317,8 @@ export function ForgotPasswordDialog({
                                 Enter your new password below.
                             </DialogDescription>
                         </DialogHeader>
-                        <form onSubmit={passwordForm.handleSubmit(handlePasswordSubmit)} className="space-y-4">
-                            <div className="py-2 space-y-6 pb-3">
+                        <form onSubmit={passwordForm.handleSubmit(handlePasswordSubmit)}>
+                            <FieldGroup>
                                 <Field data-invalid={!!passwordForm.formState.errors.password}>
                                     <FieldLabel htmlFor="new-password">New Password</FieldLabel>
                                     <Input
@@ -338,8 +341,8 @@ export function ForgotPasswordDialog({
                                     />
                                     <FieldError errors={[passwordForm.formState.errors.confirmPassword]} />
                                 </Field>
-                            </div>
-                            <DialogFooter>
+                            </FieldGroup>
+                            <DialogFooter className="mt-6">
                                 <Button type="submit" disabled={isLoading} className="w-full">
                                     {isLoading && <Loader2 className="animate-spin" />}
                                     Reset Password

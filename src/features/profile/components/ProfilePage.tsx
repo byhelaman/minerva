@@ -6,7 +6,7 @@ import * as z from "zod";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { RequirePermission } from "@/components/RequirePermission";
+
 
 import { Button } from "@/components/ui/button";
 import {
@@ -20,7 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Loader2, Link2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 const accountFormSchema = z.object({
     displayName: z
@@ -202,30 +202,12 @@ export function ProfilePage() {
                             </Button>
                         </CardFooter>
                     </Card>
-
-                    {/* Danger Zone */}
-                    <Card className="shadow-none border-destructive/50 bg-destructive/5">
-                        <CardHeader>
-                            <CardTitle className="text-destructive">{t("profile.danger_zone")}</CardTitle>
-                            <CardDescription>
-                                {t("profile.danger_zone_desc")}
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-sm text-muted-foreground">
-                                {t("profile.delete_account_warning")}
-                            </p>
-                        </CardContent>
-                        <CardFooter>
-                            <Button variant="destructive" className="w-full sm:w-auto">
-                                {t("profile.delete_account")}
-                            </Button>
-                        </CardFooter>
-                    </Card>
                 </div>
+
 
                 {/* Right Column */}
                 <div className="space-y-6">
+
                     {/* Permissions - visible for all users */}
                     <Card className="shadow-none">
                         <CardHeader>
@@ -248,39 +230,6 @@ export function ProfilePage() {
                             </div>
                         </CardContent>
                     </Card>
-
-                    {/* Zoom Integration - Super Admin only */}
-                    <RequirePermission level={100}>
-                        <Card className="shadow-none">
-                            <CardHeader>
-                                <CardTitle>{t("profile.zoom.title")}</CardTitle>
-                                <CardDescription>
-                                    {t("profile.zoom.desc")}
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="flex items-center justify-between gap-6 flex-wrap">
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-2">
-                                            <div className="size-2 rounded-full bg-gray-300" />
-                                            <span className="font-medium text-sm">
-                                                {t("profile.zoom.not_connected")}
-                                            </span>
-                                        </div>
-                                        <p className="text-sm text-muted-foreground">
-                                            {t("profile.zoom.no_account_linked")}
-                                        </p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Button variant="outline">
-                                            <Link2 />
-                                            {t("profile.zoom.connect_button")}
-                                        </Button>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </RequirePermission>
 
                     {/* Security */}
                     <Card className="shadow-none">
@@ -354,9 +303,30 @@ export function ProfilePage() {
                             </form>
                         </CardContent>
                         <CardFooter>
-                            <Button type="submit" variant="outline" form="password-form" disabled={isPasswordLoading}>
+                            <Button type="submit" form="password-form" disabled={isPasswordLoading}>
                                 {isPasswordLoading && <Loader2 className="animate-spin" />}
                                 {t("profile.update_password")}
+                            </Button>
+                        </CardFooter>
+                    </Card>
+
+
+                    {/* Danger Zone */}
+                    <Card className="shadow-none border-destructive/50 bg-destructive/5">
+                        <CardHeader>
+                            <CardTitle className="text-destructive">{t("profile.danger_zone")}</CardTitle>
+                            <CardDescription>
+                                {t("profile.danger_zone_desc")}
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-muted-foreground">
+                                {t("profile.delete_account_warning")}
+                            </p>
+                        </CardContent>
+                        <CardFooter>
+                            <Button variant="destructive" className="w-full sm:w-auto">
+                                {t("profile.delete_account")}
                             </Button>
                         </CardFooter>
                     </Card>

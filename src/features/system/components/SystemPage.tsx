@@ -1,12 +1,51 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ManageUsersModal } from "./ManageUsersModal";
 import { ManageRolesModal } from "./ManageRolesModal";
+import { Link2, Loader2 } from "lucide-react";
+import { RequirePermission } from "@/components/RequirePermission";
+import { useTranslation } from "react-i18next";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/components/auth-provider";
 
 export function SystemPage() {
+    const { t } = useTranslation();
+    const { isAdmin } = useAuth();
     const [isManageUsersOpen, setIsManageUsersOpen] = useState(false);
     const [isManageRolesOpen, setIsManageRolesOpen] = useState(false);
+    const [userCount, setUserCount] = useState<number | null>(null);
+    const [isLoadingCount, setIsLoadingCount] = useState(false);
+
+    // Fetch user count on mount (only for admins)
+    useEffect(() => {
+        if (isAdmin()) {
+            fetchUserCount();
+        }
+    }, []);
+
+    const fetchUserCount = async () => {
+        setIsLoadingCount(true);
+        try {
+            const { data, error } = await supabase.rpc('get_user_count');
+            if (!error && data !== null) {
+                setUserCount(data);
+            }
+        } catch (err) {
+            console.error('Error fetching user count:', err);
+        } finally {
+            setIsLoadingCount(false);
+        }
+    };
+
+    // Refresh count when modal closes
+    const handleUsersModalChange = (open: boolean) => {
+        setIsManageUsersOpen(open);
+        if (!open && isAdmin()) {
+            fetchUserCount();
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col py-8 my-4 gap-1">
@@ -29,9 +68,17 @@ export function SystemPage() {
                             <div className="flex items-center justify-between">
                                 <div className="space-y-0.5">
                                     <p className="font-medium text-sm">Total Users</p>
-                                    <p className="text-2xl font-semibold">--</p>
+                                    <p className="text-2xl font-semibold">
+                                        {isLoadingCount ? (
+                                            <Loader2 className="size-5 animate-spin" />
+                                        ) : userCount !== null ? (
+                                            userCount
+                                        ) : (
+                                            "--"
+                                        )}
+                                    </p>
                                 </div>
-                                <Button variant="outline" size="sm" onClick={() => setIsManageUsersOpen(true)}>
+                                <Button variant="outline" size="sm" onClick={() => handleUsersModalChange(true)}>
                                     Manage Users
                                 </Button>
                             </div>
@@ -92,6 +139,39 @@ export function SystemPage() {
                         </CardContent>
                     </Card>
 
+                    {/* Zoom Integration - Super Admin only */}
+                    <RequirePermission level={100}>
+                        <Card className="shadow-none">
+                            <CardHeader>
+                                <CardTitle>{t("profile.zoom.title")}</CardTitle>
+                                <CardDescription>
+                                    {t("profile.zoom.desc")}
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex items-center justify-between gap-6 flex-wrap">
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-2">
+                                            <div className="size-2 rounded-full bg-gray-300" />
+                                            <span className="font-medium text-sm">
+                                                {t("profile.zoom.not_connected")}
+                                            </span>
+                                        </div>
+                                        <p className="text-sm text-muted-foreground">
+                                            {t("profile.zoom.no_account_linked")}
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Button variant="outline">
+                                            <Link2 />
+                                            {t("profile.zoom.connect_button")}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </RequirePermission>
+
                     {/* System Activity */}
                     <Card className="shadow-none">
                         <CardHeader>
@@ -114,7 +194,7 @@ export function SystemPage() {
             {/* Manage Users Modal */}
             <ManageUsersModal
                 open={isManageUsersOpen}
-                onOpenChange={setIsManageUsersOpen}
+                onOpenChange={handleUsersModalChange}
             />
 
             {/* Manage Roles Modal */}
