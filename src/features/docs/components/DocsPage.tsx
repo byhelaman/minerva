@@ -1,14 +1,68 @@
-
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import {
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import { Lightbulb, AlertTriangle, Info, EllipsisIcon } from "lucide-react";
+
+const SECTIONS = [
+    { id: 'introduction', label: 'Introduction' },
+    { id: 'getting-started', label: 'Getting Started' },
+    { id: 'account', label: 'Account & Security' },
+    { id: 'schedules', label: 'Managing Schedules' },
+    { id: 'import-export', label: 'Import & Export' },
+    { id: 'conflicts', label: 'Conflict Detection' },
+    { id: 'settings', label: 'Settings' },
+    { id: 'troubleshooting', label: 'Troubleshooting' },
+    { id: 'faq', label: 'FAQ' },
+    { id: 'support', label: 'Contact & Support' },
+];
 
 export function DocsPage() {
-    const handleScrollTo = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
+    const [activeSection, setActiveSection] = useState('introduction');
+
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) {
+                        setActiveSection(entry.target.id);
+                    }
+                });
+            },
+            { rootMargin: "-50% 0px -50% 0px" }
+        );
+
+        SECTIONS.forEach((section) => {
+            const element = document.getElementById(section.id);
+            if (element) {
+                observer.observe(element);
+            }
+        });
+
+        return () => observer.disconnect();
+    }, []);
+
+    const handleScrollTo = (e: React.MouseEvent<HTMLElement>, id: string) => {
         e.preventDefault();
         const element = document.getElementById(id);
         if (element) {
-            element.scrollIntoView({ behavior: 'smooth' });
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     };
 
@@ -21,90 +75,67 @@ export function DocsPage() {
 
             <div className="grid gap-8 md:grid-cols-[200px_1fr] h-full overflow-hidden">
                 <aside className="hidden md:flex flex-col gap-2 flex-none">
-                    <nav className="grid gap-2.5 px-2 group-[[data-collapsed=true]]:justify-center group-[[data-collapsed=true]]:px-2">
-                        <a
-                            href="#introduction"
-                            onClick={(e) => handleScrollTo(e, 'introduction')}
-                            className="text-sm font-medium hover:underline text-foreground"
-                        >
-                            Introduction
-                        </a>
-                        <a
-                            href="#getting-started"
-                            onClick={(e) => handleScrollTo(e, 'getting-started')}
-                            className="text-sm text-muted-foreground hover:underline"
-                        >
-                            Getting Started
-                        </a>
-                        <a
-                            href="#account"
-                            onClick={(e) => handleScrollTo(e, 'account')}
-                            className="text-sm text-muted-foreground hover:underline"
-                        >
-                            Account & Security
-                        </a>
-                        <a
-                            href="#schedules"
-                            onClick={(e) => handleScrollTo(e, 'schedules')}
-                            className="text-sm text-muted-foreground hover:underline"
-                        >
-                            Managing Schedules
-                        </a>
-                        <a
-                            href="#settings"
-                            onClick={(e) => handleScrollTo(e, 'settings')}
-                            className="text-sm text-muted-foreground hover:underline"
-                        >
-                            Settings
-                        </a>
-                        <a
-                            href="#zoom-integration"
-                            onClick={(e) => handleScrollTo(e, 'zoom-integration')}
-                            className="text-sm text-muted-foreground hover:underline"
-                        >
-                            Zoom Integration
-                        </a>
-                        <a
-                            href="#troubleshooting"
-                            onClick={(e) => handleScrollTo(e, 'troubleshooting')}
-                            className="text-sm text-muted-foreground hover:underline"
-                        >
-                            Troubleshooting
-                        </a>
-                        <a
-                            href="#export-import"
-                            onClick={(e) => handleScrollTo(e, 'export-import')}
-                            className="text-sm text-muted-foreground hover:underline"
-                        >
-                            Export & Import
-                        </a>
-                        <a
-                            href="#faq"
-                            onClick={(e) => handleScrollTo(e, 'faq')}
-                            className="text-sm text-muted-foreground hover:underline"
-                        >
-                            FAQ
-                        </a>
-                        <a
-                            href="#support"
-                            onClick={(e) => handleScrollTo(e, 'support')}
-                            className="text-sm text-muted-foreground hover:underline"
-                        >
-                            Contact & Support
-                        </a>
+                    <nav className="grid gap-1">
+                        {SECTIONS.map((item) => (
+                            <Button
+                                key={item.id}
+                                variant="link"
+                                size="sm"
+                                onClick={(e) => handleScrollTo(e, item.id)}
+                                className={`w-fit justify-start ${activeSection === item.id
+                                    ? ''
+                                    : 'text-muted-foreground hover:text-foreground'
+                                    }`}
+                            >
+                                {item.label}
+                            </Button>
+                        ))}
                     </nav>
                 </aside>
 
-                <div className="h-full overflow-y-auto pr-6 scroll-smooth">
+                <div className="h-full overflow-y-auto scroll-smooth px-[120px]">
                     <div className="space-y-10 pb-20">
                         {/* Introduction */}
                         <section id="introduction" className="space-y-4">
                             <div>
                                 <h2 className="text-lg font-semibold tracking-tight mb-2">Introduction</h2>
-                                <p className="text-sm text-muted-foreground leading-relaxed">
-                                    Minerva v2 is a schedule management tool designed to help you organize, resolve conflicts, and export schedule data.
-                                    It offers a comprehensive set of features for managing scheduling needs.
+                                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+                                    Welcome to <strong>Minerva v2</strong>, a schedule management application designed to help you
+                                    organize, view, and export your scheduling data efficiently. Minerva provides the tools you need.
                                 </p>
+
+                                <Card className="shadow-none">
+                                    <CardHeader>
+                                        <CardTitle className="text-sm">✨ What can you do with Minerva? </CardTitle>
+                                        <CardDescription>
+                                            Key features available to manage your schedules.
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <ul className="grid gap-2 text-sm text-muted-foreground">
+                                            <li className="flex items-center gap-2">
+                                                <Badge variant="secondary">Import</Badge>
+                                                Upload schedule data from Excel files
+                                            </li>
+                                            <li className="flex items-center gap-2">
+                                                <Badge variant="secondary">Filter</Badge>
+                                                View and filter by date, time, branch, or instructor
+                                            </li>
+                                            <li className="flex items-center gap-2">
+                                                <Badge variant="secondary">Detect</Badge>
+                                                Automatically identify scheduling conflicts
+                                            </li>
+                                            <li className="flex items-center gap-2">
+                                                <Badge variant="secondary">Export</Badge>
+                                                Download data to Excel for reporting
+                                            </li>
+                                            <li className="flex items-center gap-2">
+                                                <Badge variant="secondary">Save</Badge>
+                                                Auto-save your work to prevent data loss
+                                            </li>
+                                        </ul>
+                                    </CardContent>
+                                </Card>
                             </div>
                         </section>
 
@@ -113,59 +144,62 @@ export function DocsPage() {
                         {/* Getting Started */}
                         <section id="getting-started" className="space-y-4">
                             <div>
-                                <h2 className="text-lg font-semibold tracking-tight mb-2">Getting Started</h2>
-                                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                                    To get started with Minerva, you'll need to create an account or sign in. Here is a quick overview of the main concepts:
+                                <h2 className="text-lg font-semibold tracking-tight mb-2">🚀 Getting Started</h2>
+                                <p className="text-sm text-muted-foreground leading-relaxed mb-6">
+                                    Follow these steps to begin using Minerva:
                                 </p>
-                                <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-                                    <Card className="shadow-none">
-                                        <CardHeader>
-                                            <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                                📅 Schedules
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <CardContent>
+
+                                <div className="grid gap-4">
+                                    <div className="flex gap-4">
+                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-muted text-sm font-medium">
+                                            1
+                                        </div>
+                                        <div className="grid gap-1">
+                                            <p className="text-sm font-medium">Create an account or sign in</p>
                                             <p className="text-sm text-muted-foreground">
-                                                Manage individual entries like classes or meetings with detailed time and assignee info.
+                                                If you're new, click "Sign up" on the login page.  You'll receive a 6-digit
+                                                verification code via email.  Enter this code to activate your account.
                                             </p>
-                                        </CardContent>
-                                    </Card>
-                                    <Card className="shadow-none">
-                                        <CardHeader>
-                                            <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                                ⚠️ Conflicts
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <CardContent>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-4">
+                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-muted text-sm font-medium">
+                                            2
+                                        </div>
+                                        <div className="grid gap-1">
+                                            <p className="text-sm font-medium">Access the Dashboard</p>
                                             <p className="text-sm text-muted-foreground">
-                                                Automatically detect overlaps in time, location, or assignee to prevent double-booking.
+                                                Once logged in, you'll land on the Management dashboard. This is your central hub
+                                                for viewing and managing schedules.
                                             </p>
-                                        </CardContent>
-                                    </Card>
-                                    <Card className="shadow-none">
-                                        <CardHeader>
-                                            <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                                👤 Profile
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <CardContent>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-4">
+                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-muted text-sm font-medium">
+                                            3
+                                        </div>
+                                        <div className="grid gap-1">
+                                            <p className="text-sm font-medium">Upload your first file</p>
                                             <p className="text-sm text-muted-foreground">
-                                                Manage your personal settings, display name, and security preferences.
+                                                Click "Upload Files" to import your Excel schedule data. You can drag and drop
+                                                files or browse to select them.
                                             </p>
-                                        </CardContent>
-                                    </Card>
-                                    <Card className="shadow-none">
-                                        <CardHeader>
-                                            <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                                ⚙️ Settings
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <CardContent>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-4">
+                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-muted text-sm font-medium">
+                                            4
+                                        </div>
+                                        <div className="grid gap-1">
+                                            <p className="text-sm font-medium">Explore and manage</p>
                                             <p className="text-sm text-muted-foreground">
-                                                Customize your application preferences, theme, notification settings, and export paths.
+                                                Use the filters, search, and actions menu to work with your data. Export when ready.
                                             </p>
-                                        </CardContent>
-                                    </Card>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </section>
@@ -175,61 +209,291 @@ export function DocsPage() {
                         {/* Account & Security */}
                         <section id="account" className="space-y-4">
                             <div>
-                                <div className="flex items-center gap-2 mb-2">
-                                    <h2 className="text-lg font-semibold tracking-tight">Account & Security</h2>
+                                <h2 className="text-lg font-semibold tracking-tight mb-2">🛡️ Account & Security</h2>
+                                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+                                    Your account settings can be managed from the Profile page.
+                                </p>
+
+                                <div className="space-y-6">
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-sm font-semibold">Creating an Account</h3>
+                                            <Badge variant="outline">New Users</Badge>
+                                        </div>
+                                        <p className="text-sm text-muted-foreground leading-relaxed">
+                                            Click "Sign up" on the login page and enter your email and a password (minimum 8 characters).
+                                            Check your email for a 6-digit verification code and enter it to complete registration.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <h3 className="text-sm font-semibold">Updating Your Display Name</h3>
+                                        <p className="text-sm text-muted-foreground leading-relaxed">
+                                            Navigate to <strong>Profile → Account Information</strong>. Enter your new display name
+                                            (2-30 characters) and click Save.  This name appears across the application.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <h3 className="text-sm font-semibold">Changing Your Password</h3>
+                                        <p className="text-sm text-muted-foreground leading-relaxed">
+                                            Go to <strong>Profile → Security</strong>. Enter your current password, then your new password
+                                            (minimum 8 characters), confirm it, and click Update Password.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-sm font-semibold">Forgot Your Password?</h3>
+                                            <Badge variant="outline">Recovery</Badge>
+                                        </div>
+                                        <p className="text-sm text-muted-foreground leading-relaxed">
+                                            Click "Forgot your password?" on the login page. Enter your email address and check your
+                                            inbox for a verification code. Enter the code to verify your identity, then create a new password.
+                                        </p>
+                                    </div>
+
+                                    <Alert>
+                                        <Info />
+                                        <AlertTitle>Rate Limiting</AlertTitle>
+                                        <AlertDescription>
+                                            For security, Minerva limits login attempts.  After multiple failed attempts, you'll need
+                                            to wait before trying again.
+                                        </AlertDescription>
+                                    </Alert>
                                 </div>
-                                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                                    Manage your account settings and security from the Profile page.
-                                </p>
-
-                                <h3 className="text-sm font-semibold mb-2">Creating an Account</h3>
-                                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                                    Click "Sign up" on the login page. You'll receive a 6-digit verification code via email to confirm your account.
-                                    Enter the code to complete registration and access the dashboard.
-                                </p>
-
-                                <h3 className="text-sm font-semibold mb-2">Updating Your Display Name</h3>
-                                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                                    Go to <strong>Profile → Account Information</strong> to change your display name.
-                                    This is the name shown across the application.
-                                </p>
-
-                                <h3 className="text-sm font-semibold mb-2">Changing Your Password</h3>
-                                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                                    Go to <strong>Profile → Security</strong>. For security, you must enter your current password
-                                    before setting a new one. Passwords must be at least 8 characters long.
-                                </p>
-
-                                <h3 className="text-sm font-semibold mb-2">Forgot Password?</h3>
-                                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                                    Click "Forgot password?" on the login page. You'll receive a verification code via email.
-                                    Enter the code to verify your identity, then set a new password.
-                                </p>
                             </div>
                         </section>
 
                         <Separator />
 
                         {/* Managing Schedules */}
-                        <section id="schedules" className="space-y-4">
+                        <section id="schedules" className="space-y-6">
                             <div>
-                                <div className="flex items-center gap-2 mb-2">
-                                    <h2 className="text-lg font-semibold tracking-tight">Managing Schedules</h2>
+                                <h2 className="text-lg font-semibold tracking-tight mb-2">📅 Managing Schedules</h2>
+                                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+                                    The Management dashboard is where you view, filter, and work with your schedule data.
+                                </p>
+
+                                <div className="space-y-6">
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <h3 className="text-sm font-semibold">Understanding the Table</h3>
+                                            <p className="text-sm text-muted-foreground leading-relaxed">
+                                                Each row in the schedule table represents one entry with the following columns:
+                                            </p>
+                                        </div>
+                                        <div className="rounded-md border">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead className="w-[100px] px-4">Column</TableHead>
+                                                        <TableHead>Description</TableHead>
+                                                        <TableHead className="w-[140px] px-4">Example</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    <TableRow>
+                                                        <TableCell className="px-4"><code className="text-primary">Date</code></TableCell>
+                                                        <TableCell className="text-muted-foreground">The date of the schedule entry</TableCell>
+                                                        <TableCell><code className="text-muted-foreground">dd/mm/yyyy</code></TableCell>
+                                                    </TableRow>
+                                                    <TableRow>
+                                                        <TableCell className="px-4"><code className="text-primary">Shift</code></TableCell>
+                                                        <TableCell className="text-muted-foreground">Morning or afternoon assignment</TableCell>
+                                                        <TableCell><code className="text-muted-foreground">Support</code></TableCell>
+                                                    </TableRow>
+                                                    <TableRow>
+                                                        <TableCell className="px-4"><code className="text-primary">Branch</code></TableCell>
+                                                        <TableCell className="text-muted-foreground">Location where the activity takes place</TableCell>
+                                                        <TableCell><code className="text-muted-foreground">Corporate</code></TableCell>
+                                                    </TableRow>
+                                                    <TableRow>
+                                                        <TableCell className="px-4"><code className="text-primary">Time</code></TableCell>
+                                                        <TableCell className="text-muted-foreground">Start and end time for the activity</TableCell>
+                                                        <TableCell><code className="text-muted-foreground">09:00 - 10:00</code></TableCell>
+                                                    </TableRow>
+                                                    <TableRow>
+                                                        <TableCell className="px-4"><code className="text-primary">Instructor</code></TableCell>
+                                                        <TableCell className="text-muted-foreground">Person assigned to the schedule</TableCell>
+                                                        <TableCell><code className="text-muted-foreground">John Doe</code></TableCell>
+                                                    </TableRow>
+                                                    <TableRow>
+                                                        <TableCell className="px-4"><code className="text-primary">Program</code></TableCell>
+                                                        <TableCell className="text-muted-foreground">Name of the class or activity</TableCell>
+                                                        <TableCell><code className="text-muted-foreground">English 101</code></TableCell>
+                                                    </TableRow>
+                                                </TableBody>
+                                            </Table>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <h3 className="text-sm font-semibold">Filtering & Searching</h3>
+                                        <p className="text-sm text-muted-foreground leading-relaxed">
+                                            Use the search box to search across all columns.  Filter by shift, branch, or time using
+                                            the dropdown filters.  Click the Overlaps button to show only conflicting schedules.
+                                            Click Reset to clear all filters.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <h3 className="text-sm font-semibold">Actions Menu</h3>
+                                            <p className="text-sm text-muted-foreground leading-relaxed">
+                                                The Actions dropdown provides these options:
+                                            </p>
+                                            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+                                                <li>Copy Instructors</li>
+                                                <li>Copy Schedule</li>
+                                                <li>Save Schedule</li>
+                                                <li>Export to Excel</li>
+                                                <li>Clear Schedule</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <h3 className="text-sm font-semibold">Row Actions</h3>
+                                        <p className="text-sm text-muted-foreground leading-relaxed">
+                                            Each row has a menu (<EllipsisIcon size={16} className="inline-block" />) with options to edit, copy details, change status, or delete
+                                            the entry.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <h3 className="text-sm font-semibold">Auto-Save</h3>
+                                        <p className="text-sm text-muted-foreground leading-relaxed">
+                                            When Auto Save is enabled in Settings, Minerva automatically saves your schedule data locally.
+                                            When you reopen the app, your previous session will be restored automatically.
+                                        </p>
+                                    </div>
+
+                                    <Alert>
+                                        <Lightbulb />
+                                        <AlertTitle>Tip</AlertTitle>
+                                        <AlertDescription>
+                                            Enable "Actions Respect Filters" in Settings to make Copy and Export work only on filtered data.
+                                        </AlertDescription>
+                                    </Alert>
                                 </div>
+                            </div>
+                        </section>
+                        <Separator />
+
+                        {/* Import & Export */}
+                        <section id="import-export" className="space-y-4">
+                            <div>
+                                <h2 className="text-lg font-semibold tracking-tight mb-2">🔄 Import & Export</h2>
                                 <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                                    The Dashboard is where you view and manipulate your schedule data.
+                                    Minerva makes it easy to work with Excel files for importing and exporting schedule data.
                                 </p>
 
-                                <h3 className="text-sm font-semibold mb-2">Importing Data</h3>
+                                <div className="space-y-6">
+                                    <Card className="shadow-none">
+                                        <CardHeader>
+                                            <CardTitle className="text-sm">Importing Excel Files</CardTitle>
+                                            <CardDescription>
+                                                How to upload your schedule data
+                                            </CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2">
+                                                <li>Click the <strong>Upload Files</strong> button in the toolbar</li>
+                                                <li>Drag and drop your Excel file(s) or click <strong>Browse files</strong></li>
+                                                <li>You can upload up to <strong>5 files</strong> at once</li>
+                                                <li>Click <strong>Process</strong> to import the data</li>
+                                            </ol>
+                                            <div className="flex items-center gap-2">
+                                                <Badge variant="outline">. xlsx only</Badge>
+                                                <span className="text-xs text-muted-foreground">Excel 2007+ format required</span>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+
+                                    <div className="space-y-2">
+                                        <h3 className="text-sm font-semibold">Expected Format</h3>
+                                        <p className="text-sm text-muted-foreground leading-relaxed">
+                                            Minerva can read files previously exported from the app (with headers:  date, shift, branch,
+                                            start_time, end_time, code, instructor, program, minutes, units) or original schedule reports
+                                            with specific structure.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <h3 className="text-sm font-semibold">Exporting to Excel</h3>
+                                        <p className="text-sm text-muted-foreground leading-relaxed">
+                                            Go to <strong>Actions → Export to Excel</strong> and choose where to save the file.  The file will be named
+                                            with a timestamp (e.g., schedule-export-20260115-143022.xlsx).
+                                        </p>
+                                        <Alert>
+                                            <Lightbulb />
+                                            <AlertTitle>Tip</AlertTitle>
+                                            <AlertDescription>
+                                                Enable "Open After Export" in Settings to automatically open the file in Excel after saving.
+                                            </AlertDescription>
+                                        </Alert>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <h3 className="text-sm font-semibold">Duplicate Handling</h3>
+                                        <p className="text-sm text-muted-foreground leading-relaxed">
+                                            When importing new files, Minerva automatically detects and ignores duplicate entries.
+                                            You'll see a notification indicating how many schedules were added and how many were skipped.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <Separator />
+
+                        {/* Conflict Detection */}
+                        <section id="conflicts" className="space-y-4">
+                            <div>
+                                <h2 className="text-lg font-semibold tracking-tight mb-2">⚡ Conflict Detection</h2>
                                 <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                                    Use the import function to upload Excel files. Supported formats include .xlsx and .xls.
-                                    Ensure your columns match the expected format (Date, Time, Location, etc.).
+                                    Minerva automatically identifies scheduling conflicts to help you avoid double-booking.
                                 </p>
 
-                                <h3 className="text-sm font-semibold mb-2">Auto Assign (Coming Soon)</h3>
-                                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                                    This feature is currently in development. It is intended to automatically distribute unassigned schedules to available slots or personnel based on predefined rules.
-                                </p>
+                                <div className="space-y-6">
+                                    <div className="space-y-2">
+                                        <h3 className="text-sm font-semibold">How Conflicts Are Detected</h3>
+                                        <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+                                            A conflict occurs when two or more schedules meet these conditions:
+                                        </p>
+                                        <div className="flex flex-wrap gap-2">
+                                            <Badge variant="outline">Same date</Badge>
+                                            <Badge variant="outline">Overlapping time ranges</Badge>
+                                            <Badge variant="outline">Same instructor/resource</Badge>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <h3 className="text-sm font-semibold">Visual Indicators</h3>
+                                        <p className="text-sm text-muted-foreground leading-relaxed">
+                                            Conflicting schedules are displayed in <span className="text-destructive font-medium">red text</span> in
+                                            the table. When conflicts are detected, an Overlaps button appears showing the count.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <h3 className="text-sm font-semibold">Viewing Only Conflicts</h3>
+                                        <p className="text-sm text-muted-foreground leading-relaxed">
+                                            Click the Overlaps button to filter the table and show only conflicting entries.
+                                            Click again to show all schedules.
+                                        </p>
+                                    </div>
+
+                                    <Alert>
+                                        <AlertTriangle />
+                                        <AlertTitle>Resolving Conflicts</AlertTitle>
+                                        <AlertDescription>
+                                            To resolve a conflict, edit one of the conflicting entries (change time or date) or delete
+                                            one of them.  The conflict indicator will update automatically.
+                                        </AlertDescription>
+                                    </Alert>
+                                </div>
                             </div>
                         </section>
 
@@ -238,44 +502,55 @@ export function DocsPage() {
                         {/* Settings */}
                         <section id="settings" className="space-y-4">
                             <div>
-                                <h2 className="text-lg font-semibold tracking-tight mb-2">Settings</h2>
+                                <h2 className="text-lg font-semibold tracking-tight mb-2">⚙️ Settings</h2>
                                 <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                                    Customize your experience in the Settings page.
+                                    Customize Minerva to fit your preferences from the Settings page.
                                 </p>
-                                <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-2">
-                                    <li><strong>Appearance:</strong> Toggle between Light, Dark, or System theme.</li>
-                                    <li><strong>Notifications:</strong> Enable or disable Weekly Digests and Realtime Alerts.</li>
-                                    <li><strong>Automation:</strong> Configure Auto Save preferences.</li>
-                                    <li><strong>Storage & Export:</strong> Configure open after export behavior.</li>
-                                    <li><strong>Preferences:</strong> Choose your preferred language (English, Spanish, French).</li>
-                                    <li><strong>System:</strong> Clear local cache and check for software updates.</li>
-                                </ul>
-                            </div>
-                        </section>
 
-                        <Separator />
+                                <div className="grid grid-cols-2 gap-6 text-sm">
+                                    <div className="space-y-1">
+                                        <p className="font-medium">Appearance</p>
+                                        <p className="text-muted-foreground">
+                                            Choose between Light, Dark, or System theme.  Enable "Actions Respect Filters" to apply
+                                            actions only to filtered data.
+                                        </p>
+                                    </div>
 
-                        {/* Zoom Integration */}
-                        <section id="zoom-integration" className="space-y-4">
-                            <div>
-                                <div className="flex items-center gap-2 mb-2">
-                                    <h2 className="text-lg font-semibold tracking-tight">Zoom Integration</h2>
+                                    <div className="space-y-1">
+                                        <p className="font-medium">Notifications</p>
+                                        <p className="text-muted-foreground">
+                                            Configure Weekly Digest emails and Real-time Alerts for conflicts.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <p className="font-medium">Automation</p>
+                                        <p className="text-muted-foreground">
+                                            Enable Auto Save to automatically save changes locally.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <p className="font-medium">Storage & Export</p>
+                                        <p className="text-muted-foreground">
+                                            Enable "Open After Export" to automatically open exported files.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <p className="font-medium">Preferences</p>
+                                        <p className="text-muted-foreground">
+                                            Select your preferred language:  English, Español, or Français.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <p className="font-medium">System</p>
+                                        <p className="text-muted-foreground">
+                                            Clear Cache to reset local data.  Check for Updates to verify your app version.
+                                        </p>
+                                    </div>
                                 </div>
-                                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                                    Minerva v2 allows you to check the status of your connection with Zoom.
-                                </p>
-
-                                <h3 className="text-sm font-semibold mb-2">Connecting Your Account</h3>
-                                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                                    Go to <strong>System → Zoom Integration</strong> and click "Connect Zoom".
-                                    A browser window will open asking you to authorize Minerva. Once approved, the system will automatically detect the connection.
-                                </p>
-
-                                <h3 className="text-sm font-semibold mb-2">Permissions & Security</h3>
-                                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                                    Minerva uses a secure Server-to-Server connection. Your credentials are encrypted and never exposed to the application's interface.
-                                    Only Administrators can manage this connection.
-                                </p>
                             </div>
                         </section>
 
@@ -284,53 +559,79 @@ export function DocsPage() {
                         {/* Troubleshooting */}
                         <section id="troubleshooting" className="space-y-4">
                             <div>
-                                <h2 className="text-lg font-semibold tracking-tight mb-2">Troubleshooting</h2>
-                                <p className="text-sm text-muted-foreground leading-relaxed">
-                                    If you run into issues, try the following:
-                                </p>
-                                <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-2 mt-2">
-                                    <li>Check your internet connection for features that sync with the server.</li>
-                                    <li>Use "Clear Cache" in Settings to reset local data.</li>
-                                    <li>Ensure your input Excel files are not corrupted and follow the correct format.</li>
-                                    <li>If you can't log in, try the "Forgot password?" flow to reset your credentials.</li>
-                                    <li>For Zoom connection issues, try disconnecting and reconnecting if the status seems stuck.</li>
-                                    <li>Contact support if issues persist after trying these steps.</li>
-                                </ul>
-                            </div>
-                        </section>
-
-                        <Separator />
-
-                        {/* Export & Import */}
-                        <section id="export-import" className="space-y-4">
-                            <div>
-                                <h2 className="text-lg font-semibold tracking-tight mb-2">Export & Import</h2>
+                                <h2 className="text-lg font-semibold tracking-tight mb-2">🔧 Troubleshooting</h2>
                                 <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                                    Minerva supports importing and exporting schedule data in Excel format.
+                                    Having issues? Try these solutions:
                                 </p>
 
-                                <h3 className="text-sm font-semibold mb-2">Supported Formats</h3>
-                                <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-2 mb-4">
-                                    <li><strong>.xlsx</strong> - Excel 2007+ (recommended)</li>
-                                    <li><strong>.xls</strong> - Legacy Excel format</li>
-                                </ul>
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    <Card className="shadow-none">
+                                        <CardHeader>
+                                            <CardTitle className="text-sm">Excel file won't import</CardTitle>
+                                            <CardDescription>
+                                                Issues when uploading or processing Excel files.
+                                            </CardDescription>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+                                                <li>Ensure the file is in . xlsx format</li>
+                                                <li>Check that the file isn't corrupted</li>
+                                                <li>Verify the file structure</li>
+                                                <li>Try re-saving the file in Excel</li>
+                                            </ul>
+                                        </CardContent>
+                                    </Card>
 
-                                <h3 className="text-sm font-semibold mb-2">Import Requirements</h3>
-                                <p className="text-sm text-muted-foreground leading-relaxed mb-2">
-                                    Your Excel file should contain the following columns:
-                                </p>
-                                <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-2 mb-4">
-                                    <li><strong>Date</strong> - The date of the schedule entry</li>
-                                    <li><strong>Time</strong> - Start and/or end time</li>
-                                    <li><strong>Location</strong> - Where the event takes place</li>
-                                    <li><strong>Assignee</strong> - Person or resource assigned (optional)</li>
-                                </ul>
+                                    <Card className="shadow-none">
+                                        <CardHeader>
+                                            <CardTitle className="text-sm">Can't log in</CardTitle>
+                                            <CardDescription>
+                                                Problems accessing your account.
+                                            </CardDescription>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+                                                <li>Double-check email and password</li>
+                                                <li>Wait if locked out</li>
+                                                <li>Use "Forgot your password?"</li>
+                                                <li>Check spam for verification emails</li>
+                                            </ul>
+                                        </CardContent>
+                                    </Card>
 
-                                <h3 className="text-sm font-semibold mb-2">Export Options</h3>
-                                <p className="text-sm text-muted-foreground leading-relaxed">
-                                    When you export, a secure system dialog will appear allowing you to choose where to save the file.
-                                    You can toggle "Open file after export" in Settings to automatically open the Excel file after saving.
-                                </p>
+                                    <Card className="shadow-none">
+                                        <CardHeader>
+                                            <CardTitle className="text-sm">Data not loading</CardTitle>
+                                            <CardDescription>
+                                                Schedule data doesn't appear or takes too long.
+                                            </CardDescription>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+                                                <li>Check your internet connection</li>
+                                                <li>Try logging out and back in</li>
+                                                <li>Clear Cache in Settings</li>
+                                                <li>Restart the application</li>
+                                            </ul>
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card className="shadow-none">
+                                        <CardHeader>
+                                            <CardTitle className="text-sm">Session not restored</CardTitle>
+                                            <CardDescription>
+                                                Previous work doesn't load on startup.
+                                            </CardDescription>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+                                                <li>Ensure Auto Save is enabled</li>
+                                                <li>Session may have been cleared</li>
+                                                <li>Check you're using same account</li>
+                                            </ul>
+                                        </CardContent>
+                                    </Card>
+                                </div>
                             </div>
                         </section>
 
@@ -339,41 +640,72 @@ export function DocsPage() {
                         {/* FAQ */}
                         <section id="faq" className="space-y-4">
                             <div>
-                                <h2 className="text-lg font-semibold tracking-tight mb-2">Frequently Asked Questions</h2>
+                                <h2 className="text-lg font-semibold tracking-tight mb-2">❓ Frequently Asked Questions</h2>
 
-                                <div className="space-y-4">
-                                    <div>
-                                        <h3 className="text-sm font-semibold mb-1">Why can't I edit my email address?</h3>
-                                        <p className="text-sm text-muted-foreground leading-relaxed">
+                                <Accordion type="single" collapsible className="w-full">
+                                    <AccordionItem value="item-1">
+                                        <AccordionTrigger>Why can't I edit my email address?</AccordionTrigger>
+                                        <AccordionContent>
                                             Your email is tied to your account identity and is used for authentication.
                                             For security reasons, email changes require contacting support.
-                                        </p>
-                                    </div>
+                                        </AccordionContent>
+                                    </AccordionItem>
 
-                                    <div>
-                                        <h3 className="text-sm font-semibold mb-1">I didn't receive my verification code. What should I do?</h3>
-                                        <p className="text-sm text-muted-foreground leading-relaxed">
-                                            Check your spam/junk folder first. If it's not there, wait a few minutes and try
-                                            clicking "Resend" to get a new code. Make sure you entered the correct email.
-                                        </p>
-                                    </div>
+                                    <AccordionItem value="item-2">
+                                        <AccordionTrigger>I didn't receive my verification code.  What should I do?</AccordionTrigger>
+                                        <AccordionContent>
+                                            Check your spam/junk folder first. If it's not there, wait a few minutes and click
+                                            Resend to get a new code.  Make sure you entered the correct email address.
+                                        </AccordionContent>
+                                    </AccordionItem>
 
-                                    <div>
-                                        <h3 className="text-sm font-semibold mb-1">How do I report a bug or request a feature?</h3>
-                                        <p className="text-sm text-muted-foreground leading-relaxed">
-                                            Use the Contact & Support section below to reach our team.
-                                            Please include as much detail as possible about the issue.
-                                        </p>
-                                    </div>
+                                    <AccordionItem value="item-3">
+                                        <AccordionTrigger>Will I lose my data if I close the application?</AccordionTrigger>
+                                        <AccordionContent>
+                                            If Auto Save is enabled (Settings → Automation), your data is saved automatically.
+                                            When you reopen Minerva, your previous session will be restored.
+                                        </AccordionContent>
+                                    </AccordionItem>
 
-                                    <div>
-                                        <h3 className="text-sm font-semibold mb-1">Is my data secure?</h3>
-                                        <p className="text-sm text-muted-foreground leading-relaxed">
-                                            Yes. We use industry-standard encryption and your data is stored securely.
-                                            Passwords are hashed and never stored in plain text.
-                                        </p>
-                                    </div>
-                                </div>
+                                    <AccordionItem value="item-4">
+                                        <AccordionTrigger>Can I import multiple files at once?</AccordionTrigger>
+                                        <AccordionContent>
+                                            Yes! You can upload up to 5 Excel files at once. All schedules will be merged together,
+                                            and duplicates will be automatically detected and skipped.
+                                        </AccordionContent>
+                                    </AccordionItem>
+
+                                    <AccordionItem value="item-5">
+                                        <AccordionTrigger>How do I export only filtered data?</AccordionTrigger>
+                                        <AccordionContent>
+                                            Enable "Actions Respect Filters" in Settings → Appearance.  Then, apply your desired
+                                            filters before using Export to Excel.  Only visible rows will be exported.
+                                        </AccordionContent>
+                                    </AccordionItem>
+
+                                    <AccordionItem value="item-6">
+                                        <AccordionTrigger>Is my data secure?</AccordionTrigger>
+                                        <AccordionContent>
+                                            Yes.  We use industry-standard encryption and your data is stored securely.
+                                        </AccordionContent>
+                                    </AccordionItem>
+
+                                    <AccordionItem value="item-7">
+                                        <AccordionTrigger>What permissions do I have?</AccordionTrigger>
+                                        <AccordionContent>
+                                            You can view your current permissions in Profile → Permissions. Your access level
+                                            determines which features are available to you.
+                                        </AccordionContent>
+                                    </AccordionItem>
+
+                                    <AccordionItem value="item-8">
+                                        <AccordionTrigger>How do I report a bug?</AccordionTrigger>
+                                        <AccordionContent>
+                                            Click the bug icon in the bottom-left corner of the screen to open the bug report form.
+                                            Provide a clear title and detailed description of the issue.
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                </Accordion>
                             </div>
                         </section>
 
@@ -387,11 +719,11 @@ export function DocsPage() {
                                     Need help? We're here for you.
                                 </p>
 
-                                <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+                                <div className="grid gap-4 md:grid-cols-2">
                                     <Card className="shadow-none">
                                         <CardHeader>
-                                            <CardTitle className="text-sm font-medium">📧 Email Support</CardTitle>
-                                            <CardDescription className="text-xs text-muted-foreground">
+                                            <CardTitle className="text-sm">📧 Email Support</CardTitle>
+                                            <CardDescription>
                                                 For general inquiries and support requests.
                                             </CardDescription>
                                         </CardHeader>
@@ -401,8 +733,8 @@ export function DocsPage() {
                                     </Card>
                                     <Card className="shadow-none">
                                         <CardHeader>
-                                            <CardTitle className="text-sm font-medium">🐛 Report Issues</CardTitle>
-                                            <CardDescription className="text-xs text-muted-foreground">
+                                            <CardTitle className="text-sm">🐛 Report Issues</CardTitle>
+                                            <CardDescription>
                                                 Found a bug? Let us know so we can fix it.
                                             </CardDescription>
                                         </CardHeader>
