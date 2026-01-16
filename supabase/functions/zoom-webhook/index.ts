@@ -1,19 +1,19 @@
 // Supabase Edge Function: zoom-webhook
-// Handles incoming webhooks from Zoom
+// Maneja los webhooks entrantes de Zoom
 //
-// POST / - Receive and process Zoom webhook events
+// POST / - Recibe y procesa eventos de webhook de Zoom
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { createHmac } from "https://deno.land/std@0.168.0/node/crypto.ts"
 
 const ZOOM_WEBHOOK_SECRET = Deno.env.get('ZOOM_WEBHOOK_SECRET')!
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-// SECURITY: Restrict CORS - webhooks come from Zoom servers, not browsers
-// Server-to-server requests (no Origin header) are always allowed
-// Browser requests are restricted to known origins
+// SEGURIDAD: Restringir CORS - los webhooks vienen de servidores de Zoom, no de navegadores
+// Las solicitudes servidor-a-servidor (sin header Origin) siempre están permitidas
+// Las solicitudes de navegadores están restringidas a orígenes conocidos
 const ALLOWED_ORIGINS = [
     'http://localhost:1420',
     'tauri://localhost',
@@ -41,15 +41,15 @@ serve(async (req) => {
         const signature = req.headers.get('x-zm-signature')
         const timestamp = req.headers.get('x-zm-request-timestamp')
 
-        // Validate webhook signature
+        // Validar firma del webhook
         if (!verifySignature(body, signature, timestamp)) {
-            console.error('Invalid webhook signature')
+            console.error('Webhook: signature validation failed')
             return new Response('Unauthorized', { status: 401 })
         }
 
         const event = JSON.parse(body)
 
-        // Handle Zoom URL validation challenge
+        // Manejar desafío de validación de URL de Zoom
         if (event.event === 'endpoint.url_validation') {
             const plainToken = event.payload.plainToken
             const hash = createHmac('sha256', ZOOM_WEBHOOK_SECRET)
@@ -64,7 +64,7 @@ serve(async (req) => {
             })
         }
 
-        // Store event in database
+        // Almacenar evento en base de datos
         const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
         await supabase
@@ -75,13 +75,13 @@ serve(async (req) => {
                 processed: false
             })
 
-        // Process event based on type
+        // Procesar evento según tipo
         await processEvent(supabase, event)
 
         return new Response('OK', { status: 200 })
 
     } catch (error) {
-        console.error('Webhook error:', error)
+        console.error('Webhook: processing error')
         return new Response('Error', { status: 500 })
     }
 })
@@ -94,7 +94,7 @@ function verifySignature(body: string, signature: string | null, timestamp: stri
     const timestampMs = parseInt(timestamp) * 1000
     const now = Date.now()
     if (Math.abs(now - timestampMs) > 5 * 60 * 1000) {
-        console.error('Webhook timestamp too old')
+        console.error('Webhook: timestamp expired')
         return false
     }
 
@@ -107,15 +107,23 @@ function verifySignature(body: string, signature: string | null, timestamp: stri
     return signature === expectedSignature
 }
 
-async function processEvent(supabase: any, event: any): Promise<void> {
+
+interface ZoomWebhookEvent {
+    event: string
+    payload: {
+        object: any
+    }
+}
+
+async function processEvent(supabase: SupabaseClient, event: ZoomWebhookEvent): Promise<void> {
     const eventType = event.event
     const payload = event.payload
 
-    console.log(`Processing event: ${eventType}`)
+    console.log('Processing event')
 
     try {
         switch (eventType) {
-            // ========== USER EVENTS ==========
+            // ========== EVENTOS DE USUARIO ==========
             case 'user.created':
             case 'user.updated':
                 await upsertUser(supabase, payload.object)
@@ -126,7 +134,7 @@ async function processEvent(supabase: any, event: any): Promise<void> {
                 await deleteUser(supabase, payload.object.id)
                 break
 
-            // ========== MEETING EVENTS ==========
+            // ========== EVENTOS DE REUNIÓN ==========
             case 'meeting.created':
             case 'meeting.updated':
                 await upsertMeeting(supabase, payload.object)
@@ -137,18 +145,18 @@ async function processEvent(supabase: any, event: any): Promise<void> {
                 break
 
             case 'meeting.started':
-                console.log(`Meeting started: ${payload.object.id}`)
+                console.log('Meeting started')
                 break
 
             case 'meeting.ended':
-                console.log(`Meeting ended: ${payload.object.id}`)
+                console.log('Meeting ended')
                 break
 
             default:
-                console.log(`Unhandled event type: ${eventType}`)
+                console.log('Event type not handled')
         }
 
-        // Mark event as processed
+        // Marcar evento como procesado
         await supabase
             .from('webhook_events')
             .update({
@@ -160,55 +168,112 @@ async function processEvent(supabase: any, event: any): Promise<void> {
             .limit(1)
 
     } catch (error) {
-        console.error(`Error processing ${eventType}:`, error)
+        console.error('Event processing failed')
     }
 }
 
-// ========== USER HANDLERS ==========
-async function upsertUser(supabase: any, user: any): Promise<void> {
-    const userRecord = {
+// ========== MANEJADORES DE USUARIO ==========
+interface ZoomUserData {
+    id: string
+    email?: string
+    first_name: string
+    last_name: string
+    display_name: string
+    synced_at: string
+}
+
+interface ZoomUserPayload {
+    id: string
+    email?: string
+    first_name?: string
+    last_name?: string
+    display_name?: string
+}
+
+async function upsertUser(supabase: SupabaseClient, user: ZoomUserPayload): Promise<void> {
+    const userRecord: ZoomUserData = {
         id: user.id,
-        email: user.email,
         first_name: user.first_name || '',
         last_name: user.last_name || '',
         display_name: user.display_name || `${user.first_name || ''} ${user.last_name || ''}`.trim(),
         synced_at: new Date().toISOString()
     }
 
-    const { error } = await supabase
-        .from('zoom_users')
-        .upsert(userRecord, { onConflict: 'id' })
+    if (user.email) userRecord.email = user.email
+
+    let error;
+
+    // Misma lógica de seguridad que reuniones:
+    // 'email' es NOT NULL. Si falta, solo podemos actualizar registros existentes.
+    if (user.email) {
+        const result = await supabase
+            .from('zoom_users')
+            .upsert(userRecord, { onConflict: 'id' })
+        error = result.error
+    } else {
+        console.log('User update: partial data')
+        // Omitir 'email' del payload de actualización
+        const { email, ...updatePayload } = userRecord
+        const result = await supabase
+            .from('zoom_users')
+            .update(updatePayload)
+            .eq('id', user.id)
+        error = result.error
+    }
 
     if (error) {
-        console.error('Error upserting user:', error)
+        console.error('User operation failed')
     } else {
-        console.log(`User upserted: ${user.email}`)
+        console.log('User processed')
     }
 }
 
-async function deleteUser(supabase: any, userId: string): Promise<void> {
+async function deleteUser(supabase: SupabaseClient, userId: string): Promise<void> {
     const { error } = await supabase
         .from('zoom_users')
         .delete()
         .eq('id', userId)
 
     if (error) {
-        console.error('Error deleting user:', error)
+        console.error('User deletion failed')
     } else {
-        console.log(`User deleted: ${userId}`)
+        console.log('User deleted')
     }
 }
 
-// ========== MEETING HANDLERS ==========
-async function upsertMeeting(supabase: any, meeting: any): Promise<void> {
-    // Build record with only non-null fields to avoid overwriting existing data
-    // This is important for meeting.updated events which may not include all fields
-    const meetingRecord: any = {
-        meeting_id: meeting.id,
+// ========== MANEJADORES DE REUNIÓN ==========
+interface ZoomMeetingData {
+    meeting_id: string
+    uuid?: string
+    host_id?: string
+    topic?: string
+    type?: number
+    start_time?: string
+    duration?: number
+    timezone?: string
+    join_url?: string
+    synced_at: string
+}
+
+interface ZoomMeetingPayload {
+    id: number | string
+    uuid?: string
+    host_id?: string
+    topic?: string
+    type?: number
+    start_time?: string
+    duration?: number
+    timezone?: string
+    join_url?: string
+}
+
+async function upsertMeeting(supabase: SupabaseClient, meeting: ZoomMeetingPayload): Promise<void> {
+    const meetingRecord: ZoomMeetingData = {
+        meeting_id: String(meeting.id),
         synced_at: new Date().toISOString()
     }
 
-    // Only add fields if they have values (avoid overwriting with null)
+    // Solo agregar campos si tienen valores (evitar sobreescribir con null)
     if (meeting.uuid) meetingRecord.uuid = meeting.uuid
     if (meeting.host_id) meetingRecord.host_id = meeting.host_id
     if (meeting.topic) meetingRecord.topic = meeting.topic
@@ -218,28 +283,42 @@ async function upsertMeeting(supabase: any, meeting: any): Promise<void> {
     if (meeting.timezone) meetingRecord.timezone = meeting.timezone
     if (meeting.join_url) meetingRecord.join_url = meeting.join_url
 
-    console.log('Upserting meeting:', meeting.id, 'topic:', meeting.topic || '(not provided)')
+    console.log('Processing meeting')
 
-    const { error } = await supabase
-        .from('zoom_meetings')
-        .upsert(meetingRecord, { onConflict: 'meeting_id' })
+    let error;
+
+    if (meeting.host_id) {
+        const result = await supabase
+            .from('zoom_meetings')
+            .upsert(meetingRecord, { onConflict: 'meeting_id' })
+        error = result.error
+    } else {
+        console.log('Meeting update: partial data')
+        // Omit 'host_id' from update payload to be safe, though it's likely undefined anyway
+        const { host_id, ...updatePayload } = meetingRecord
+        const result = await supabase
+            .from('zoom_meetings')
+            .update(updatePayload)
+            .eq('meeting_id', meeting.id)
+        error = result.error
+    }
 
     if (error) {
-        console.error('Error upserting meeting:', error)
+        console.error('Meeting operation failed')
     } else {
-        console.log(`Meeting upserted: ${meeting.id}`)
+        console.log('Meeting processed')
     }
 }
 
-async function deleteMeeting(supabase: any, meetingId: number): Promise<void> {
+async function deleteMeeting(supabase: SupabaseClient, meetingId: number | string): Promise<void> {
     const { error } = await supabase
         .from('zoom_meetings')
         .delete()
         .eq('meeting_id', meetingId)
 
     if (error) {
-        console.error('Error deleting meeting:', error)
+        console.error('Meeting deletion failed')
     } else {
-        console.log(`Meeting deleted: ${meetingId}`)
+        console.log('Meeting deleted')
     }
 }

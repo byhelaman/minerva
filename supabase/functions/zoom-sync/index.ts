@@ -5,7 +5,7 @@
 // Retorna: { users_synced, meetings_synced }
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getValidAccessToken } from './zoom-auth-utils.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -30,7 +30,7 @@ function getCorsHeaders(req: Request) {
 }
 
 // Helper: Verificar si el usuario es administrador (Estándar V2)
-async function verifyAdmin(req: Request, supabase: any) {
+async function verifyAdmin(req: Request, supabase: SupabaseClient) {
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) throw new Error('Unauthorized: Missing header')
 
@@ -47,7 +47,7 @@ async function verifyAdmin(req: Request, supabase: any) {
     .single()
 
   if (profileError || !profile) {
-    console.error('Error fetching profile:', profileError)
+    console.error('Profile lookup failed')
     // Fallback: Si no hay perfil, verificar si es super_admin en auth (opcional, pero mejor ser estricto)
     throw new Error('Unauthorized: Profile not found')
   }
@@ -72,7 +72,7 @@ serve(async (req: Request) => {
   // 2. x-internal-key - Chequeo de clave interna (Cronjobs etc)
 
   let isAuthorized = false
-  let authError: any = null
+  let authError: unknown = null
   const authHeader = req.headers.get('authorization')
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
@@ -83,7 +83,7 @@ serve(async (req: Request) => {
     }
   } catch (e) {
     // Si falla auth de usuario, intentamos Internal Key
-    console.log("User auth failed, trying Internal Key:", e)
+    console.log('Fallback to internal key')
     // TEMPORAL DEBUG: Guardar el error para retornarlo si falla todo
     authError = e
   }
@@ -112,7 +112,7 @@ serve(async (req: Request) => {
     }
 
     // 1. Sincronizar Usuarios
-    console.log('Syncing Zoom users...')
+    console.log('Starting user sync')
     const usersResponse = await fetch(`${ZOOM_API_BASE}/users?page_size=300`, {
       headers: { 'Authorization': `Bearer ${accessToken}` }
     })
@@ -133,7 +133,17 @@ serve(async (req: Request) => {
     // Zoom role_id: "0" = Owner, "1" = Admin, "2" = Member
     const EXCLUDED_ROLE_IDS = ['0', '1']  // Excluir Owner y Admin
 
-    const users = allUsers.filter((user: any) => {
+    interface ZoomUser {
+      id: string
+      email: string
+      role_id?: string
+      first_name?: string
+      last_name?: string
+      display_name?: string
+      created_at: string
+    }
+
+    const users = (allUsers as ZoomUser[]).filter((user) => {
       // Siempre incluir emails en lista blanca
       if (WHITELIST_EMAILS.includes(user.email?.toLowerCase())) {
         return true
@@ -142,11 +152,11 @@ serve(async (req: Request) => {
       return !EXCLUDED_ROLE_IDS.includes(user.role_id)
     })
 
-    console.log(`Filtered users: ${users.length} of ${allUsers.length} (excluded ${allUsers.length - users.length} admins/owners)`)
+    console.log('Users filtered')
 
     // Upsert (Insertar/Actualizar) usuarios en lote
     if (users.length > 0) {
-      const userRecords = users.map((user: any) => ({
+      const userRecords = users.map((user) => ({
         id: user.id,
         email: user.email,
         first_name: user.first_name || '',
@@ -164,25 +174,38 @@ serve(async (req: Request) => {
         })
 
       if (usersError) {
-        console.error('Error upserting users:', usersError)
+        console.error('User sync failed')
       }
     }
 
-    console.log(`Synced ${users.length} users`)
+    console.log('Users synced')
 
     // 2. Sincronizar Reuniones - PARALELO para velocidad
-    console.log('Syncing meetings in parallel...')
+    console.log('Starting meeting sync')
 
     // Obtener reuniones en paralelo (max 10 concurrentes por lote)
     const BATCH_SIZE = 10
     let totalMeetings = 0
-    const allMeetings: any[] = []
+    interface ZoomMeeting {
+      meeting_id: string
+      uuid: string
+      host_id: string
+      topic: string
+      type: number
+      start_time: string
+      duration: number
+      timezone: string
+      join_url: string
+      created_at: string
+      synced_at: string
+    }
+    const allMeetings: ZoomMeeting[] = []
 
     for (let i = 0; i < users.length; i += BATCH_SIZE) {
       const batch = users.slice(i, i + BATCH_SIZE)
 
       const batchResults = await Promise.all(
-        batch.map(async (user: any) => {
+        batch.map(async (user) => {
           try {
             const response = await fetch(
               `${ZOOM_API_BASE}/users/${user.id}/meetings?page_size=300&type=scheduled`,
@@ -229,12 +252,12 @@ serve(async (req: Request) => {
         })
 
       if (meetingsError) {
-        console.error('Error upserting meetings:', meetingsError)
+        console.error('Meeting sync failed')
       }
       totalMeetings = uniqueMeetings.length
     }
 
-    console.log(`Synced ${totalMeetings} meetings`)
+    console.log('Meetings synced')
 
     return jsonResponse({
       success: true,
@@ -243,13 +266,13 @@ serve(async (req: Request) => {
     }, 200, corsHeaders)
 
   } catch (error: unknown) {
-    console.error('Sync error:', error)
+    console.error('Sync operation failed')
     const message = error instanceof Error ? error.message : 'Unknown error'
     return jsonResponse({ error: message }, 500, corsHeaders)
   }
 })
 
-function jsonResponse(data: any, status = 200, corsHeaders: Record<string, string> = {}): Response {
+function jsonResponse(data: unknown, status = 200, corsHeaders: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(data), {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }

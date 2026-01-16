@@ -2,7 +2,7 @@
 // Maneja el flujo de autenticación (Server-to-Server OAuth)
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const ZOOM_CLIENT_ID = Deno.env.get('ZOOM_CLIENT_ID')!
 const ZOOM_CLIENT_SECRET = Deno.env.get('ZOOM_CLIENT_SECRET')!
@@ -55,7 +55,7 @@ serve(async (req: Request) => {
                 case 'status': return await handleStatus(req, corsHeaders)
                 case 'disconnect': return await handleDisconnect(req, corsHeaders)
                 default:
-                    console.error('Body recibido:', body)
+                    console.error('Invalid action received')
                     return new Response(JSON.stringify({ error: `Acción desconocida: ${action}` }), {
                         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
                     })
@@ -66,10 +66,11 @@ serve(async (req: Request) => {
         return new Response(JSON.stringify({ error: `Endpoint no encontrado para path: ${path}` }), {
             status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
-    } catch (error: any) {
-        console.error('Error de Zoom Auth:', error)
-        return new Response(JSON.stringify({ error: error.message }), {
-            status: error.message === 'Unauthorized' ? 401 : 500,
+    } catch (error: unknown) {
+        console.error('Auth error')
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        return new Response(JSON.stringify({ error: message }), {
+            status: message === 'Unauthorized' ? 401 : 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
     }
@@ -77,7 +78,7 @@ serve(async (req: Request) => {
 
 // SEGURIDAD: Verificar si el usuario es admin
 // Devuelve el objeto usuario si está autorizado, lanza error si no
-async function verifyAdmin(req: Request, supabase: any) {
+async function verifyAdmin(req: Request, supabase: SupabaseClient) {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) throw new Error('Unauthorized')
 
@@ -97,7 +98,7 @@ async function verifyAdmin(req: Request, supabase: any) {
     // V2: "RPC set_new_user_role", "ManageUsersModal".
 
     if (profileError || !profile) {
-        console.error('Error al obtener perfil:', profileError)
+        console.error('Profile lookup failed')
         throw new Error('Unauthorized: No profile')
     }
 
@@ -111,7 +112,7 @@ async function verifyAdmin(req: Request, supabase: any) {
 }
 
 // === INIT ===
-async function handleInit(req: Request, corsHeaders: any): Promise<Response> {
+async function handleInit(req: Request, corsHeaders: Record<string, string>): Promise<Response> {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
     // Verificación RBAC
@@ -138,7 +139,7 @@ async function handleInit(req: Request, corsHeaders: any): Promise<Response> {
 }
 
 // === CALLBACK ===
-async function handleCallback(url: URL, corsHeaders: any): Promise<Response> {
+async function handleCallback(url: URL, corsHeaders: Record<string, string>): Promise<Response> {
     // El callback viene de Zoom, NO del cliente directamente (navegador).
     // Validamos STATE para vincularlo al usuario que lo inició.
 
@@ -201,7 +202,7 @@ async function handleCallback(url: URL, corsHeaders: any): Promise<Response> {
     })
 
     if (rpcError) {
-        console.error('Error al guardar en Vault:', rpcError)
+        console.error('Credential storage failed')
         return new Response(`Error de Base de Datos: ${rpcError.message}`, { status: 500 })
     }
 
@@ -211,7 +212,7 @@ async function handleCallback(url: URL, corsHeaders: any): Promise<Response> {
 }
 
 // === STATUS ===
-async function handleStatus(req: Request, corsHeaders: any): Promise<Response> {
+async function handleStatus(req: Request, corsHeaders: Record<string, string>): Promise<Response> {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
     // Verificación RBAC (Solo admins pueden ver estado)
@@ -243,7 +244,7 @@ async function handleStatus(req: Request, corsHeaders: any): Promise<Response> {
 }
 
 // === DISCONNECT ===
-async function handleDisconnect(req: Request, corsHeaders: any): Promise<Response> {
+async function handleDisconnect(req: Request, corsHeaders: Record<string, string>): Promise<Response> {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
     // Verificación RBAC - CRÍTICO
