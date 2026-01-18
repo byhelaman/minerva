@@ -191,32 +191,81 @@ export const structuralTokenMissing: PenaltyFunction = (ctx) => {
 };
 
 /**
- * Token distintivo del query no está en topic (weak match)
+ * LRU Cache para Levenshtein - evita cálculos redundantes y limita uso de memoria
+ * Tamaño máximo configurable para prevenir crecimiento indefinido en sesiones largas
  */
+const MAX_LEVENSHTEIN_CACHE_SIZE = 5000;
+const levenshteinCache = new Map<string, number>();
+
 /**
- * Calcula la distancia de Levenshtein entre dos strings
+ * Limpiar cache de Levenshtein (llamar entre batches de matching)
+ */
+export function clearLevenshteinCache(): void {
+    levenshteinCache.clear();
+}
+
+/**
+ * Calcula la distancia de Levenshtein entre dos strings (con memoización LRU)
+ * Optimizado: usa solo 2 filas en lugar de matriz completa O(n×m) -> O(min(n,m))
  */
 const levenshtein = (a: string, b: string): number => {
-    if (a.length === 0) return b.length;
-    if (b.length === 0) return a.length;
+    // Cache key simétrico (a,b) = (b,a)
+    const key = a < b ? `${a}|${b}` : `${b}|${a}`;
 
-    const matrix = Array(b.length + 1).fill(null).map(() => Array(a.length + 1).fill(null));
+    // Check cache con LRU refresh
+    if (levenshteinCache.has(key)) {
+        const value = levenshteinCache.get(key)!;
+        // Move to end (most recently used) for LRU ordering
+        levenshteinCache.delete(key);
+        levenshteinCache.set(key, value);
+        return value;
+    }
 
-    for (let i = 0; i <= b.length; i++) matrix[i][0] = i;
-    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+    // Casos base
+    if (a.length === 0) {
+        setCacheWithLimit(key, b.length);
+        return b.length;
+    }
+    if (b.length === 0) {
+        setCacheWithLimit(key, a.length);
+        return a.length;
+    }
+
+    // Optimización: a siempre es el más corto para minimizar memoria
+    if (a.length > b.length) [a, b] = [b, a];
+
+    // Solo necesitamos 2 filas en lugar de matriz completa
+    let prev = Array.from({ length: a.length + 1 }, (_, i) => i);
+    let curr = new Array<number>(a.length + 1);
 
     for (let i = 1; i <= b.length; i++) {
+        curr[0] = i;
         for (let j = 1; j <= a.length; j++) {
-            const cost = b.charAt(i - 1) === a.charAt(j - 1) ? 0 : 1;
-            matrix[i][j] = Math.min(
-                matrix[i - 1][j] + 1,
-                matrix[i][j - 1] + 1,
-                matrix[i - 1][j - 1] + cost
-            );
+            curr[j] = b.charAt(i - 1) === a.charAt(j - 1)
+                ? prev[j - 1]
+                : 1 + Math.min(prev[j], curr[j - 1], prev[j - 1]);
+        }
+        [prev, curr] = [curr, prev]; // Intercambiar referencias
+    }
+
+    const result = prev[a.length];
+    setCacheWithLimit(key, result);
+    return result;
+};
+
+/**
+ * Helper para insertar en cache respetando el límite LRU
+ */
+function setCacheWithLimit(key: string, value: number): void {
+    // Si alcanzamos el límite, eliminar la entrada más antigua (primera en el Map)
+    if (levenshteinCache.size >= MAX_LEVENSHTEIN_CACHE_SIZE) {
+        const oldestKey = levenshteinCache.keys().next().value;
+        if (oldestKey !== undefined) {
+            levenshteinCache.delete(oldestKey);
         }
     }
-    return matrix[b.length][a.length];
-};
+    levenshteinCache.set(key, value);
+}
 
 /**
  * Penaliza si faltan tokens distintivos, usando fuzzy matching

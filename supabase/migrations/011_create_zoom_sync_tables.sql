@@ -21,7 +21,7 @@ ALTER TABLE public.zoom_users ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow read for valid roles" ON public.zoom_users
     FOR SELECT TO authenticated
     USING (
-        COALESCE((auth.jwt() ->> 'hierarchy_level')::int, 0) >= 50
+        COALESCE(((SELECT auth.jwt()) ->> 'hierarchy_level')::int, 0) >= 50
     );
 
 CREATE POLICY "Allow full access for service_role" ON public.zoom_users
@@ -50,7 +50,7 @@ ALTER TABLE public.zoom_meetings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow read for valid roles" ON public.zoom_meetings
     FOR SELECT TO authenticated
     USING (
-        COALESCE((auth.jwt() ->> 'hierarchy_level')::int, 0) >= 50
+        COALESCE(((SELECT auth.jwt()) ->> 'hierarchy_level')::int, 0) >= 50
     );
 
 CREATE POLICY "Allow full access for service_role" ON public.zoom_meetings

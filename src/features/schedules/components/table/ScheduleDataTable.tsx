@@ -33,6 +33,7 @@ interface ScheduleDataTableProps<TData, TValue> {
     data: TData[];
     onUploadClick?: () => void;
     onClearSchedule?: () => void;
+    onRefresh?: () => void;
     hideFilters?: boolean;
     hideUpload?: boolean;
     hideActions?: boolean;
@@ -44,6 +45,7 @@ export function ScheduleDataTable<TData, TValue>({
     data,
     onClearSchedule,
     onUploadClick,
+    onRefresh,
     ...props
 }: ScheduleDataTableProps<TData, TValue>) {
     const [rowSelection, setRowSelection] = React.useState({});
@@ -115,6 +117,7 @@ export function ScheduleDataTable<TData, TValue>({
                 overlapCount={overlapResult.overlapCount}
                 onClearSchedule={onClearSchedule}
                 onUploadClick={onUploadClick}
+                onRefresh={onRefresh}
                 fullData={data}
                 hideFilters={props.hideFilters}
                 hideUpload={props.hideUpload}

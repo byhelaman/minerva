@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
-import { ZoomMeetingCandidate, MatchingService, MatchResult } from '../services/matcher';
+import { ZoomMeetingCandidate, MatchResult } from '../services/matcher';
 import { Schedule } from '@/features/schedules/utils/excel-parser';
 
 interface ZoomUser {
@@ -26,11 +26,17 @@ interface ZoomState {
     // Estado de Carga de Datos
     isLoadingData: boolean;
 
+    // Worker Instance
+    worker: Worker | null,
+
     // Acciones
     fetchZoomData: () => Promise<void>;
     triggerSync: () => Promise<void>;
-    runMatching: (schedules: Schedule[]) => void;
+    runMatching: (schedules: Schedule[]) => Promise<void>;
     resolveConflict: (schedule: Schedule, selectedMeeting: ZoomMeetingCandidate) => void;
+
+    // Método interno para inicializar el worker
+    _initWorker: (meetings: ZoomMeetingCandidate[], users: ZoomUser[]) => void;
 }
 
 export const useZoomStore = create<ZoomState>((set, get) => ({
@@ -42,71 +48,101 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
     syncError: null,
     lastSyncedAt: null,
     isLoadingData: false,
+    worker: null,
+
+    // Cache interno eliminado a favor del worker
 
     fetchZoomData: async () => {
+        // Evitar múltiples llamadas simultáneas que puedan reiniciar el worker incorrectamente
+        if (get().isLoadingData) {
+            console.log('Fetch already in progress, skipping...');
+            return;
+        }
+
         set({ isLoadingData: true });
         try {
-            // Fetch Meetings (Pagination loop)
-            let allMeetings: any[] = [];
-            let page = 0;
             const pageSize = 1000;
-            let hasMore = true;
 
-            while (hasMore) {
-                const { data: meetings, error: meetingsError } = await supabase
-                    .from('zoom_meetings')
-                    .select('meeting_id, topic, host_id, start_time, join_url')
-                    .range(page * pageSize, (page + 1) * pageSize - 1);
+            const fetchAllPages = async <T>(
+                table: 'zoom_meetings' | 'zoom_users',
+                select: string
+            ): Promise<T[]> => {
+                let allData: T[] = [];
+                let page = 0;
+                let hasMore = true;
 
-                if (meetingsError) throw meetingsError;
+                while (hasMore) {
+                    const { data, error } = await supabase
+                        .from(table)
+                        .select(select)
+                        .range(page * pageSize, (page + 1) * pageSize - 1);
 
-                if (meetings) {
-                    allMeetings = [...allMeetings, ...meetings];
-                    if (meetings.length < pageSize) hasMore = false;
-                    else page++;
-                } else {
-                    hasMore = false;
+                    if (error) throw error;
+
+                    if (data && data.length > 0) {
+                        allData = [...allData, ...data as T[]];
+                        if (data.length < pageSize) hasMore = false;
+                        else page++;
+                    } else {
+                        hasMore = false;
+                    }
                 }
-            }
+                return allData;
+            };
 
-            // Fetch Users (Pagination loop)
-            let allUsers: any[] = [];
-            page = 0;
-            hasMore = true;
-
-            while (hasMore) {
-                const { data: users, error: usersError } = await supabase
-                    .from('zoom_users')
-                    .select('id, email, first_name, last_name, display_name')
-                    .range(page * pageSize, (page + 1) * pageSize - 1);
-
-                if (usersError) throw usersError;
-
-                if (users) {
-                    allUsers = [...allUsers, ...users];
-                    if (users.length < pageSize) hasMore = false;
-                    else page++;
-                } else {
-                    hasMore = false;
-                }
-            }
+            const [allMeetings, allUsers] = await Promise.all([
+                fetchAllPages<ZoomMeetingCandidate>(
+                    'zoom_meetings',
+                    'meeting_id, topic, host_id, start_time, join_url'
+                ),
+                fetchAllPages<ZoomUser>(
+                    'zoom_users',
+                    'id, email, first_name, last_name, display_name'
+                )
+            ]);
 
             set({
-                meetings: allMeetings as unknown as ZoomMeetingCandidate[],
-                users: allUsers as unknown as ZoomUser[]
+                meetings: allMeetings,
+                users: allUsers,
             });
+
+            // Inicializar worker con los nuevos datos
+            get()._initWorker(allMeetings, allUsers);
+
         } catch (error) {
             console.error("Error fetching Zoom data:", error);
-            // Optionally set an error state here if needed
         } finally {
             set({ isLoadingData: false });
         }
     },
 
+    _initWorker: (meetings, users) => {
+        const currentWorker = get().worker;
+        if (currentWorker) {
+            currentWorker.terminate();
+        }
+
+        // Crear nuevo worker
+        const worker = new Worker(new URL('../workers/match.worker.ts', import.meta.url), {
+            type: 'module'
+        });
+
+        worker.onmessage = (e) => {
+            if (e.data.type === 'READY') {
+                console.log('Matching Worker Ready');
+            } else if (e.data.type === 'ERROR') {
+                console.error('Matching Worker Error:', e.data.error);
+            }
+        };
+
+        // Enviar datos de inicialización
+        worker.postMessage({ type: 'INIT', meetings, users });
+        set({ worker });
+    },
+
     triggerSync: async () => {
         set({ isSyncing: true, syncError: null, syncProgress: 10 });
         try {
-            // 1. Verificar sesión y refrescar si es necesario
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
             if (sessionError || !session) {
@@ -119,33 +155,26 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
 
             console.log("Session verified.");
 
-            // 2. Invocar Edge Function
             const { data, error } = await supabase.functions.invoke('zoom-sync', {
                 method: 'POST',
             });
 
             if (error) {
-                // Si es un error de la función (ej: 401 o 500 lanzado por throw error), viene aquí
                 const errorMessage = error instanceof Error ? error.message : "Error invocando función";
-
-                // Intentar parsear si el body traía un JSON de error
                 let context = "";
                 if (typeof error === 'object' && error !== null && 'context' in error) {
                     // @ts-ignore
                     context = JSON.stringify(error.context);
                 }
-
                 throw new Error(errorMessage + (context ? ` ${context}` : ""));
             }
 
-            // Validar respuesta de negocio (la función devuelve json)
             if (!data || data.error) {
                 throw new Error(data?.error || "La sincronización falló sin detalles.");
             }
 
             set({ syncProgress: 80 });
 
-            // Refrescar datos locales
             await get().fetchZoomData();
 
             set({
@@ -160,23 +189,48 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
                 isSyncing: false,
                 syncError: error.message || 'Unknown error during synchronization'
             });
-            throw error; // Relanzar para que la UI (ZoomIntegration) sepa que falló
+            throw error;
         }
     },
 
-    runMatching: (schedules: Schedule[]) => {
-        const meetings = get().meetings;
-        const users = get().users;
+    runMatching: async (schedules: Schedule[]) => {
+        const { worker, meetings, users } = get();
+        let activeWorker = worker;
 
-        // Pass both meetings and users to the matcher
-        const matcher = new MatchingService(meetings, users);
-        const results = matcher.matchAll(schedules);
+        // Si no hay worker (ej: recarga live), intentar revivirlo
+        if (!activeWorker) {
+            console.warn("Worker not found, re-initializing...");
+            get()._initWorker(meetings, users);
+            activeWorker = get().worker;
+            // Pequeña espera para asegurar que INIT se procese antes de MATCH (aunque postMessage garantiza orden)
+        }
 
-        set({ matchResults: results });
+        if (!activeWorker) {
+            console.error("Failed to initialize worker for matching");
+            return;
+        }
+
+        return new Promise<void>((resolve, reject) => {
+            // Configurar listener temporal para esta ejecución
+            // Nota: En una app más compleja, usaríamos IDs de mensaje para correlacionar respuestas
+            const handleMessage = (e: MessageEvent) => {
+                if (e.data.type === 'MATCH_RESULT') {
+                    set({ matchResults: e.data.results });
+                    activeWorker?.removeEventListener('message', handleMessage);
+                    resolve();
+                } else if (e.data.type === 'ERROR') {
+                    console.error("Worker matching error:", e.data.error);
+                    activeWorker?.removeEventListener('message', handleMessage);
+                    reject(new Error(e.data.error));
+                }
+            };
+
+            activeWorker.addEventListener('message', handleMessage);
+            activeWorker.postMessage({ type: 'MATCH', schedules });
+        });
     },
 
     resolveConflict: (schedule: Schedule, selectedMeeting: ZoomMeetingCandidate) => {
-        // Actualizar el resultado del match manualmente
         const results = get().matchResults.map(r => {
             if (r.schedule === schedule) {
                 return {
@@ -186,7 +240,6 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
                     bestMatch: selectedMeeting,
                     meeting_id: selectedMeeting.meeting_id,
                     reason: 'Manually Assigned',
-                    // Opcionalmente limpiar candidatos para bloquear la selección
                 };
             }
             return r;

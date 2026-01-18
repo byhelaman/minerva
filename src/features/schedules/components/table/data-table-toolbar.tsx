@@ -80,6 +80,7 @@ interface DataTableToolbarProps<TData> {
     overlapCount: number;
     onClearSchedule?: () => void;
     onUploadClick?: () => void;
+    onRefresh?: () => void;
     fullData: TData[];
     hideFilters?: boolean;
     hideUpload?: boolean;
@@ -93,6 +94,7 @@ export function DataTableToolbar<TData>({
     overlapCount,
     onClearSchedule,
     onUploadClick,
+    onRefresh,
     fullData,
     hideFilters = false,
     hideUpload = false,
@@ -354,6 +356,15 @@ export function DataTableToolbar<TData>({
                         </Button>
                     )}
                     <DataTableViewOptions table={table} />
+                    {onRefresh && (
+                        <Button
+                            variant="outline"
+                            size="icon-sm"
+                            onClick={onRefresh}
+                        >
+                            <RefreshCw />
+                        </Button>
+                    )}
                     {!hideActions && (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>

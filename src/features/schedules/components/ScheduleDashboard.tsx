@@ -14,6 +14,7 @@ import { Bot, CalendarPlus, CalendarSearch } from "lucide-react";
 import { SearchLinkModal } from "./modals/SearchLinkModal";
 import { CreateLinkModal } from "./modals/CreateLinkModal";
 import { AssignLinkModal } from "./modals/AssignLinkModal";
+import { useZoomStore } from "@/features/matching/stores/useZoomStore";
 
 export function ScheduleDashboard() {
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -25,6 +26,15 @@ export function ScheduleDashboard() {
     const hasLoadedAutosave = useRef(false);
     const autoSaveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
     const { settings } = useSettings();
+    const fetchZoomData = useZoomStore((state) => state.fetchZoomData);
+    const meetingsLoaded = useZoomStore((state) => state.meetings.length > 0);
+
+    // Pre-load Zoom data in background on mount
+    useEffect(() => {
+        if (!meetingsLoaded) {
+            fetchZoomData();
+        }
+    }, [meetingsLoaded, fetchZoomData]);
 
     // Auto-load on mount
     useEffect(() => {

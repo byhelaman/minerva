@@ -44,7 +44,8 @@ export interface MatchEvaluation {
     allResults: ScoringResult[];
     decision: 'assigned' | 'to_update' | 'ambiguous' | 'not_found';
     confidence: 'high' | 'medium' | 'low' | 'none';
-    reason: string;
+    reason: string; // Mensaje corto para la columna Reason
+    detailedReason?: string; // Mensaje detallado para el hover card
     ambiguousCandidates?: ZoomMeetingCandidate[];
 }
 

@@ -1,9 +1,9 @@
 import Fuse, { IFuseOptions } from 'fuse.js';
 import { Schedule } from '@/features/schedules/utils/excel-parser';
 import { normalizeString } from '../utils/normalizer';
-import { evaluateMatch, logScoringResult } from '../scoring/scorer';
+import { evaluateMatch } from '../scoring/scorer';
+import { clearLevenshteinCache } from '../scoring/penalties';
 import { THRESHOLDS } from '../config/matching.config';
-import { logger } from '@/lib/logger';
 
 export interface ZoomMeetingCandidate {
     meeting_id: string;
@@ -24,7 +24,8 @@ export interface ZoomUserCandidate {
 export interface MatchResult {
     schedule: Schedule;
     status: 'assigned' | 'to_update' | 'not_found' | 'ambiguous';
-    reason: string;
+    reason: string; // Mensaje corto para la columna Reason
+    detailedReason?: string; // Mensaje detallado para el hover card
     meeting_id?: string;
     found_instructor?: {
         id: string;
@@ -133,10 +134,6 @@ export class MatchingService {
         const programNormalized = normalizeString(schedule.program);
         const instructorNormalized = normalizeString(schedule.instructor);
 
-        logger.group(`🔍 Match: ${schedule.program} (${schedule.instructor})`);
-        logger.debug("Raw:", { program: schedule.program, instructor: schedule.instructor });
-        logger.debug("Normalized:", { program: programNormalized, instructor: instructorNormalized });
-
         // ---------------------------------------------------------------------
         // PASO 1: Obtener Candidatos de Meeting
         // ---------------------------------------------------------------------
@@ -145,21 +142,14 @@ export class MatchingService {
         // 1.a. Búsqueda Exacta (ahora devuelve array para manejar colisiones)
         if (this.meetingsDict[programNormalized]) {
             candidates = this.meetingsDict[programNormalized];
-            logger.debug(`📍 ${candidates.length} candidato(s) por Exact Match:`, candidates.map(c => c.topic));
         }
-        // 1.b. Búsqueda Difusa con Fuse.js
         else {
             const searchResults = this.fuseMeetings.search(programNormalized);
             candidates = searchResults
                 .filter(r => r.score !== undefined && r.score <= THRESHOLDS.FUSE_MAX_SCORE)
                 .map(r => r.item);
-
-            if (candidates.length > 0) {
-                logger.debug(`📍 ${candidates.length} candidatos por Fuse Match`);
-            }
         }
 
-        // 1.c. Fallback: Token Set Match
         if (candidates.length === 0) {
             const queryTokens = new Set(programNormalized.split(" ").filter(t => t.length > 2));
 
@@ -173,10 +163,6 @@ export class MatchingService {
                     intersection.length >= THRESHOLDS.MIN_MATCHING_TOKENS &&
                     overlapRatio >= THRESHOLDS.TOKEN_OVERLAP_MIN;
             });
-
-            if (candidates.length > 0) {
-                logger.debug(`📍 ${candidates.length} candidatos por Token Set Match`);
-            }
         }
 
         // ---------------------------------------------------------------------
@@ -184,51 +170,31 @@ export class MatchingService {
         // ---------------------------------------------------------------------
         if (candidates.length === 0) {
             result.status = 'not_found';
-            result.reason = 'Reunión no encontrada';
-            logger.debug("🏁 Resultado: NO ENCONTRADO (sin candidatos)");
-            logger.groupEnd();
+            result.reason = 'Meeting not found';
             return result;
         }
 
         const evaluation = evaluateMatch(schedule.program, candidates);
 
-        // Log detallado del scoring
-        if (evaluation.bestMatch) {
-            logScoringResult(schedule.program, evaluation.bestMatch);
-        }
-
-        // Aplicar decisión
         if (evaluation.decision === 'not_found') {
             result.status = 'not_found';
             result.reason = evaluation.reason;
+            result.detailedReason = evaluation.detailedReason;
             if (evaluation.bestMatch) {
                 result.bestMatch = evaluation.bestMatch.candidate;
             }
-            logger.debug(`🏁 Resultado: NO ENCONTRADO (${evaluation.reason})`);
-            logger.groupEnd();
             return result;
         }
 
         if (evaluation.decision === 'ambiguous') {
             result.status = 'ambiguous';
             result.reason = evaluation.reason;
+            result.detailedReason = evaluation.detailedReason;
             result.ambiguousCandidates = evaluation.ambiguousCandidates;
             if (evaluation.bestMatch) {
                 result.bestMatch = evaluation.bestMatch.candidate;
                 result.score = evaluation.bestMatch.finalScore;
             }
-
-            // Log de candidatos ambiguos con scores
-            logger.debug(`🏁 Resultado: AMBIGUO (${evaluation.reason})`);
-            logger.debug("   Candidatos en disputa:");
-            // Necesitamos acceder a los scores internos que evaluateMatch usó,
-            // pero evaluation.ambiguousCandidates es ZoomMeetingCandidate[]
-            // Sin embargo, evaluateMatch devuelve MatchEvaluation que tiene info
-            // pero ambiguousCandidates es solo el modelo crudo.
-            // Para debug, podemos recalcular o asumir que Scorer debería devolver esa info.
-            // Por ahora solo logueamos los topics.
-            result.ambiguousCandidates?.forEach(c => logger.debug(`   - ${c.topic}`));
-            logger.groupEnd();
             return result;
         }
 
@@ -239,19 +205,14 @@ export class MatchingService {
         result.bestMatch = meeting;
         result.score = evaluation.bestMatch!.finalScore;
 
-        logger.debug(`✅ Meeting Match: ${meeting.topic} (score: ${result.score})`);
-
         // ---------------------------------------------------------------------
         // PASO 3: Encontrar Instructor
         // ---------------------------------------------------------------------
 
         // Bypass para tests de meetings sin usuarios cargados
         if (this.users.length === 0) {
-            logger.debug("⚠️ Modo Test: Saltando validación de instructor (sin usuarios)");
             result.status = 'assigned';
-            result.reason = `Score: ${result.score} (Sin validación de instructor)`;
-            logger.debug("🏁 Resultado: ASIGNADO (Test Mode)");
-            logger.groupEnd();
+            result.reason = `Score: ${result.score} (No instructor validation)`;
             return result;
         }
 
@@ -260,10 +221,8 @@ export class MatchingService {
         // 3.a. Búsqueda Exacta
         if (this.usersDict[instructorNormalized]) {
             instructor = this.usersDict[instructorNormalized];
-            logger.debug("✅ Instructor Exact Match (Nombre):", instructor.display_name);
         } else if (this.usersDictDisplay[instructorNormalized]) {
             instructor = this.usersDictDisplay[instructorNormalized];
-            logger.debug("✅ Instructor Exact Match (Display):", instructor.display_name);
         } else {
             // 3.b. Token Subset Match
             const queryTokens = new Set(instructorNormalized.split(" "));
@@ -286,24 +245,18 @@ export class MatchingService {
                     );
                     return currLen > prevLen ? current : prev;
                 });
-                logger.debug("✅ Instructor Token Match:", instructor.display_name);
             } else {
                 // 3.c. Fuse.js Fuzzy Match
                 const userResults = this.fuseUsers.search(instructorNormalized);
                 if (userResults.length > 0 && userResults[0].score !== undefined && userResults[0].score <= 0.45) {
                     instructor = userResults[0].item;
-                    logger.debug("✅ Instructor Fuse Match:", instructor.display_name, "Score:", userResults[0].score);
-                } else {
-                    logger.debug("❌ Instructor no encontrado");
                 }
             }
         }
 
         if (!instructor) {
             result.status = 'not_found';
-            result.reason = 'Instructor no encontrado';
-            logger.debug("🏁 Resultado: NO ENCONTRADO (Instructor)");
-            logger.groupEnd();
+            result.reason = 'Instructor not found';
             return result;
         }
 
@@ -316,25 +269,23 @@ export class MatchingService {
         // ---------------------------------------------------------------------
         // PASO 4: Validar Anfitrión
         // ---------------------------------------------------------------------
-        logger.debug("⚖️ Validando Anfitrión:");
-        logger.debug("   ID Anfitrión de Reunión:", meeting.host_id);
-        logger.debug("   ID Instructor:          ", instructor.id);
-
         if (meeting.host_id === instructor.id) {
             result.status = 'assigned';
             result.reason = evaluation.confidence === 'high' ? '-' : `Score: ${result.score}`;
-            logger.debug("🏁 Resultado: ASIGNADO");
         } else {
             result.status = 'to_update';
             result.reason = evaluation.confidence === 'high' ? '-' : `Score: ${result.score}`;
-            logger.debug("🏁 Resultado: POR ACTUALIZAR");
         }
 
-        logger.groupEnd();
         return result;
     }
 
+    /**
+     * Process all schedules asynchronously in chunks to avoid blocking the UI.
+     * Yields to the event loop between batches.
+     */
     public matchAll(schedules: Schedule[]): MatchResult[] {
+        clearLevenshteinCache();
         return schedules.map(s => this.findMatch(s));
     }
 }

@@ -3,9 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { ManageUsersModal } from "./ManageUsersModal";
 import { ManageRolesModal } from "./ManageRolesModal";
-import { Link2, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { RequirePermission } from "@/components/RequirePermission";
-import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/auth-provider";
 import { ZoomIntegration } from "@/features/system/components/ZoomIntegration";
