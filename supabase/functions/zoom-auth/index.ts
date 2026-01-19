@@ -2,7 +2,8 @@
 // Maneja el flujo de autenticación (Server-to-Server OAuth)
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { verifyUserRole, ROLES } from '../_shared/auth-utils.ts'
 
 const ZOOM_CLIENT_ID = Deno.env.get('ZOOM_CLIENT_ID')!
 const ZOOM_CLIENT_SECRET = Deno.env.get('ZOOM_CLIENT_SECRET')!
@@ -76,47 +77,12 @@ serve(async (req: Request) => {
     }
 })
 
-// SEGURIDAD: Verificar si el usuario es admin
-// Devuelve el objeto usuario si está autorizado, lanza error si no
-async function verifyAdmin(req: Request, supabase: SupabaseClient) {
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) throw new Error('Unauthorized')
-
-    const token = authHeader.replace('Bearer ', '')
-    const { data: { user }, error } = await supabase.auth.getUser(token)
-
-    if (error || !user) throw new Error('Unauthorized')
-
-    // Verificar Rol del Perfil
-    // Asumiendo que la tabla 'profiles' vinculada por 'id' tiene una columna 'role'
-    const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-
-    // V2: "RPC set_new_user_role", "ManageUsersModal".
-
-    if (profileError || !profile) {
-        console.error('Profile lookup failed')
-        throw new Error('Unauthorized: No profile')
-    }
-
-    const allowedRoles = ['admin', 'super_admin']
-    // Verificar si el rol está en la lista permitida
-    if (!allowedRoles.includes(profile.role)) {
-        throw new Error('Unauthorized: Insufficient permissions')
-    }
-
-    return user
-}
-
 // === INIT ===
 async function handleInit(req: Request, corsHeaders: Record<string, string>): Promise<Response> {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
     // Verificación RBAC
-    const user = await verifyAdmin(req, supabase)
+    const user = await verifyUserRole(req, supabase, ROLES.ADMIN_AND_ABOVE)
 
     // Crear estado
     const { data: state, error: stateError } = await supabase.rpc('create_oauth_state', {
@@ -216,7 +182,7 @@ async function handleStatus(req: Request, corsHeaders: Record<string, string>): 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
     // Verificación RBAC (Solo admins pueden ver estado)
-    await verifyAdmin(req, supabase)
+    await verifyUserRole(req, supabase, ROLES.ADMIN_AND_ABOVE)
 
     // Seleccionamos campos no sensibles. NO seleccionamos IDs de secretos aquí.
     const { data: account, error } = await supabase
@@ -248,7 +214,7 @@ async function handleDisconnect(req: Request, corsHeaders: Record<string, string
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
     // Verificación RBAC - CRÍTICO
-    await verifyAdmin(req, supabase)
+    await verifyUserRole(req, supabase, ROLES.ADMIN_AND_ABOVE)
 
     // Eliminar cuenta. ¿Integridad referencial o limpieza manual de secretos?
     // Por ahora, solo borramos la cuenta. Los secretos quedan en vault sin referencia.

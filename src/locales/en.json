@@ -94,7 +94,8 @@
             "desc": "Manage your regional settings.",
             "language": "Language",
             "language_desc": "Select your preferred language.",
-            "language_changed": "Language updated"
+            "language_changed": "Language updated",
+            "language_wip": "Some translations may be incomplete."
         },
         "system": {
             "title": "System",

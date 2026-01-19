@@ -94,7 +94,8 @@
             "desc": "Gérez vos paramètres régionaux.",
             "language": "Langue",
             "language_desc": "Sélectionnez votre langue préférée.",
-            "language_changed": "Langue mise à jour"
+            "language_changed": "Langue mise à jour",
+            "language_wip": "Certaines traductions peuvent être incomplètes."
         },
         "system": {
             "title": "Système",

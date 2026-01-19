@@ -186,8 +186,8 @@ function LoginForm({
                                     )}
                                     {isLocked ? `Locked (${lockoutSeconds}s)` : "Login"}
                                 </Button>
-                                <Button variant="outline" type="button">
-                                    Login with Google
+                                <Button variant="outline" type="button" disabled title="Coming soon">
+                                    Login with Google (Coming soon)
                                 </Button>
                                 <FieldDescription className="text-center">
                                     Don&apos;t have an account?{" "}

@@ -6,8 +6,9 @@
 // Body (batch): { batch: true, requests: [...] }
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { getValidAccessToken } from './zoom-auth-utils.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getValidAccessToken } from '../_shared/zoom-token-utils.ts'
+import { verifyUserRole, ROLES } from '../_shared/auth-utils.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -29,34 +30,6 @@ function getCorsHeaders(req: Request) {
     }
 }
 
-// Verificar usuario autenticado y rol admin
-async function verifyAdmin(req: Request, supabase: SupabaseClient) {
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) throw new Error('Unauthorized: Missing header')
-
-    const token = authHeader.replace('Bearer ', '')
-    const { data: { user }, error } = await supabase.auth.getUser(token)
-
-    if (error || !user) throw new Error('Unauthorized: Invalid token')
-
-    // Verificar rol en profiles
-    const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-
-    if (profileError || !profile) {
-        throw new Error('Unauthorized: Profile not found')
-    }
-
-    const allowedRoles = ['super_admin', 'admin']
-    if (!allowedRoles.includes(profile.role)) {
-        throw new Error('Unauthorized: Insufficient permissions')
-    }
-
-    return user
-}
 
 // Tipos
 interface UpdateRequest {
@@ -122,7 +95,7 @@ serve(async (req: Request) => {
 
     try {
         // Verificar autenticación
-        await verifyAdmin(req, supabase)
+        await verifyUserRole(req, supabase, ROLES.ADMIN_AND_ABOVE)
 
         // Obtener token de Zoom válido
         let accessToken: string

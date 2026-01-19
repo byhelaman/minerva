@@ -94,7 +94,8 @@
             "desc": "Administra tu configuración regional.",
             "language": "Idioma",
             "language_desc": "Selecciona tu idioma preferido.",
-            "language_changed": "Idioma actualizado"
+            "language_changed": "Idioma actualizado",
+            "language_wip": "Algunas traducciones pueden estar incompletas."
         },
         "system": {
             "title": "Sistema",

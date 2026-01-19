@@ -266,7 +266,9 @@ export function SettingsPage() {
                                     value={i18n.language}
                                     onValueChange={(value) => {
                                         i18n.changeLanguage(value);
-                                        toast.success(t("settings.preferences.language_changed"));
+                                        toast.info(t("settings.preferences.language_changed"), {
+                                            description: t("settings.preferences.language_wip"),
+                                        });
                                     }}
                                 >
                                     <SelectTrigger className="w-[160px]">

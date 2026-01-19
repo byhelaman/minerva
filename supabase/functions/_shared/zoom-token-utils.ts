@@ -1,9 +1,21 @@
+// Supabase Edge Function: Shared Zoom Token Utils
+// Obtención y refresh automático de tokens de acceso de Zoom
+
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const ZOOM_TOKEN_URL = 'https://zoom.us/oauth/token'
+const TOKEN_BUFFER_MS = 5 * 60 * 1000 // 5 minutos antes de expiración
 
-export async function getValidAccessToken(supabase: SupabaseClient) {
-    // 1. Obtener credenciales actuales
+/**
+ * Obtiene un token de acceso válido de Zoom.
+ * Si el token actual está por expirar, lo refresca automáticamente.
+ * 
+ * @param supabase - Cliente Supabase con service role
+ * @returns Token de acceso válido
+ * @throws Error si no hay cuenta conectada o falla el refresh
+ */
+export async function getValidAccessToken(supabase: SupabaseClient): Promise<string> {
+    // 1. Obtener credenciales actuales desde vista desencriptada
     const { data: zoomAccount, error: zoomError } = await supabase
         .from('zoom_credentials_decrypted')
         .select('*')
@@ -14,25 +26,26 @@ export async function getValidAccessToken(supabase: SupabaseClient) {
         throw new Error('No Zoom account connected')
     }
 
-    // 2. Verificar expiración (Buffer de 5 minutos)
+    // 2. Verificar expiración con buffer de seguridad
     const expiresAt = new Date(zoomAccount.expires_at).getTime()
     const now = Date.now()
-    const bufferMs = 5 * 60 * 1000 // 5 minutos
 
     // Si aún es válido, retornar token actual
-    if (expiresAt > (now + bufferMs)) {
-        console.log('Token valid')
+    if (expiresAt > (now + TOKEN_BUFFER_MS)) {
         return zoomAccount.access_token
     }
 
-    console.log('Token refresh required')
+    // 3. Token expirando pronto - refrescar
+    const clientId = Deno.env.get('ZOOM_CLIENT_ID')
+    const clientSecret = Deno.env.get('ZOOM_CLIENT_SECRET')
 
-    // 3. Preparar credenciales para Refresh
-    const clientId = Deno.env.get('ZOOM_CLIENT_ID')!
-    const clientSecret = Deno.env.get('ZOOM_CLIENT_SECRET')!
+    if (!clientId || !clientSecret) {
+        throw new Error('Zoom OAuth credentials not configured')
+    }
+
     const authString = btoa(`${clientId}:${clientSecret}`)
 
-    // 4. Llamar a Zoom API
+    // 4. Llamar a Zoom API para refresh
     const params = new URLSearchParams()
     params.append('grant_type', 'refresh_token')
     params.append('refresh_token', zoomAccount.refresh_token)
@@ -48,15 +61,14 @@ export async function getValidAccessToken(supabase: SupabaseClient) {
 
     if (!response.ok) {
         const errorBody = await response.text()
-        console.error('Token refresh failed')
         throw new Error(`Failed to refresh Zoom token: ${errorBody}. Please reconnect credentials.`)
     }
 
     const data = await response.json()
 
-    // 5. Guardar nuevos tokens en DB (RPC Atomic)
+    // 5. Guardar nuevos tokens en DB (RPC atómico)
     const { error: rpcError } = await supabase.rpc('store_zoom_credentials', {
-        p_user_id: zoomAccount.zoom_user_id, // Mantenemos el ID original
+        p_user_id: zoomAccount.zoom_user_id,
         p_email: zoomAccount.zoom_email,
         p_name: zoomAccount.zoom_name || 'Zoom User',
         p_access_token: data.access_token,
@@ -66,10 +78,8 @@ export async function getValidAccessToken(supabase: SupabaseClient) {
     })
 
     if (rpcError) {
-        console.error('Credential storage failed')
         throw new Error('Failed to save refreshed token')
     }
 
-    console.log('Token refresh complete')
     return data.access_token
 }

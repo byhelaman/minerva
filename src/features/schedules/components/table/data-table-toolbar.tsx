@@ -93,6 +93,7 @@ interface DataTableToolbarProps<TData> {
     hideFilters?: boolean;
     hideUpload?: boolean;
     hideActions?: boolean;
+    disableRefresh?: boolean;
 }
 
 export function DataTableToolbar<TData>({
@@ -107,6 +108,7 @@ export function DataTableToolbar<TData>({
     hideFilters = false,
     hideUpload = false,
     hideActions = false,
+    disableRefresh = false,
 }: DataTableToolbarProps<TData>) {
     const isFiltered =
         table.getState().columnFilters.length > 0 ||
@@ -370,6 +372,7 @@ export function DataTableToolbar<TData>({
                             variant="outline"
                             size="icon-sm"
                             onClick={onRefresh}
+                            disabled={disableRefresh}
                         >
                             <RefreshCw />
                         </Button>

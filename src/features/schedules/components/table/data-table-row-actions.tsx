@@ -43,7 +43,11 @@ export function DataTableRowActions({
                     <span className="sr-only">Open menu</span>
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[160px]">
+            <DropdownMenuContent
+                align="end"
+                className="w-[160px]"
+                onCloseAutoFocus={(e) => e.preventDefault()}
+            >
                 <DropdownMenuItem onClick={() => onEdit?.(schedule)}>
                     Edit
                 </DropdownMenuItem>

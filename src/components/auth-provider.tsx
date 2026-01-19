@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { Session, User, AuthChangeEvent } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { jwtDecode } from "jwt-decode";
+import { logger } from "@/lib/logger";
 
 // Tipos
 export interface Profile {
@@ -83,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         event: AuthChangeEvent,
         newSession: Session | null
     ) => {
-        console.log(`[Auth] Event: ${event}`, newSession ? "with session" : "no session");
+        logger.debug(`[Auth] Event: ${event}`, newSession ? "with session" : "no session");
 
         // Helper para procesar sesión válida
         const processValidSession = (session: Session) => {
@@ -100,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 if (newSession) {
                     const exists = await verifyUserExists(newSession.user.id);
                     if (!exists) {
-                        console.log('[Auth] User no longer exists, forcing sign out');
+                        logger.debug('[Auth] User no longer exists, forcing sign out');
                         await supabase.auth.signOut();
                         setIsLoading(false);
                         return;
@@ -134,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 break;
 
             default:
-                console.log(`[Auth] Unhandled event: ${event}`);
+                logger.debug(`[Auth] Unhandled event: ${event}`);
                 if (newSession) {
                     setSession(newSession);
                     setUser(newSession.user);
@@ -175,11 +176,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     filter: `id=eq.${user.id}`,
                 },
                 async (payload) => {
-                    console.log('[Auth] Realtime profile change:', payload.eventType);
+                    logger.debug('[Auth] Realtime profile change:', payload.eventType);
 
                     if (payload.eventType === 'DELETE') {
                         // Usuario eliminado → logout inmediato
-                        console.log('[Auth] User deleted, forcing sign out');
+                        logger.debug('[Auth] User deleted, forcing sign out');
                         await supabase.auth.signOut();
                         return;
                     }
@@ -190,7 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         const newRole = (payload.new as any)?.role;
 
                         if (oldRole !== newRole) {
-                            console.log('[Auth] Role changed, refreshing session');
+                            logger.debug('[Auth] Role changed, refreshing session');
                             await supabase.auth.refreshSession();
                         }
                     }

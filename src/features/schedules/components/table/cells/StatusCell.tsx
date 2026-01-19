@@ -171,7 +171,7 @@ export function StatusCell({
                                         </div>
                                     </div>
                                     <div>
-                                        <div className="text-xs font-medium text-muted-foreground mb-1">Series End</div>
+                                        <div className="text-xs font-medium text-muted-foreground mb-1">Series end</div>
                                         <div className="text-sm">
                                             {matched.start_time
                                                 ? new Date(matched.start_time).toLocaleString('en-US', {

@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { logger } from "./logger";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -75,7 +76,7 @@ export const startSessionRefresh = () => {
     if (!isAutoRefreshActive) {
         supabase.auth.startAutoRefresh();
         isAutoRefreshActive = true;
-        console.log("[Supabase] Auto-refresh started");
+        logger.debug("[Supabase] Auto-refresh started");
     }
 };
 
@@ -87,7 +88,7 @@ export const stopSessionRefresh = () => {
     if (isAutoRefreshActive) {
         supabase.auth.stopAutoRefresh();
         isAutoRefreshActive = false;
-        console.log("[Supabase] Auto-refresh stopped");
+        logger.debug("[Supabase] Auto-refresh stopped");
     }
 };
 
@@ -111,7 +112,7 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
 
                 // Si el token expira en menos de 5 minutos, refrescar proactivamente
                 if (expiresAt && (expiresAt - now) < fiveMinutes) {
-                    console.log("[Supabase] Token expiring soon - refreshing proactively");
+                    logger.debug("[Supabase] Token expiring soon - refreshing proactively");
                     await supabase.auth.refreshSession();
                 }
             }

@@ -1,11 +1,32 @@
+# Supabase Edge Functions Configuration
+# ==========================================
+#
+# zoom-api: Actualiza meetings de Zoom
+# Verificación: verifyUserRole(req, supabase, ROLES.ADMIN_AND_ABOVE)
+[functions.zoom-api]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/zoom-api/index.ts"
 
+# zoom-auth: Maneja OAuth flow con Zoom  
+# Verificación: verifyUserRole(req, supabase, ROLES.ADMIN_AND_ABOVE)
+[functions.zoom-auth]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/zoom-auth/index.ts"
+
+# zoom-sync: Sincroniza usuarios y meetings de Zoom
+# Verificación: verifyAccess() - acepta JWT admin O internal key (cronjobs)
 [functions.zoom-sync]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/zoom-sync/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
 entrypoint = "./functions/zoom-sync/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/zoom-sync/*.html" ]
+
+# zoom-webhook: Recibe webhooks de Zoom
+# Verificación: Firma HMAC con x-zm-signature (Zoom no envía JWT)
+[functions.zoom-webhook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/zoom-webhook/index.ts"
+

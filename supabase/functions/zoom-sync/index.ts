@@ -5,8 +5,9 @@
 // Retorna: { users_synced, meetings_synced }
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { getValidAccessToken } from './zoom-auth-utils.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getValidAccessToken } from '../_shared/zoom-token-utils.ts'
+import { verifyAccess, ROLES } from '../_shared/auth-utils.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -29,37 +30,6 @@ function getCorsHeaders(req: Request) {
   }
 }
 
-// Helper: Verificar si el usuario es administrador (Estándar V2)
-async function verifyAdmin(req: Request, supabase: SupabaseClient) {
-  const authHeader = req.headers.get('Authorization')
-  if (!authHeader) throw new Error('Unauthorized: Missing header')
-
-  const token = authHeader.replace('Bearer ', '')
-  const { data: { user }, error } = await supabase.auth.getUser(token)
-
-  if (error || !user) throw new Error('Unauthorized: Invalid token')
-
-  // Verificar Rol del Perfil (Tabla 'profiles' de V2)
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (profileError || !profile) {
-    console.error('Profile lookup failed')
-    // Fallback: Si no hay perfil, verificar si es super_admin en auth (opcional, pero mejor ser estricto)
-    throw new Error('Unauthorized: Profile not found')
-  }
-
-  const allowedRoles = ['super_admin']
-  if (!allowedRoles.includes(profile.role)) {
-    throw new Error('Unauthorized: Insufficient permissions')
-  }
-
-  return user
-}
-
 serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req)
 
@@ -67,33 +37,10 @@ serve(async (req: Request) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  // Estrategia de Autenticación:
-  // 1. Bearer Token (JWT) - Chequeo de Admin via verifyAdmin
-  // 2. x-internal-key - Chequeo de clave interna (Cronjobs etc)
-
-  let isAuthorized = false
-  let authError: unknown = null
-  const authHeader = req.headers.get('authorization')
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-  try {
-    if (authHeader) {
-      await verifyAdmin(req, supabase)
-      isAuthorized = true
-    }
-  } catch (e) {
-    // Si falla auth de usuario, intentamos Internal Key
-    console.log('Fallback to internal key')
-    // TEMPORAL DEBUG: Guardar el error para retornarlo si falla todo
-    authError = e
-  }
-
-  // Verificar Internal Key (Fallback)
-  const INTERNAL_API_KEY = Deno.env.get('INTERNAL_API_KEY')
-  const providedKey = req.headers.get('x-internal-key')
-  if (!isAuthorized && INTERNAL_API_KEY && providedKey === INTERNAL_API_KEY) {
-    isAuthorized = true
-  }
+  // Verificación de acceso: usuario super_admin O clave interna
+  const isAuthorized = await verifyAccess(req, supabase, ROLES.SUPER_ADMIN_ONLY)
 
   if (!isAuthorized) {
     return new Response(

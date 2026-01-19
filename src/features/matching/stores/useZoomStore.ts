@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
 import { ZoomMeetingCandidate, MatchResult } from '../services/matcher';
 import { Schedule } from '@/features/schedules/utils/excel-parser';
+import { logger } from '@/lib/logger';
 
 interface ZoomUser {
     id: string;
@@ -60,7 +61,7 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
     fetchZoomData: async () => {
         // Evitar múltiples llamadas simultáneas que puedan reiniciar el worker incorrectamente
         if (get().isLoadingData) {
-            console.log('Fetch already in progress, skipping...');
+            logger.debug('Fetch already in progress, skipping...');
             return;
         }
 
@@ -134,7 +135,7 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
 
         worker.onmessage = (e) => {
             if (e.data.type === 'READY') {
-                console.log('Matching Worker Ready');
+                logger.debug('Matching Worker Ready');
             } else if (e.data.type === 'ERROR') {
                 console.error('Matching Worker Error:', e.data.error);
             }
@@ -158,7 +159,7 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
                 }
             }
 
-            console.log("Session verified.");
+            logger.debug("Session verified.");
 
             const { data, error } = await supabase.functions.invoke('zoom-sync', {
                 method: 'POST',
@@ -255,10 +256,11 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
     executeAssignments: async (meetingIds?: string[]) => {
         const { matchResults } = get();
 
-        // Filtrar: 'to_update' o 'manual' (ambiguedad resuelta) con meeting_id e instructor
+        // Filtrar: 'to_update', 'manual' (ambiguedad resuelta), o 'assigned' (re-actualización)
+        // Se requiere meeting_id e instructor
         // Si se proporcionan meetingIds, filtrar solo esos
         let toUpdate = matchResults.filter(r =>
-            (r.status === 'to_update' || r.status === 'manual') &&
+            (r.status === 'to_update' || r.status === 'manual' || r.status === 'assigned') &&
             r.meeting_id &&
             r.found_instructor
         );
@@ -275,7 +277,7 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
 
         try {
             // Construir requests para batch
-            const requests = toUpdate.map(result => {
+            const allRequests = toUpdate.map(result => {
                 const schedule = result.schedule;
                 const instructor = result.found_instructor!;
 
@@ -298,29 +300,68 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
                 };
             });
 
-            // Llamar Edge Function
-            const { data, error } = await supabase.functions.invoke('zoom-api', {
-                body: { batch: true, requests }
-            });
+            // Procesar en chunks de 30 secuencialmente
+            // Zoom Heavy APIs tienen límite de 10 req/s, la Edge Function procesa en paralelo internamente
+            const CHUNK_SIZE = 30;
+            const DELAY_BETWEEN_CHUNKS_MS = 3500; // 3.5 segundos entre chunks (30 items / 10 req/s = 3s + margen)
 
-            if (error) {
-                set({ isExecuting: false });
-                return { succeeded: 0, failed: toUpdate.length, errors: [error.message] };
+            const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+            let totalSucceeded = 0;
+            let totalFailed = 0;
+            const allErrors: string[] = [];
+            const allResults: Array<{ meeting_id: string; success: boolean; error?: string }> = [];
+
+            // Dividir en chunks
+            const chunks: typeof allRequests[] = [];
+            for (let i = 0; i < allRequests.length; i += CHUNK_SIZE) {
+                chunks.push(allRequests.slice(i, i + CHUNK_SIZE));
             }
 
-            const response = data as {
-                batch: boolean;
-                total: number;
-                succeeded: number;
-                failed: number;
-                results: Array<{ meeting_id: string; success: boolean; error?: string }>;
-            };
+            // Procesar chunks secuencialmente con delay entre cada uno
+            for (let i = 0; i < chunks.length; i++) {
+                const chunk = chunks[i];
+                const chunkNum = i + 1;
+
+                const { data, error } = await supabase.functions.invoke('zoom-api', {
+                    body: { batch: true, requests: chunk }
+                });
+
+                if (error) {
+                    totalFailed += chunk.length;
+                    allErrors.push(`Chunk ${chunkNum}: ${error.message}`);
+                } else {
+                    const response = data as {
+                        batch: boolean;
+                        total: number;
+                        succeeded: number;
+                        failed: number;
+                        results: Array<{ meeting_id: string; success: boolean; error?: string }>;
+                    };
+
+                    totalSucceeded += response.succeeded;
+                    totalFailed += response.failed;
+                    allResults.push(...response.results);
+
+                    // Agregar errores individuales
+                    const chunkErrors = response.results
+                        .filter(r => !r.success && r.error)
+                        .map(r => `${r.meeting_id}: ${r.error}`);
+                    allErrors.push(...chunkErrors);
+                }
+
+                // Delay entre chunks para respetar rate limit de Zoom (30 items / 10 req/s = 3s + margen)
+                if (i < chunks.length - 1) {
+                    await delay(DELAY_BETWEEN_CHUNKS_MS);
+                }
+            }
 
             // Actualizar matchResults con los resultados
             const updatedResults = matchResults.map(r => {
-                if (r.status !== 'to_update' || !r.meeting_id) return r;
+                // Solo procesar los status que fueron enviados para actualización
+                if (!['to_update', 'manual', 'assigned'].includes(r.status) || !r.meeting_id) return r;
 
-                const result = response.results.find(res => res.meeting_id === r.meeting_id);
+                const result = allResults.find(res => res.meeting_id === r.meeting_id);
                 if (result?.success) {
                     return { ...r, status: 'assigned' as const, reason: 'Updated' };
                 }
@@ -329,14 +370,10 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
 
             set({ matchResults: updatedResults, isExecuting: false });
 
-            const errors = response.results
-                .filter(r => !r.success && r.error)
-                .map(r => `${r.meeting_id}: ${r.error}`);
-
             return {
-                succeeded: response.succeeded,
-                failed: response.failed,
-                errors
+                succeeded: totalSucceeded,
+                failed: totalFailed,
+                errors: allErrors
             };
         } catch (err) {
             set({ isExecuting: false });

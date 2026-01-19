@@ -36,10 +36,13 @@ interface ScheduleDataTableProps<TData, TValue> {
     onRefresh?: () => void;
     onSelectionChange?: (selectedRows: TData[]) => void;
     enableRowSelection?: boolean | ((row: TData) => boolean);
+    controlledSelection?: Record<string, boolean>;
+    onControlledSelectionChange?: (selection: Record<string, boolean>) => void;
     hideFilters?: boolean;
     hideUpload?: boolean;
     hideActions?: boolean;
     hideOverlaps?: boolean;
+    disableRefresh?: boolean;
 }
 
 export function ScheduleDataTable<TData, TValue>({
@@ -50,7 +53,16 @@ export function ScheduleDataTable<TData, TValue>({
     onRefresh,
     ...props
 }: ScheduleDataTableProps<TData, TValue>) {
-    const [rowSelection, setRowSelection] = React.useState({});
+    // Use controlled selection if provided, otherwise use internal state
+    const [internalSelection, setInternalSelection] = React.useState({});
+    const isControlled = props.controlledSelection !== undefined;
+    const rowSelection = isControlled ? props.controlledSelection! : internalSelection;
+    const setRowSelection = isControlled
+        ? (updater: React.SetStateAction<Record<string, boolean>>) => {
+            const newValue = typeof updater === 'function' ? updater(rowSelection) : updater;
+            props.onControlledSelectionChange?.(newValue);
+        }
+        : setInternalSelection;
     // Columna shift oculta por defecto
     const [columnVisibility, setColumnVisibility] =
         React.useState<VisibilityState>({ shift: false });
@@ -211,6 +223,7 @@ export function ScheduleDataTable<TData, TValue>({
                 hideFilters={props.hideFilters}
                 hideUpload={props.hideUpload}
                 hideActions={props.hideActions}
+                disableRefresh={props.disableRefresh}
             />
 
             {/* Table */}
