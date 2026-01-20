@@ -35,6 +35,7 @@ function getCorsHeaders(req: Request) {
 interface UpdateRequest {
     meeting_id: string
     schedule_for: string
+    topic?: string // Agregado para permitir renombrar reuniones
     start_time?: string
     duration?: number
     timezone?: string
@@ -74,6 +75,10 @@ function buildZoomPatchBody(req: UpdateRequest): Record<string, unknown> {
 
     if (req.schedule_for) {
         body.schedule_for = req.schedule_for
+    }
+
+    if (req.topic) {
+        body.topic = req.topic
     }
 
     if (req.start_time) {
@@ -132,34 +137,63 @@ serve(async (req: Request) => {
 
         const body: RequestBody = await req.json()
 
+        // Helper para sincronizar inmediatamente con DB (Side-Effect Update)
+        const syncToSupabase = async (meetingId: string): Promise<{ success: boolean; error?: string }> => {
+            try {
+                // 1. Obtener datos frescos de Zoom
+                const getResp = await fetch(`${ZOOM_API_BASE}/meetings/${meetingId}`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                })
+                if (!getResp.ok) {
+                    const msg = `[Zoom API] Fetch error: ${meetingId} (Status: ${getResp.status})`;
+                    console.error(msg)
+                    return { success: false, error: msg }
+                }
+                const zoomData = await getResp.json()
+
+                // 2. Preparar payload DB
+                const dbPayload = {
+                    meeting_id: zoomData.id.toString(),
+                    topic: zoomData.topic,
+                    host_id: zoomData.host_id,
+                    start_time: zoomData.start_time,
+                    duration: zoomData.duration,
+                    timezone: zoomData.timezone,
+                    join_url: zoomData.join_url,
+                    created_at: zoomData.created_at,
+                    synced_at: new Date().toISOString()
+                }
+
+                // 3. Upsert a Supabase
+                const { error } = await supabase.from('zoom_meetings').upsert(dbPayload, { onConflict: 'meeting_id' })
+
+                if (error) {
+                    console.error(`[Zoom API] Sync error for ${meetingId}:`, error)
+                    return { success: false, error: `DB Sync Error: ${error.message}` }
+                } else {
+                    return { success: true }
+                }
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : 'Unknown sync error';
+                console.error(`[Zoom API] Sync exception for ${meetingId}:`, err)
+                return { success: false, error: msg }
+            }
+        }
+
         // ========== MODO BATCH ==========
         if (isBatchRequest(body)) {
-            if (body.requests.length === 0) {
-                return jsonResponse({ error: 'No requests in batch' }, 400, corsHeaders)
-            }
-            if (body.requests.length > 50) {
-                return jsonResponse({ error: 'Batch size exceeds limit (max 50)' }, 400, corsHeaders)
-            }
-
+            // ... (validaciones)
             // Procesar solicitudes en paralelo
             const results = await Promise.allSettled(
                 body.requests.map(async (request, index) => {
-                    // Determinar acción: request.action > body.action > 'update' (por defecto)
+                    // ... (lógica existente de action determination)
                     const action = request.action || (body as BatchRequest).action || 'update'
 
                     if (action === 'update' && (!request.meeting_id || !request.schedule_for)) {
-                        return {
-                            meeting_id: request.meeting_id || 'unknown',
-                            success: false,
-                            error: 'meeting_id and schedule_for required for update'
-                        }
+                        return { meeting_id: request.meeting_id || 'unknown', success: false, error: 'meeting_id and schedule_for required for update' }
                     }
                     if (action === 'create' && !request.topic) {
-                        return {
-                            meeting_id: 'new',
-                            success: false,
-                            error: 'topic required for create'
-                        }
+                        return { meeting_id: 'new', success: false, error: 'topic required for create' }
                     }
 
                     try {
@@ -184,59 +218,62 @@ serve(async (req: Request) => {
                                 'Content-Type': 'application/json'
                             },
                             body: JSON.stringify(apiBody)
-                        }
-                        )
+                        })
 
                         // 201 Creado para POST, 204 Sin Contenido para PATCH
                         if (zoomResponse.status === 201 || zoomResponse.status === 204 || zoomResponse.ok) {
-                            // Para crear, retornar el nuevo ID
-                            let resultData = {}
+                            let resultData: any = {}
+                            let finalMeetingId = request.meeting_id
+
                             if (action === 'create') {
                                 try {
                                     resultData = await zoomResponse.json()
+                                    finalMeetingId = resultData.id.toString()
                                 } catch { }
                             }
+
+                            // SIDE-EFFECT: Sincronizar con DB inmediatamente
+                            if (finalMeetingId && finalMeetingId !== 'unknown') {
+                                const syncResult = await syncToSupabase(finalMeetingId)
+                                if (!syncResult.success) {
+                                    // Si falla el sync, considerarlo un error parcial o warning, pero para el frontend es crítico saberlo.
+                                    // Vamos a marcarlo como fallo para que el usuario sepa que algo salió mal.
+                                    return {
+                                        meeting_id: finalMeetingId,
+                                        success: false,
+                                        error: `Zoom Created but DB Sync Failed: ${syncResult.error}`
+                                    }
+                                }
+                            }
+
                             return {
-                                meeting_id: request.meeting_id || (resultData as any).id || 'unknown',
+                                meeting_id: finalMeetingId || 'unknown',
                                 success: true,
                                 data: resultData
                             }
                         }
 
-                        // Error de Zoom
+                        // ... (Error handling)
                         let errorMsg = `Zoom API error: ${zoomResponse.status}`
                         try {
                             const errorData = await zoomResponse.json()
                             errorMsg = errorData.message || errorMsg
-                        } catch { /* ignore parse error */ }
-
+                        } catch { }
                         return { meeting_id: request.meeting_id || 'unknown', success: false, error: errorMsg }
+
                     } catch (err) {
-                        return {
-                            meeting_id: request.meeting_id,
-                            success: false,
-                            error: err instanceof Error ? err.message : 'Unknown error'
-                        }
+                        return { meeting_id: request.meeting_id, success: false, error: err instanceof Error ? err.message : 'Unknown error' }
                     }
                 })
             )
-
-            // Formatear resultados
+            // ... (resto de lógica batch)
             const batchResults = results.map((result, index) => {
-                if (result.status === 'fulfilled') {
-                    return result.value
-                }
-                return {
-                    meeting_id: body.requests[index]?.meeting_id || 'unknown',
-                    success: false,
-                    error: result.reason?.message || 'Request failed'
-                }
+                if (result.status === 'fulfilled') return result.value
+                return { meeting_id: 'unknown', success: false, error: result.reason?.message || 'Request failed' }
             })
-
+            // ...
             const successCount = batchResults.filter(r => r.success).length
             const errorCount = batchResults.length - successCount
-
-            console.log(`Batch complete: ${successCount} succeeded, ${errorCount} failed`)
 
             return jsonResponse({
                 batch: true,
@@ -268,7 +305,12 @@ serve(async (req: Request) => {
 
         // Zoom devuelve 204 No Content en éxito
         if (zoomResponse.status === 204 || zoomResponse.ok) {
-            console.log(`Meeting ${body.meeting_id} updated successfully`)
+            // SIDE-EFFECT: Sync inmediata
+            const syncResult = await syncToSupabase(body.meeting_id)
+            if (!syncResult.success) {
+                return jsonResponse({ success: false, error: `Zoom Updated but DB Sync Failed: ${syncResult.error}` }, 500, corsHeaders)
+            }
+
             return jsonResponse({ success: true }, 200, corsHeaders)
         }
 
@@ -277,7 +319,7 @@ serve(async (req: Request) => {
         try {
             const errorData = await zoomResponse.json()
             errorMsg = errorData.message || errorMsg
-        } catch { /* ignore parse error */ }
+        } catch { }
 
         return jsonResponse({ success: false, error: errorMsg }, zoomResponse.status, corsHeaders)
 

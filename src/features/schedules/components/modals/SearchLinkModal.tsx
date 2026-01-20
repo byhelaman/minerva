@@ -29,7 +29,7 @@ const searchColumns: ColumnDef<MeetingRow>[] = [
     {
         id: "select",
         size: 36,
-        header: ({ table }) => (
+        header: () => (
             <div className="flex justify-center items-center mb-1">
                 <Checkbox
                     disabled
@@ -38,7 +38,7 @@ const searchColumns: ColumnDef<MeetingRow>[] = [
                 />
             </div>
         ),
-        cell: ({ row }) => (
+        cell: () => (
             <div className="flex justify-center">
                 <Checkbox
                     disabled
@@ -113,7 +113,7 @@ const searchColumns: ColumnDef<MeetingRow>[] = [
     {
         id: "actions",
         size: 50,
-        cell: ({ row }) => {
+        cell: () => {
             return (
                 <div className="flex justify-center">
                     <DropdownMenu>

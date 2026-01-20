@@ -8,6 +8,7 @@ import { getAssignmentColumns, AssignmentRow } from "@schedules/components/table
 import { Schedule } from "@schedules/utils/excel-parser";
 import { useZoomStore } from "@/features/matching/stores/useZoomStore";
 import { useInstructors } from "@/features/schedules/hooks/useInstructors";
+import { useHostMap } from "@/features/schedules/hooks/useHostMap";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -20,7 +21,7 @@ interface AssignLinkModalProps {
 }
 
 export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkModalProps) {
-    const { fetchZoomData, runMatching, matchResults, meetings, users, isLoadingData, executeAssignments, isExecuting } = useZoomStore();
+    const { fetchZoomData, runMatching, matchResults, meetings, isLoadingData, executeAssignments, isExecuting } = useZoomStore();
     const instructorsList = useInstructors();
     const [isMatching, setIsMatching] = useState(false);
     const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
@@ -84,14 +85,8 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
         }
     };
 
-    // Create host ID to name map
-    const hostMap = useMemo(() => {
-        const map = new Map<string, string>();
-        for (const user of users) {
-            map.set(user.id, user.display_name || `${user.first_name} ${user.last_name}`);
-        }
-        return map;
-    }, [users]);
+    // Usar hook reutilizable para mapa de anfitriones
+    const hostMap = useHostMap();
 
     // Handler para cambiar instructor de una fila
     const handleInstructorChange = (rowId: string, newInstructor: string) => {
@@ -402,7 +397,7 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
                     {/* Status bar with counts on the left */}
                     <div className="flex items-center gap-3 mr-auto text-sm text-muted-foreground">
                         {isLoadingData || isMatching || isExecuting ? (
-                            <span className="text-muted-foreground">...</span>
+                            <span className="text-muted-foreground">Processing...</span>
                         ) : (
                             <>
                                 <span>Assigned: <strong className="text-foreground font-medium">{statusCounts.assigned}</strong></span>
@@ -467,7 +462,11 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
                                     // Resetear switch y selección después de ejecutar
                                     setIncludeAssigned(false);
                                     setRowSelection({});
-                                    await handleRefresh();
+                                    // El store ya hizo el refresh con delay de webhook
+                                    // Solo necesitamos re-ejecutar el matching con los datos frescos
+                                    setIsMatching(true);
+                                    await runMatching(schedules);
+                                    setIsMatching(false);
                                 }
                                 if (result.failed > 0) {
                                     toast.error(`${result.failed} meetings failed to update`);

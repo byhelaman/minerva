@@ -158,12 +158,22 @@ export async function parseExcelFile(file: File): Promise<Schedule[]> {
         if (isExportedFormat) {
             // Parseo simple para archivos exportados
             const exportData = utils.sheet_to_json(worksheet) as Schedule[];
-            // Normalizar tiempos a 24h para consistencia interna
-            const normalizedData = exportData.map(item => ({
-                ...item,
-                start_time: formatTimeTo24h(item.start_time),
-                end_time: formatTimeTo24h(item.end_time)
-            }));
+            // Normalizar tiempos a 24h para consistencia interna y corregir fechas numéricas
+            const normalizedData = exportData.map(item => {
+                let date = item.date;
+                if (typeof date === 'number') {
+                    date = excelDateToString(date);
+                } else if (typeof date === 'string' && /^\d+$/.test(date.trim())) {
+                    date = excelDateToString(parseInt(date.trim(), 10));
+                }
+
+                return {
+                    ...item,
+                    date: safeString(date), // Asegurar que sea string final
+                    start_time: formatTimeTo24h(item.start_time),
+                    end_time: formatTimeTo24h(item.end_time)
+                };
+            });
             schedules.push(...normalizedData);
             continue;
         }
@@ -185,10 +195,14 @@ export async function parseExcelFile(file: File): Promise<Schedule[]> {
             const instructorCode = safeString(row3[0]);
             const instructorName = safeString(row4[0]);
 
-            const scheduleDate =
-                typeof scheduleDateVal === "number"
-                    ? excelDateToString(scheduleDateVal)
-                    : safeString(scheduleDateVal);
+            let scheduleDate = safeString(scheduleDateVal);
+
+            // Detectar fechas numéricas o strings numéricos (ej: "46044")
+            if (typeof scheduleDateVal === "number") {
+                scheduleDate = excelDateToString(scheduleDateVal);
+            } else if (typeof scheduleDateVal === "string" && /^\d+$/.test(scheduleDateVal.trim())) {
+                scheduleDate = excelDateToString(parseInt(scheduleDateVal.trim(), 10));
+            }
 
             const branchName = extractBranchKeyword(safeString(locationVal)) ?? "";
 

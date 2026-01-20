@@ -34,14 +34,18 @@ interface ZoomState {
     worker: Worker | null,
 
     // Acciones
-    fetchZoomData: () => Promise<void>;
+    fetchZoomData: (options?: { force?: boolean; silent?: boolean }) => Promise<void>;
     triggerSync: () => Promise<void>;
     runMatching: (schedules: Schedule[]) => Promise<void>;
     resolveConflict: (schedule: Schedule, selectedMeeting: ZoomMeetingCandidate) => void;
     createMeetings: (topics: string[]) => Promise<{ succeeded: number; failed: number; errors: string[] }>;
     updateMatchings: (updates: { meeting_id: string; topic?: string; schedule_for?: string }[]) => Promise<{ succeeded: number; failed: number; errors: string[] }>;
+    executeAssignments: (meetingIds?: string[]) => Promise<{ succeeded: number; failed: number; errors: string[] }>;
 
     _genericBatchAction: (meetingIds?: string[]) => Promise<{ succeeded: number; failed: number; errors: string[] }>;
+
+    // Promesa de fetch activa para deduplicación
+    _activeFetchPromise: Promise<void> | null;
 
     // Método interno para inicializar el worker
     _initWorker: (meetings: ZoomMeetingCandidate[], users: ZoomUser[]) => void;
@@ -58,74 +62,91 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
     isLoadingData: false,
     isExecuting: false,
     worker: null,
+    _activeFetchPromise: null,
 
     // Cache interno eliminado a favor del worker
 
-    fetchZoomData: async () => {
-        // Evitar múltiples llamadas simultáneas que puedan reiniciar el worker incorrectamente
-        if (get().isLoadingData) {
-            logger.debug('Fetch already in progress, skipping...');
-            return;
+    fetchZoomData: async (options = {}) => {
+        const { force = false, silent = false } = options;
+        const activePromise = get()._activeFetchPromise;
+
+        // Si hay un fetch activo:
+        if (activePromise) {
+            // Si no se fuerza, reutilizar la promesa existente (deduplicación)
+            if (!force) {
+                return activePromise;
+            }
+            // Si se fuerza, esperar a que termine la activa y luego lanzar una nueva
+            // Esto es crucial para operaciones de escritura que necesitan datos frescos
+            // y no pueden confiar en un fetch iniciado ANTES de la escritura.
+            await activePromise;
         }
 
-        set({ isLoadingData: true });
-        try {
-            const pageSize = 1000;
+        const fetchPromise = (async () => {
+            if (!silent) {
+                set({ isLoadingData: true });
+            }
+            try {
+                const pageSize = 1000;
 
-            const fetchAllPages = async <T>(
-                table: 'zoom_meetings' | 'zoom_users',
-                select: string
-            ): Promise<T[]> => {
-                let allData: T[] = [];
-                let page = 0;
-                let hasMore = true;
+                const fetchAllPages = async <T>(
+                    table: 'zoom_meetings' | 'zoom_users',
+                    select: string
+                ): Promise<T[]> => {
+                    let allData: T[] = [];
+                    let page = 0;
+                    let hasMore = true;
 
-                while (hasMore) {
-                    const { data, error } = await supabase
-                        .from(table)
-                        .select(select)
-                        .range(page * pageSize, (page + 1) * pageSize - 1);
+                    while (hasMore) {
+                        const { data, error } = await supabase
+                            .from(table)
+                            .select(select)
+                            .range(page * pageSize, (page + 1) * pageSize - 1);
 
-                    if (error) throw error;
+                        if (error) throw error;
 
-                    if (data && data.length > 0) {
-                        allData = [...allData, ...data as T[]];
-                        if (data.length < pageSize) hasMore = false;
-                        else page++;
-                    } else {
-                        hasMore = false;
+                        if (data && data.length > 0) {
+                            allData = [...allData, ...data as T[]];
+                            if (data.length < pageSize) hasMore = false;
+                            else page++;
+                        } else {
+                            hasMore = false;
+                        }
                     }
-                }
-                return allData;
-            };
+                    return allData;
+                };
 
-            const [allMeetings, allUsers] = await Promise.all([
-                fetchAllPages<ZoomMeetingCandidate>(
-                    'zoom_meetings',
-                    'meeting_id, topic, host_id, start_time, join_url'
-                ),
-                fetchAllPages<ZoomUser>(
-                    'zoom_users',
-                    'id, email, first_name, last_name, display_name'
-                )
-            ]);
+                const [allMeetings, allUsers] = await Promise.all([
+                    fetchAllPages<ZoomMeetingCandidate>(
+                        'zoom_meetings',
+                        'meeting_id, topic, host_id, start_time, join_url'
+                    ),
+                    fetchAllPages<ZoomUser>(
+                        'zoom_users',
+                        'id, email, first_name, last_name, display_name'
+                    )
+                ]);
 
-            set({
-                meetings: allMeetings,
-                users: allUsers,
-            });
+                set({
+                    meetings: allMeetings,
+                    users: allUsers,
+                });
 
-            // Inicializar worker con los nuevos datos
-            get()._initWorker(allMeetings, allUsers);
+                // Inicializar worker con los nuevos datos
+                get()._initWorker(allMeetings, allUsers);
 
-        } catch (error) {
-            console.error("Error fetching Zoom data:", error);
-        } finally {
-            set({ isLoadingData: false });
-        }
+            } catch (error) {
+                console.error("Error fetching Zoom data:", error);
+            } finally {
+                set({ isLoadingData: false, _activeFetchPromise: null });
+            }
+        })();
+
+        set({ _activeFetchPromise: fetchPromise });
+        return fetchPromise;
     },
 
-    _initWorker: (meetings, users) => {
+    _initWorker: (meetings: ZoomMeetingCandidate[], users: ZoomUser[]) => {
         const currentWorker = get().worker;
         if (currentWorker) {
             currentWorker.terminate();
@@ -256,10 +277,7 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
     },
 
     executeAssignments: async (meetingIds?: string[]) => {
-        // Implementation for executeAssignments (kept as is, but we could refactor to use the generic updateMatchings if desired, but kept separate for logic isolation)
-        const { matchResults } = get();
-        // ... (existing logic)
-        // For brevity in this diff, reusing the existing logic structure for new actions below
+        // Delegating to the generic batch action
         return get()._genericBatchAction(meetingIds);
     },
 
@@ -319,7 +337,14 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
                 return r;
             });
 
-            set({ matchResults: updatedResults, isExecuting: false });
+            set({ matchResults: updatedResults });
+
+            // Refrescar datos inmediatamente (el backend ya sincronizó con DB)
+            if (result.succeeded > 0) {
+                await get().fetchZoomData({ force: true });
+            }
+
+            set({ isExecuting: false });
             return { succeeded: result.succeeded, failed: result.failed, errors: result.errors };
 
         } catch (err) {
@@ -367,8 +392,10 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
 
             const result = await processBatchChunks(requests);
 
-            // Refresh data to show new meetings
-            await get().fetchZoomData();
+
+
+            // Refresh data should be handled by caller
+            // await get().fetchZoomData({ force: true });
 
             set({ isExecuting: false });
             return { succeeded: result.succeeded, failed: result.failed, errors: result.errors };
@@ -383,14 +410,47 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
         try {
             // Actualizaciones básicas (ej: renombrar tema o confirmar)
             // Por ahora, asumiendo actualización de tema o simplemente "tocarlo".
+            // Build recurrence for updates (same as create)
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(9, 0, 0, 0);
+            const startTimeStr = tomorrow.toISOString().split('.')[0];
+
+            const endDate = new Date(tomorrow);
+            endDate.setDate(endDate.getDate() + 120);
+            const endDateTime = endDate.toISOString().replace('.000', '');
+
+            const recurrence = {
+                type: 2, // Weekly
+                repeat_interval: 1,
+                weekly_days: "2,3,4,5", // Mon-Thu
+                end_date_time: endDateTime
+            };
+
             const requests = updates.map(u => ({
                 action: 'update' as const,
                 meeting_id: u.meeting_id,
-                schedule_for: u.schedule_for || 'me', // Por defecto a 'me' si se encuentra?
-                topic: u.topic
+                schedule_for: u.schedule_for, // Requerido por backend
+                topic: u.topic,
+                // Agregamos el resto de campos para asegurar actualización completa en Zoom
+                type: 8,
+                start_time: startTimeStr,
+                duration: 60,
+                timezone: 'America/Lima',
+                recurrence: recurrence,
+                settings: {
+                    join_before_host: true,
+                    waiting_room: true
+                }
             }));
 
             const result = await processBatchChunks(requests);
+
+
+
+            // Refresh data should be handled by caller
+            // await get().fetchZoomData({ force: true });
+
             set({ isExecuting: false });
             return { succeeded: result.succeeded, failed: result.failed, errors: result.errors };
         } catch (err) {
@@ -421,31 +481,56 @@ function calculateDuration(startTime: string, endTime: string): number {
 /** Convertir fecha y hora a ISO 8601 (hora local sin conversión UTC) */
 function toISODateTime(dateStr: string, timeStr: string): string {
     try {
-        // Intentar formatos: DD/MM/YYYY, YYYY-MM-DD
+        if (!dateStr || !timeStr) {
+            console.warn("toISODateTime: Missing date or time", { dateStr, timeStr });
+            return '';
+        }
+
         let year: number, month: number, day: number;
 
+        // Intentar formatos manuales: DD/MM/YYYY, YYYY-MM-DD
         if (dateStr.includes('/')) {
             const parts = dateStr.split('/');
             if (parts[0].length === 4) {
                 // YYYY/MM/DD
                 [year, month, day] = parts.map(Number);
             } else {
-                // DD/MM/YYYY (formato Perú)
+                // DD/MM/YYYY (formato Perú/UK)
                 [day, month, year] = parts.map(Number);
             }
         } else if (dateStr.includes('-')) {
+            // YYYY-MM-DD
             [year, month, day] = dateStr.split('-').map(Number);
         } else {
+            // Fallback: Intentar parsear con Date nativo (ej: "Mon Jan 19 2026...")
+            const d = new Date(dateStr);
+            if (!isNaN(d.getTime())) {
+                year = d.getFullYear();
+                month = d.getMonth() + 1;
+                day = d.getDate();
+            } else {
+                console.error("toISODateTime: Unsupported format", { dateStr });
+                return '';
+            }
+        }
+
+        if (isNaN(year) || isNaN(month) || isNaN(day)) {
+            console.error("toISODateTime: Parsed NaN values", { dateStr, year, month, day });
             return '';
         }
 
         const [hours, minutes] = timeStr.split(':').map(Number);
+        if (isNaN(hours) || isNaN(minutes)) {
+            console.error("toISODateTime: Invalid time", { timeStr });
+            return '';
+        }
 
         // Construir string ISO directamente sin conversión UTC
         // Formato: yyyy-MM-ddTHH:mm:ss (Zoom usa timezone por separado)
         const pad = (n: number) => n.toString().padStart(2, '0');
         return `${year}-${pad(month)}-${pad(day)}T${pad(hours)}:${pad(minutes)}:00`;
-    } catch {
+    } catch (e) {
+        console.error("toISODateTime check error:", e);
         return '';
     }
 }

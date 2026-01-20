@@ -618,7 +618,6 @@ describe('MatchingService - Scotiabank vs Person', () => {
             host_id: 'h1',
             start_time: '2023-01-01'
         };
-        const matcher = new MatchingService([repsolMeeting], []);
 
         // "ESPINOZA" should match because the name matches, and it shouldn't be treated as a company
         const scoring = scoreCandidate(
@@ -644,7 +643,6 @@ describe('MatchingService - Scotiabank vs Person', () => {
             start_time: '2023-01-01'
         };
 
-        const matcher = new MatchingService([crashMeeting], []);
 
         const scoring = scoreCandidate(
             'Mejía Ora (PER)(ONLINE), Mayra Kasandra',

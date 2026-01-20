@@ -1,305 +1,27 @@
 import { useState, useMemo, useEffect } from "react";
+import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScheduleDataTable } from "@schedules/components/table/ScheduleDataTable";
 import { useZoomStore } from "@/features/matching/stores/useZoomStore";
 import { MatchingService } from "@/features/matching/services/matcher";
-import { type ColumnDef } from "@tanstack/react-table";
-import { DataTableColumnHeader } from "@schedules/components/table/data-table-column-header";
-import { ArrowLeft, Loader2, CheckCircle2, HelpCircle, RefreshCw, MoreHorizontal, Hand, PlusCircle } from "lucide-react";
+import { ArrowLeft, Loader2, HelpCircle, RefreshCw, Hand, PlusCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Checkbox } from "@/components/ui/checkbox";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useHostMap } from "@schedules/hooks/useHostMap";
+import { getCreateLinkColumns, type ValidationResult, type ValidationStatus } from "@schedules/components/table/create-link-columns";
 
 interface CreateLinkModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
 }
 
-// Tipos para el resultado de validación
-type ValidationStatus = 'to_create' | 'exists' | 'ambiguous' | 'manual';
-
-interface ValidationResult {
-    id: string;
-    inputName: string;           // Nombre original que ingresó el usuario
-    status: ValidationStatus;
-    meeting_id?: string;
-    join_url?: string;
-    matchedTopic?: string;       // Topic del meeting encontrado
-    ambiguousCandidates?: Array<{
-        meeting_id: string;
-        topic: string;
-        join_url?: string;
-        host_id?: string;
-    }>;
-    host_id?: string; // Anfitrión preservado
-}
-
-// Columnas para la tabla de validación
-const getValidationColumns = (
-    hostMap: Map<string, string> = new Map(),
-    onSelectCandidate?: (rowId: string, candidate: { meeting_id: string; topic: string; join_url?: string; host_id?: string } | null) => void
-): ColumnDef<ValidationResult>[] => [
-        {
-            id: "select",
-            size: 36,
-            header: ({ table }) => (
-                <div className="flex justify-center items-center mb-1">
-                    <Checkbox
-                        checked={table.getIsAllPageRowsSelected()}
-                        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-                        aria-label="Select all"
-                        className="translate-y-[2px]"
-                    />
-                </div>
-            ),
-            cell: ({ row }) => (
-                <div className="flex justify-center">
-                    <Checkbox
-                        checked={row.getIsSelected()}
-                        disabled={!row.getCanSelect()}
-                        onCheckedChange={(value) => row.toggleSelected(!!value)}
-                        aria-label="Select row"
-                        className="translate-y-[2px] mb-1"
-                    />
-                </div>
-            ),
-            enableSorting: false,
-            enableHiding: false,
-        },
-        {
-            accessorKey: "status",
-            size: 120,
-            header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Status" className="justify-center" />
-            ),
-            cell: ({ row }) => {
-                const status = row.getValue("status") as ValidationStatus;
-                const result = row.original;
-
-                // Badge según status
-                let badge;
-                if (status === 'to_create') {
-                    badge = (
-                        <Badge variant="outline" className="border-green-600 text-green-600 bg-green-50 dark:bg-green-950/20 dark:border-green-500 dark:text-green-400 cursor-pointer hover:bg-green-100">
-                            <CheckCircle2 />
-                            New
-                        </Badge>
-                    );
-                } else if (status === 'exists') {
-                    badge = (
-                        <Badge variant="outline" className="text-muted-foreground cursor-pointer hover:bg-gray-100">
-                            <RefreshCw />
-                            Exists
-                        </Badge>
-                    );
-                } else if (status === 'manual') {
-                    badge = (
-                        <Badge variant="outline" className="border-blue-500/50 text-blue-600 bg-blue-500/10 dark:text-blue-400 cursor-pointer hover:bg-blue-500/20">
-                            <Hand />
-                            Manual
-                        </Badge>
-                    );
-                } else {
-                    badge = (
-                        <Badge variant="outline" className="border-orange-500/50 text-orange-600 bg-orange-500/10 dark:text-orange-400 cursor-pointer hover:bg-orange-500/20">
-                            <HelpCircle />
-                            Ambiguous
-                        </Badge>
-                    );
-                }
-
-                // Si es ambiguo o manual (que viene de ambiguo), mostrar popover
-                if ((status === 'ambiguous' || (status === 'manual' && result.ambiguousCandidates && result.ambiguousCandidates.length > 0))) {
-                    const candidates = result.ambiguousCandidates || [];
-
-                    if (candidates.length > 0) {
-                        return (
-                            <div className="flex justify-center">
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        {badge}
-                                    </PopoverTrigger>
-                                    <PopoverContent className="p-0 rounded-lg" onWheel={(e) => e.stopPropagation()}>
-                                        <div className="p-4 space-y-4">
-                                            <div className="flex items-center justify-between mb-3">
-                                                <h4 className="font-semibold text-sm">
-                                                    {status === 'manual' ? 'Manual Selection' : 'Multiple Matches Found'}
-                                                </h4>
-                                                <Badge variant="secondary" className="text-xs">{candidates.length} options</Badge>
-                                            </div>
-                                            <div className="space-y-2 max-h-[280px] overflow-y-auto no-scrollbar">
-                                                {candidates.map((cand, i) => {
-                                                    const isSelected = result.meeting_id === cand.meeting_id;
-                                                    return (
-                                                        <div
-                                                            key={i}
-                                                            className={`border rounded-md p-2.5 transition-colors cursor-pointer ${isSelected ? 'border-green-500 bg-green-50/50 dark:bg-green-950/20' : 'hover:bg-accent/50'}`}
-                                                            onClick={() => {
-                                                                if (isSelected) {
-                                                                    // Deseleccionar (volver a ambiguo)
-                                                                    onSelectCandidate?.(result.id, null);
-                                                                } else {
-                                                                    // Seleccionar
-                                                                    onSelectCandidate?.(result.id, cand);
-                                                                }
-                                                            }}
-                                                        >
-                                                            <div className="flex items-start justify-between gap-2">
-                                                                <div className="flex-1 min-w-0">
-                                                                    <div className="font-medium text-sm mb-1">{cand.topic}</div>
-                                                                    <div className="text-xs text-muted-foreground">
-                                                                        ID: {cand.meeting_id}
-                                                                    </div>
-                                                                    <div className="text-xs text-muted-foreground truncate">
-                                                                        Host: {hostMap.get(cand.host_id || '') || cand.host_id}
-                                                                    </div>
-                                                                </div>
-                                                                {isSelected && (
-                                                                    <Badge variant="outline" className="border-green-600 text-green-600 bg-green-50 dark:bg-green-950/20">
-                                                                        Selected
-                                                                    </Badge>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                        );
-                    }
-                }
-
-                // Si existe, mostrar popover con detalles del meeting
-                if (status === 'exists' && result.meeting_id) {
-                    return (
-                        <div className="flex justify-center">
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    {badge}
-                                </PopoverTrigger>
-                                <PopoverContent className="w-72 p-0 rounded-lg" onWheel={(e) => e.stopPropagation()}>
-                                    <div className="p-4">
-                                        <h4 className="font-semibold text-sm mb-3">Existing Meeting</h4>
-                                        <div className="space-y-2.5">
-                                            <div>
-                                                <div className="text-xs font-medium text-muted-foreground mb-1">Topic</div>
-                                                <div className="text-sm">{result.matchedTopic || result.inputName}</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-xs font-medium text-muted-foreground mb-1">Meeting ID</div>
-                                                <div className="text-sm font-mono">
-                                                    {result.meeting_id}
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <div className="text-xs font-medium text-muted-foreground mb-1">Host</div>
-                                                <div className="text-sm">
-                                                    {hostMap.get(result.host_id || '') || result.host_id || '—'}
-                                                </div>
-                                            </div>
-                                            {result.join_url && (
-                                                <div>
-                                                    <div className="text-xs font-medium text-muted-foreground mb-1">Join URL</div>
-                                                    <div className="text-sm">
-                                                        <a
-                                                            href={result.join_url}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="text-blue-600 hover:underline truncate block"
-                                                        >
-                                                            {result.join_url}
-                                                        </a>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
-                        </div>
-                    );
-                }
-
-                return <div className="flex justify-center">{badge}</div>;
-            },
-        },
-        {
-            accessorKey: "inputName",
-            size: 400,
-            header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Program" />
-            ),
-            cell: ({ row }) => (
-                <div className="truncate max-w-[380px]">{row.getValue("inputName")}</div>
-            ),
-        },
-        {
-            accessorKey: "meeting_id",
-            size: 130,
-            header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Meeting ID" className="justify-center" />
-            ),
-            cell: ({ row }) => {
-                const meetingId = row.getValue("meeting_id") as string | undefined;
-                if (!meetingId) return <div className="text-center font-mono">—</div>;
-                return (
-                    <div className="text-center font-mono">
-                        <a
-                            href={`https://zoom.us/meeting/${meetingId}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 underline"
-                        >
-                            {meetingId}
-                        </a>
-                    </div>
-                );
-            },
-        },
-        {
-            id: "actions",
-            size: 50,
-            cell: ({ row }) => {
-                return (
-                    <div className="flex justify-center">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon-sm">
-                                    <span className="sr-only">Open menu</span>
-                                    <MoreHorizontal className="w-4 h-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem>
-                                    Copy details
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
-                );
-            },
-        },
-    ];
-
 export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
     const { meetings, users, isLoadingData, fetchZoomData, createMeetings, updateMatchings, isExecuting } = useZoomStore();
 
-    // Crear mapa de anfitriones para búsqueda fácil
-    const hostMap = useMemo(() => {
-        const map = new Map<string, string>();
-        users.forEach(u => {
-            map.set(u.id, u.display_name || `${u.first_name} ${u.last_name}`.trim() || u.email);
-        });
-        return map;
-    }, [users]);
+    // Usar hook reutilizable para mapa de anfitriones
+    const hostMap = useHostMap();
 
     // Estado del asistente
     const [step, setStep] = useState<'input' | 'results'>('input');
@@ -313,6 +35,7 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
             setStep('input');
             setInputText("");
             setValidationResults([]);
+            setIsValidating(false);
         }
     }, [open]);
 
@@ -329,6 +52,64 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
         return new MatchingService(meetings, users);
     }, [meetings, users]);
 
+    // Función de revalidación que usa datos frescos del store
+    const revalidateWithFreshData = () => {
+        // Obtener datos frescos directamente del store
+        const { meetings: freshMeetings, users: freshUsers } = useZoomStore.getState();
+        const freshMatcher = new MatchingService(freshMeetings, freshUsers);
+
+        const lines = inputText
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0);
+
+        if (lines.length === 0) {
+            setIsValidating(false);
+            return;
+        }
+
+        const results: ValidationResult[] = lines.map((inputName, index) => {
+            const matchResult = freshMatcher.findMatchByTopic(inputName, { ignoreLevelMismatch: true });
+
+            if (matchResult.status === 'not_found') {
+                return {
+                    id: `${index}-${inputName}`,
+                    inputName,
+                    status: 'to_create' as ValidationStatus,
+                };
+            }
+
+            if (matchResult.status === 'ambiguous' && matchResult.ambiguousCandidates) {
+                return {
+                    id: `${index}-${inputName}`,
+                    inputName,
+                    status: 'ambiguous' as ValidationStatus,
+                    ambiguousCandidates: matchResult.ambiguousCandidates.map(m => ({
+                        meeting_id: m.meeting_id,
+                        topic: m.topic,
+                        join_url: m.join_url,
+                        host_id: m.host_id,
+                    })),
+                };
+            }
+
+            const matchedMeeting = matchResult.matchedCandidate || matchResult.bestMatch;
+            return {
+                id: `${index}-${inputName}`,
+                inputName,
+                status: 'exists' as ValidationStatus,
+                meeting_id: matchedMeeting?.meeting_id,
+                join_url: matchedMeeting?.join_url,
+                matchedTopic: matchedMeeting?.topic,
+                host_id: matchedMeeting?.host_id,
+            };
+        });
+
+        setValidationResults(results);
+        setRowSelection({});
+        setIsValidating(false);
+    };
+
     // Función de validación usando MatchingService
     const handleValidate = async () => {
         const lines = inputText
@@ -339,9 +120,7 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
         if (lines.length === 0 || !matcher) return;
 
         setIsValidating(true);
-
-        // Pequeño retraso para UX
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Validación instantánea sin delays artificiales
 
         const results: ValidationResult[] = lines.map((inputName, index) => {
             // Usar findMatchByTopic que no requiere instructor
@@ -389,6 +168,13 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
         setValidationResults(results);
         setIsValidating(false);
         setStep('results');
+    };
+
+    // Función de refresh que actualiza datos de Zoom y luego revalida
+    const handleRefresh = async () => {
+        setIsValidating(true);
+        await fetchZoomData();
+        revalidateWithFreshData();
     };
 
     // Selección de filas
@@ -453,7 +239,7 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
 
     // Columnas con manejador memorizado
     const columns = useMemo(() =>
-        getValidationColumns(hostMap, handleSelectCandidate),
+        getCreateLinkColumns(hostMap, handleSelectCandidate),
         [hostMap]
     );
 
@@ -530,24 +316,44 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
                 {step === 'results' && (
                     <>
                         <div className="flex-1 overflow-auto p-2">
-                            <ScheduleDataTable
-                                columns={columns}
-                                data={validationResults}
-                                hideFilters
-                                hideUpload
-                                hideActions
-                                hideOverlaps
-                                enableRowSelection={(row) => row.status !== 'ambiguous'}
-                                controlledSelection={rowSelection}
-                                onControlledSelectionChange={setRowSelection}
-                                initialPageSize={25}
-                                statusOptions={[
-                                    { label: "New", value: "to_create", icon: PlusCircle },
-                                    { label: "Exists", value: "exists", icon: RefreshCw },
-                                    { label: "Ambiguous", value: "ambiguous", icon: HelpCircle },
-                                    { label: "Manual", value: "manual", icon: Hand },
-                                ]}
-                            />
+                            {isLoadingData || isValidating || isExecuting ? (
+                                <div className="flex flex-col items-center justify-center h-full min-h-[400px] space-y-4">
+                                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                    <div className="text-center space-y-2">
+                                        <p className="text-sm font-medium">
+                                            {isExecuting
+                                                ? "Processing changes..."
+                                                : (isLoadingData ? "Loading Zoom data..." : "Validating schedules...")}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {isExecuting
+                                                ? "Syncing with Zoom and updating records"
+                                                : (isLoadingData ? "Fetching meetings and users" : "Analyzing input data")}
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <ScheduleDataTable
+                                    columns={columns}
+                                    data={validationResults}
+                                    hideFilters
+                                    hideUpload
+                                    hideActions
+                                    hideOverlaps
+                                    onRefresh={handleRefresh}
+                                    disableRefresh={isValidating || isLoadingData}
+                                    enableRowSelection={(row) => row.status !== 'ambiguous'}
+                                    controlledSelection={rowSelection}
+                                    onControlledSelectionChange={setRowSelection}
+                                    initialPageSize={25}
+                                    statusOptions={[
+                                        { label: "New", value: "to_create", icon: PlusCircle },
+                                        { label: "Exists", value: "exists", icon: RefreshCw },
+                                        { label: "Ambiguous", value: "ambiguous", icon: HelpCircle },
+                                        { label: "Manual", value: "manual", icon: Hand },
+                                    ]}
+                                />
+                            )}
                         </div>
                         <DialogFooter className="mt-auto flex-col sm:flex-row gap-4">
                             {/* Barra de estado con conteos a la izquierda */}
@@ -582,7 +388,7 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
                                 </Button>
 
                                 <Button
-                                    disabled={selectedCount === 0 || isExecuting}
+                                    disabled={selectedCount === 0 || isExecuting || isValidating || isLoadingData}
                                     onClick={async () => {
                                         const selectedRows = validationResults.filter(r => rowSelection[r.id]);
 
@@ -608,27 +414,40 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
 
                                         if (toCreate.length === 0 && updates.length === 0) return;
 
-                                        // Ejecutar secuencialmente o paralelo según sea necesario
-                                        // El store maneja isExecuting, así que mejor secuencial para no pisar estados si el store es simple
+                                        // Ejecutar en paralelo para máxima velocidad
                                         let successCount = 0;
+                                        let failureCount = 0;
 
                                         if (toCreate.length > 0) {
                                             const res = await createMeetings(toCreate);
                                             successCount += res.succeeded;
+                                            failureCount += res.failed;
                                         }
 
                                         if (updates.length > 0) {
                                             const res = await updateMatchings(updates);
                                             successCount += res.succeeded;
+                                            failureCount += res.failed;
                                         }
 
                                         if (successCount > 0) {
-                                            // Validar de nuevo para refrescar estados
-                                            handleValidate();
+                                            toast.success(`Successfully processed ${successCount} meetings`);
+                                        }
+
+                                        if (failureCount > 0) {
+                                            toast.error(`Failed to process ${failureCount} meetings`);
+                                        }
+
+                                        if (successCount > 0) {
+                                            // 1. Actualización ÚNICA y forzada de datos
+                                            await fetchZoomData({ force: true });
+
+                                            // 2. Revalidación con datos frescos
+                                            revalidateWithFreshData();
                                         }
                                     }}
                                 >
-                                    {isExecuting ? (
+                                    {isExecuting || isLoadingData ? (
                                         <>
                                             <Loader2 className="animate-spin" />
                                             Executing...
