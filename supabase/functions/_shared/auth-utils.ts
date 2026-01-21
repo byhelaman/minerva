@@ -97,3 +97,41 @@ export async function verifyAccess(
     // Fallback a clave interna
     return verifyInternalKey(req)
 }
+
+/**
+ * Verifica que el usuario tiene un permiso específico (Granular Permission).
+ * 
+ * @param req - Request con header Authorization
+ * @param supabase - Cliente Supabase
+ * @param requiredPermission - String del permiso requerido (ej: 'meetings.create')
+ * @returns Usuario autenticado
+ */
+export async function verifyPermission(
+    req: Request,
+    supabase: SupabaseClient,
+    requiredPermission: string
+) {
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+        throw new Error('Unauthorized: Missing Authorization header')
+    }
+
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error } = await supabase.auth.getUser(token)
+
+    if (error || !user) {
+        throw new Error('Unauthorized: Invalid token')
+    }
+
+    // ESTRATEGIA OPTIMIZADA: Leer de base de datos usando RPC has_permission
+    // Esto asegura que usamos la misma lógica que el backend SQL
+    const { data: hasPerm, error: rpcError } = await supabase.rpc('has_permission', {
+        required_permission: requiredPermission
+    })
+
+    if (rpcError || !hasPerm) {
+        throw new Error(`Unauthorized: Missing permission ${requiredPermission}`)
+    }
+
+    return user
+}

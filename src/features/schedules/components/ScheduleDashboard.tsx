@@ -193,8 +193,8 @@ export function ScheduleDashboard() {
                         Upload Files
                     </Button> */}
 
-                    {/* Search - requires zoom.search permission */}
-                    <RequirePermission permission="zoom.search">
+                    {/* Search - requires meetings.search permission */}
+                    <RequirePermission permission="meetings.search">
                         <Button
                             size="sm"
                             variant="outline"
@@ -205,8 +205,8 @@ export function ScheduleDashboard() {
                         </Button>
                     </RequirePermission>
 
-                    {/* Create - requires zoom.links permission */}
-                    <RequirePermission permission="zoom.links">
+                    {/* Create - requires meetings.create permission */}
+                    <RequirePermission permission="meetings.create">
                         <Button
                             size="sm"
                             variant="outline"
@@ -217,8 +217,8 @@ export function ScheduleDashboard() {
                         </Button>
                     </RequirePermission>
 
-                    {/* Assign - requires zoom.links permission */}
-                    <RequirePermission permission="zoom.links">
+                    {/* Assign - requires meetings.assign permission */}
+                    <RequirePermission permission="meetings.assign">
                         <Button
                             size="sm"
                             onClick={() => setIsAssignModalOpen(true)}

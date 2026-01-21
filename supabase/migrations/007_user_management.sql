@@ -27,8 +27,9 @@ BEGIN
     -- Verificar que el usuario tiene permiso admin
     caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
     
-    IF caller_level < 80 THEN
-        RAISE EXCEPTION 'Permission denied: requires admin privileges';
+    -- 1. Verificar permiso de ver usuarios (users.view)
+    IF NOT public.has_permission('users.view') THEN
+        RAISE EXCEPTION 'Permission denied: requires users.view permission';
     END IF;
     
     RETURN QUERY
@@ -86,9 +87,9 @@ BEGIN
     caller_id := auth.uid();
     caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
     
-    -- Verificar que el caller es admin
-    IF caller_level < 80 THEN
-        RAISE EXCEPTION 'Permission denied: requires admin privileges';
+    -- 1. Verificar si tiene permiso de gestionar usuarios (users.manage)
+    IF NOT public.has_permission('users.manage') THEN
+        RAISE EXCEPTION 'Permission denied: requires users.manage permission';
     END IF;
     
     -- Prevenir auto-modificación
@@ -157,8 +158,9 @@ BEGIN
     caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
     
     -- Verificar que el caller es super_admin
-    IF caller_level < 100 THEN
-        RAISE EXCEPTION 'Permission denied: requires super_admin privileges';
+    -- 1. Verificar permiso de gestionar usuarios (users.manage)
+    IF NOT public.has_permission('users.manage') THEN
+        RAISE EXCEPTION 'Permission denied: requires users.manage permission';
     END IF;
     
     -- Prevenir auto-eliminación
@@ -556,8 +558,9 @@ BEGIN
     -- Verificar que el usuario tiene permiso admin
     caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
     
-    IF caller_level < 80 THEN
-        RAISE EXCEPTION 'Permission denied: requires admin privileges';
+    -- 1. Verificar permiso de gestionar usuarios (users.manage)
+    IF NOT public.has_permission('users.manage') THEN
+        RAISE EXCEPTION 'Permission denied: requires users.manage permission';
     END IF;
     
     -- Obtener nivel del rol objetivo

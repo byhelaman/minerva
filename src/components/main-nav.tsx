@@ -7,7 +7,7 @@ import { ArrowUpRight } from "lucide-react"
 const navItems = [
     { title: "Home", href: "/" },
     { title: "Docs", href: "/docs" },
-    { title: "Buy me a coffee", href: "https://www.buymeacoffee.com/byhelaman", target: "_blank", icon: ArrowUpRight },
+    { title: "Buy me a coffee", href: "https://www.buymeacoffee.com/helaman", target: "_blank", icon: ArrowUpRight },
 ]
 
 export function MainNav({

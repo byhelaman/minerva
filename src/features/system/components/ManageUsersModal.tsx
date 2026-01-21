@@ -74,7 +74,7 @@ const createUserSchema = z.object({
 type CreateUserFormData = z.infer<typeof createUserSchema>;
 
 export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) {
-    const { profile } = useAuth();
+    const { profile, hasPermission } = useAuth();
     const [searchQuery, setSearchQuery] = useState("");
     const [users, setUsers] = useState<User[]>([]);
     const [roles, setRoles] = useState<Role[]>([]);
@@ -230,13 +230,16 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
         }
     };
 
-    // Check if current user can modify a target user
+    // Check if current user can modify a target user (Permission + Hierarchy)
     const canModifyUser = (targetLevel: number) => {
-        return myLevel > targetLevel;
+        return hasPermission('users.manage') && (myLevel > targetLevel);
     };
 
-    // Check if current user can delete users (super_admin only)
-    const canDeleteUsers = myLevel >= 100;
+    // Check if current user can delete users (Permission + Hierarchy)
+    // Must have permission AND target must be lower rank
+    const canDeleteUsers = (targetLevel: number) => {
+        return hasPermission('users.manage') && (myLevel > targetLevel);
+    };
 
     // Get assignable roles (only roles with level < my level)
     const getAssignableRoles = () => {
@@ -322,8 +325,8 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
                                                 </Badge>
                                             )}
 
-                                            {/* Delete Button (super_admin only, can't delete self or other super_admins) */}
-                                            {canDeleteUsers && user.id !== profile?.id && user.hierarchy_level < 100 && (
+                                            {/* Delete Button (users.manage permission + lower rank) */}
+                                            {canDeleteUsers(user.hierarchy_level) && user.id !== profile?.id && (
                                                 <Button
                                                     variant="secondary"
                                                     size="icon-sm"
@@ -349,7 +352,7 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
                             <p className="text-sm text-muted-foreground">
                                 {filteredUsers.length} user(s)
                             </p>
-                            {myLevel >= 80 && (
+                            {hasPermission('users.manage') && (
                                 <Button
                                     size="sm"
                                     onClick={() => setIsCreateOpen(true)}
