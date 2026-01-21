@@ -18,7 +18,7 @@ const ZOOM_API_BASE = 'https://api.zoom.us/v2'
 const ALLOWED_ORIGINS = [
   'http://localhost:1420',
   'tauri://localhost',
-  'https://tauri.localhost'
+  'http://tauri.localhost',
 ]
 
 function getCorsHeaders(req: Request) {
@@ -95,6 +95,9 @@ serve(async (req: Request) => {
       if (WHITELIST_EMAILS.includes(user.email?.toLowerCase())) {
         return true
       }
+
+      if (!user.role_id) return false
+
       // Excluir por role_id
       return !EXCLUDED_ROLE_IDS.includes(user.role_id)
     })

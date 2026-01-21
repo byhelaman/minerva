@@ -16,7 +16,7 @@ const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const ALLOWED_ORIGINS = [
     'http://localhost:1420',
     'tauri://localhost',
-    'https://tauri.localhost'
+    'http://tauri.localhost',
 ]
 
 function getCorsHeaders(req: Request) {

@@ -18,7 +18,7 @@ const ZOOM_API_BASE = 'https://api.zoom.us/v2'
 const ALLOWED_ORIGINS = [
     'http://localhost:1420',
     'tauri://localhost',
-    'https://tauri.localhost'
+    'http://tauri.localhost',
 ]
 
 function getCorsHeaders(req: Request) {
