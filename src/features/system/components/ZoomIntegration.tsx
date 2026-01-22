@@ -1,9 +1,9 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Unplug, Link2, RefreshCw } from "lucide-react";
+import { Loader2, Unplug, Link2, RefreshCw, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import {
@@ -60,6 +60,17 @@ export function ZoomIntegration() {
         fetchStatus();
     }, []);
 
+    const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const handleCancelConnect = () => {
+        if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+        }
+        setIsConnecting(false);
+        toast.info("Connection cancelled");
+    };
+
     const handleConnect = async () => {
         try {
             setIsConnecting(true);
@@ -85,30 +96,35 @@ export function ZoomIntegration() {
             const TIMEOUT = 180000; // 3 min
             let connectionHandled = false; // Flag para evitar toast duplicado
 
-            const timer = setInterval(async () => {
-                // Si ya manejamos la conexión, no hacer nada
-                if (connectionHandled) return;
+            // Limpiar cualquier timer previo por seguridad
+            if (timerRef.current) clearInterval(timerRef.current);
+
+            timerRef.current = setInterval(async () => {
+                // Si ya manejamos la conexión o fue cancelada, detener
+                if (connectionHandled || !timerRef.current) return;
 
                 if (Date.now() - startTime > TIMEOUT) {
-                    clearInterval(timer);
+                    if (timerRef.current) {
+                        clearInterval(timerRef.current);
+                        timerRef.current = null;
+                    }
                     setIsConnecting(false);
                     toast.error("Connection timed out. Please try again.");
                     return;
                 }
 
                 try {
-                    const { data: statusData, error: statusError } = await supabase.functions.invoke('zoom-auth', {
+                    const { data: statusData } = await supabase.functions.invoke('zoom-auth', {
                         body: { action: 'status' },
                         method: 'POST'
                     });
 
-                    if (statusError) {
-                        // Verificación de error crítico si es necesario
-                    }
-
                     if (statusData?.connected && !connectionHandled) {
                         connectionHandled = true; // Marcar como manejado ANTES de cualquier acción
-                        clearInterval(timer);
+                        if (timerRef.current) {
+                            clearInterval(timerRef.current);
+                            timerRef.current = null;
+                        }
                         setAccount(statusData.account);
                         setIsConnecting(false);
                         toast.success("Zoom connected successfully!");
@@ -121,6 +137,10 @@ export function ZoomIntegration() {
         } catch (error: any) {
             toast.error(error.message || "Failed to start connection");
             setIsConnecting(false);
+            if (timerRef.current) {
+                clearInterval(timerRef.current);
+                timerRef.current = null;
+            }
         }
     };
 
@@ -261,18 +281,33 @@ export function ZoomIntegration() {
                                 </AlertDialogContent>
                             </AlertDialog>
                         ) : (
-                            <Button variant="outline" size="sm" onClick={handleConnect} disabled={isConnecting}>
-                                {isConnecting ? (
-                                    <Loader2 className="animate-spin" />
-                                ) : (
+                            isConnecting ? (
+                                <div className="flex items-center gap-2">
+                                    <Button variant="outline" size="sm" disabled className="gap-2">
+                                        <Loader2 className="animate-spin" />
+                                        Connecting...
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        onClick={handleCancelConnect}
+                                        className="text-muted-foreground hover:text-foreground"
+                                        title="Cancel connection"
+                                    >
+                                        <X />
+                                        <span className="sr-only">Cancel</span>
+                                    </Button>
+                                </div>
+                            ) : (
+                                <Button variant="outline" size="sm" onClick={handleConnect}>
                                     <Link2 />
-                                )}
-                                {isConnecting ? "Connecting..." : "Connect Zoom"}
-                            </Button>
+                                    Connect Zoom
+                                </Button>
+                            )
                         )}
                     </div>
                 </div>
             </CardContent>
-        </Card>
+        </Card >
     );
 }

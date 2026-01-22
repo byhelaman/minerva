@@ -26,6 +26,7 @@ interface ZoomState {
 
     // Estado de Carga de Datos
     isLoadingData: boolean;
+    isInitialized: boolean;
 
     // Estado de Ejecución de Asignaciones
     isExecuting: boolean;
@@ -40,9 +41,9 @@ interface ZoomState {
     resolveConflict: (schedule: Schedule, selectedMeeting: ZoomMeetingCandidate) => void;
     createMeetings: (topics: string[]) => Promise<{ succeeded: number; failed: number; errors: string[] }>;
     updateMatchings: (updates: { meeting_id: string; topic?: string; schedule_for?: string }[]) => Promise<{ succeeded: number; failed: number; errors: string[] }>;
-    executeAssignments: (meetingIds?: string[]) => Promise<{ succeeded: number; failed: number; errors: string[] }>;
+    executeAssignments: (schedules?: Schedule[]) => Promise<{ succeeded: number; failed: number; errors: string[] }>;
 
-    _genericBatchAction: (meetingIds?: string[]) => Promise<{ succeeded: number; failed: number; errors: string[] }>;
+    _genericBatchAction: (schedules?: Schedule[]) => Promise<{ succeeded: number; failed: number; errors: string[] }>;
 
     // Promesa de fetch activa para deduplicación
     _activeFetchPromise: Promise<void> | null;
@@ -60,6 +61,7 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
     syncError: null,
     lastSyncedAt: null,
     isLoadingData: false,
+    isInitialized: false,
     isExecuting: false,
     worker: null,
     _activeFetchPromise: null,
@@ -138,7 +140,7 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
             } catch (error) {
                 console.error("Error fetching Zoom data:", error);
             } finally {
-                set({ isLoadingData: false, _activeFetchPromise: null });
+                set({ isLoadingData: false, _activeFetchPromise: null, isInitialized: true });
             }
         })();
 
@@ -276,26 +278,31 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
         set({ matchResults: results });
     },
 
-    executeAssignments: async (meetingIds?: string[]) => {
+    executeAssignments: async (schedules?: Schedule[]) => {
         // Delegating to the generic batch action
-        return get()._genericBatchAction(meetingIds);
+        return get()._genericBatchAction(schedules);
     },
 
     // Ayudante para acciones por lotes (interno) - refactorización para reutilizar lógica
-    _genericBatchAction: async (meetingIds?: string[]) => {
+    _genericBatchAction: async (schedules?: Schedule[]) => {
         const { matchResults } = get();
 
         // Filtrar: 'to_update', 'manual' (ambiguedad resuelta), o 'assigned' (re-actualización)
         // Se requiere meeting_id e instructor
-        // Si se proporcionan meetingIds, filtrar solo esos
+        // Si se proporcionan schedules, filtrar solo esos
         let toUpdate = matchResults.filter(r =>
             (r.status === 'to_update' || r.status === 'manual' || r.status === 'assigned') &&
             r.meeting_id &&
             r.found_instructor
         );
 
-        if (meetingIds && meetingIds.length > 0) {
-            toUpdate = toUpdate.filter(r => meetingIds.includes(r.meeting_id!));
+        if (schedules && schedules.length > 0) {
+            toUpdate = toUpdate.filter(r => schedules.some(s =>
+                s.date === r.schedule.date &&
+                s.start_time === r.schedule.start_time &&
+                s.program === r.schedule.program &&
+                s.instructor === r.schedule.instructor
+            ));
         }
 
         if (toUpdate.length === 0) {

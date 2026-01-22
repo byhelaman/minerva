@@ -21,7 +21,7 @@ interface AssignLinkModalProps {
 }
 
 export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkModalProps) {
-    const { fetchZoomData, runMatching, matchResults, meetings, isLoadingData, executeAssignments, isExecuting } = useZoomStore();
+    const { fetchZoomData, runMatching, matchResults, meetings, isLoadingData, isInitialized, executeAssignments, isExecuting } = useZoomStore();
     const instructorsList = useInstructors();
     const [isMatching, setIsMatching] = useState(false);
     const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
@@ -42,12 +42,12 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
         return `${schedule.date}-${schedule.start_time}-${schedule.program}-${schedule.instructor}`;
     };
 
-    // 1. Cargar datos de Zoom si no están cargados
+    // 1. Cargar datos de Zoom si no están inicializados
     useEffect(() => {
-        if (open && meetings.length === 0 && !isLoadingData) {
+        if (open && !isInitialized && !isLoadingData) {
             fetchZoomData();
         }
-    }, [open, meetings.length, isLoadingData, fetchZoomData]);
+    }, [open, isInitialized, isLoadingData, fetchZoomData]);
 
     // 2. Ejecutar Matching cuando se abre el modal o cambian los horarios
     // Solo si ya tenemos meetings cargados
@@ -332,7 +332,7 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="!max-w-7xl max-h-[85vh] flex flex-col">
+            <DialogContent className="max-w-7xl! max-h-[85vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Automatic Assignment</DialogTitle>
                     <DialogDescription>
@@ -449,14 +449,14 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
                         </Button>
                         <Button
                             onClick={async () => {
-                                const meetingIds = eligibleRows.map(row => row.meetingId!);
+                                const schedules = eligibleRows.map(row => row.originalSchedule);
 
-                                if (meetingIds.length === 0) {
+                                if (schedules.length === 0) {
                                     toast.error('No eligible meetings selected.');
                                     return;
                                 }
 
-                                const result = await executeAssignments(meetingIds);
+                                const result = await executeAssignments(schedules);
                                 if (result.succeeded > 0) {
                                     toast.success(`${result.succeeded} meetings updated successfully`);
                                     // Resetear switch y selección después de ejecutar

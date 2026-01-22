@@ -27,14 +27,14 @@ export function ScheduleDashboard() {
     const autoSaveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
     const { settings } = useSettings();
     const fetchZoomData = useZoomStore((state) => state.fetchZoomData);
-    const meetingsLoaded = useZoomStore((state) => state.meetings.length > 0);
+    const isInitialized = useZoomStore((state) => state.isInitialized);
 
     // Pre-load Zoom data in background on mount
     useEffect(() => {
-        if (!meetingsLoaded) {
+        if (!isInitialized) {
             fetchZoomData();
         }
-    }, [meetingsLoaded, fetchZoomData]);
+    }, [isInitialized, fetchZoomData]);
 
     // Auto-load on mount
     useEffect(() => {

@@ -1,0 +1,340 @@
+-- ============================================
+-- Minerva v2 - 001: Core Access (Roles, Profiles, Auth, RLS)
+-- ============================================
+-- Combina roles, permisos, perfiles, auth hook, RPCs base, RLS y seguridad.
+-- Ejecutar primero en Supabase SQL Editor.
+
+-- =============================================
+-- ROLES + PERMISSIONS
+-- =============================================
+CREATE TABLE public.roles (
+    name TEXT PRIMARY KEY,
+    description TEXT,
+    hierarchy_level INT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+
+CREATE TABLE public.permissions (
+    name TEXT PRIMARY KEY,
+    description TEXT,
+    min_role_level INT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+
+CREATE TABLE public.role_permissions (
+    role TEXT REFERENCES public.roles(name) ON DELETE CASCADE,
+    permission TEXT REFERENCES public.permissions(name) ON DELETE CASCADE,
+    PRIMARY KEY (role, permission)
+);
+
+INSERT INTO public.roles (name, description, hierarchy_level) VALUES
+    ('super_admin', 'Full system control, Zoom integration', 100),
+    ('admin', 'Manage users and system settings', 80),
+    ('moderator', 'Can assign users and manage Zoom links', 60),
+    ('operator', 'Work with schedules and Zoom data', 50),
+    ('viewer', 'Read-only access to own schedules', 10);
+
+INSERT INTO public.permissions (name, description, min_role_level) VALUES
+    ('schedules.read', 'View own schedules', 10),
+    ('schedules.write', 'Upload and edit schedules', 50),
+    ('meetings.search', 'Search Zoom meeting history', 60),
+    ('meetings.create', 'Create and edit Zoom links', 60),
+    ('meetings.assign', 'Assign Zoom links to schedules', 60),
+    ('users.view', 'View list of users', 80),
+    ('users.manage', 'Create, delete, and change user roles', 80),
+    ('settings.view', 'View system settings', 80),
+    ('settings.manage', 'Modify system settings', 100);
+
+INSERT INTO public.role_permissions (role, permission) VALUES
+    ('viewer', 'schedules.read'),
+    ('operator', 'schedules.read'),
+    ('operator', 'schedules.write'),
+    ('moderator', 'schedules.read'),
+    ('moderator', 'schedules.write'),
+    ('moderator', 'meetings.search'),
+    ('moderator', 'meetings.create'),
+    ('moderator', 'meetings.assign'),
+    ('admin', 'schedules.read'),
+    ('admin', 'schedules.write'),
+    ('admin', 'meetings.search'),
+    ('admin', 'meetings.create'),
+    ('admin', 'meetings.assign'),
+    ('admin', 'users.view'),
+    ('admin', 'users.manage'),
+    ('admin', 'settings.view'),
+    ('super_admin', 'schedules.read'),
+    ('super_admin', 'schedules.write'),
+    ('super_admin', 'meetings.search'),
+    ('super_admin', 'meetings.create'),
+    ('super_admin', 'meetings.assign'),
+    ('super_admin', 'users.view'),
+    ('super_admin', 'users.manage'),
+    ('super_admin', 'settings.view'),
+    ('super_admin', 'settings.manage');
+
+-- =============================================
+-- PROFILES
+-- =============================================
+CREATE TABLE public.profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    display_name TEXT,
+    role TEXT REFERENCES public.roles(name) DEFAULT 'viewer' NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+
+CREATE INDEX idx_profiles_email ON public.profiles(email);
+CREATE INDEX idx_profiles_role ON public.profiles(role);
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+    INSERT INTO public.profiles (id, email, display_name)
+    VALUES (
+        NEW.id,
+        NEW.email,
+        COALESCE(NEW.raw_user_meta_data->>'display_name', split_part(NEW.email, '@', 1))
+    );
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_new_user();
+
+CREATE OR REPLACE FUNCTION public.handle_profile_updated()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER on_profile_updated
+    BEFORE UPDATE ON public.profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_profile_updated();
+
+-- =============================================
+-- AUTH HOOK (JWT Custom Claims)
+-- =============================================
+CREATE OR REPLACE FUNCTION public.custom_access_token_hook(event jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    claims jsonb;
+    user_role text;
+    user_hierarchy_level int;
+    user_permissions text[];
+BEGIN
+    SELECT p.role, r.hierarchy_level
+    INTO user_role, user_hierarchy_level
+    FROM public.profiles p
+    JOIN public.roles r ON p.role = r.name
+    WHERE p.id = (event ->> 'user_id')::uuid;
+
+    claims := event -> 'claims';
+
+    IF user_role IS NOT NULL THEN
+        SELECT array_agg(rp.permission)
+        INTO user_permissions
+        FROM public.role_permissions rp
+        WHERE rp.role = user_role;
+
+        claims := jsonb_set(claims, '{user_role}', to_jsonb(user_role));
+        claims := jsonb_set(claims, '{hierarchy_level}', to_jsonb(user_hierarchy_level));
+        claims := jsonb_set(claims, '{permissions}', to_jsonb(COALESCE(user_permissions, ARRAY[]::text[])));
+    ELSE
+        claims := jsonb_set(claims, '{user_role}', '"viewer"');
+        claims := jsonb_set(claims, '{hierarchy_level}', '10');
+        claims := jsonb_set(claims, '{permissions}', '["schedules.read"]');
+    END IF;
+
+    event := jsonb_set(event, '{claims}', claims);
+    RETURN event;
+END;
+$$;
+
+GRANT USAGE ON SCHEMA public TO supabase_auth_admin;
+GRANT EXECUTE ON FUNCTION public.custom_access_token_hook TO supabase_auth_admin;
+REVOKE EXECUTE ON FUNCTION public.custom_access_token_hook FROM authenticated, anon, public;
+GRANT SELECT ON TABLE public.profiles TO supabase_auth_admin;
+GRANT SELECT ON TABLE public.roles TO supabase_auth_admin;
+GRANT SELECT ON TABLE public.role_permissions TO supabase_auth_admin;
+
+-- =============================================
+-- RPCs BASE
+-- =============================================
+CREATE OR REPLACE FUNCTION public.get_my_profile()
+RETURNS JSON
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+    SELECT json_build_object(
+        'id', p.id,
+        'email', p.email,
+        'display_name', p.display_name,
+        'role', p.role,
+        'hierarchy_level', r.hierarchy_level,
+        'permissions', (
+            SELECT COALESCE(json_agg(perm.name), '[]'::json)
+            FROM public.permissions perm
+            WHERE perm.min_role_level <= r.hierarchy_level
+        )
+    )
+    FROM public.profiles p
+    JOIN public.roles r ON p.role = r.name
+    WHERE p.id = auth.uid();
+$$;
+
+CREATE OR REPLACE FUNCTION public.check_email_exists(p_email TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+    SELECT EXISTS (SELECT 1 FROM public.profiles WHERE email = p_email);
+$$;
+
+CREATE OR REPLACE FUNCTION public.update_my_display_name(new_display_name TEXT)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+    UPDATE public.profiles
+    SET display_name = new_display_name,
+        updated_at = NOW()
+    WHERE id = auth.uid();
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_my_profile() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.check_email_exists(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_my_display_name(TEXT) TO authenticated;
+
+-- =============================================
+-- RLS POLICIES
+-- =============================================
+ALTER TABLE public.roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.permissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.role_permissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "roles_select" ON public.roles
+    FOR SELECT TO authenticated
+    USING (true);
+
+CREATE POLICY "permissions_select" ON public.permissions
+    FOR SELECT TO authenticated
+    USING (true);
+
+CREATE POLICY "role_permissions_select" ON public.role_permissions
+    FOR SELECT TO authenticated
+    USING (true);
+
+CREATE POLICY "profiles_select" ON public.profiles
+    FOR SELECT USING (
+        id = (SELECT auth.uid())
+        OR COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0) >= 80
+    );
+
+CREATE POLICY "profiles_insert" ON public.profiles
+    FOR INSERT WITH CHECK (
+        id = (SELECT auth.uid())
+    );
+
+CREATE POLICY "profiles_update" ON public.profiles
+    FOR UPDATE USING (
+        id = (SELECT auth.uid())
+        OR COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0) >= 80
+    );
+
+CREATE POLICY "profiles_delete" ON public.profiles
+    FOR DELETE USING (
+        COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0) >= 100
+    );
+
+-- =============================================
+-- SECURITY TRIGGER (privilege escalation prevention)
+-- =============================================
+CREATE OR REPLACE FUNCTION public.prevent_role_self_update()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    caller_hierarchy_level int;
+    caller_id uuid;
+    target_current_level int;
+    new_role_level int;
+BEGIN
+    caller_id := auth.uid();
+    caller_hierarchy_level := COALESCE(
+        (SELECT (auth.jwt() ->> 'hierarchy_level'))::int,
+        0
+    );
+
+    IF OLD.role IS DISTINCT FROM NEW.role THEN
+        IF OLD.id = caller_id THEN
+            RAISE EXCEPTION 'Permission denied: cannot modify your own role';
+        END IF;
+
+        IF caller_hierarchy_level < 80 THEN
+            RAISE EXCEPTION 'Permission denied: cannot change role without admin privileges';
+        END IF;
+
+        SELECT r.hierarchy_level INTO target_current_level
+        FROM public.roles r
+        WHERE r.name = OLD.role;
+
+        IF target_current_level >= caller_hierarchy_level THEN
+            RAISE EXCEPTION 'Permission denied: cannot modify user with equal or higher privileges';
+        END IF;
+
+        SELECT r.hierarchy_level INTO new_role_level
+        FROM public.roles r
+        WHERE r.name = NEW.role;
+
+        IF new_role_level >= caller_hierarchy_level THEN
+            RAISE EXCEPTION 'Permission denied: cannot assign role with equal or higher privileges than yours';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS check_role_update ON public.profiles;
+CREATE TRIGGER check_role_update
+    BEFORE UPDATE ON public.profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION public.prevent_role_self_update();
+
+-- =============================================
+-- MANUAL STEP: enable auth hook in Supabase dashboard
+-- =============================================
+-- 1. Dashboard → Authentication → Hooks
+-- 2. "Customize Access Token (JWT) Claims"
+-- 3. Select schema "public", function "custom_access_token_hook"
+-- 4. Save

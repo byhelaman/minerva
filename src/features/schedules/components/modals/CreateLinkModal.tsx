@@ -18,7 +18,7 @@ interface CreateLinkModalProps {
 }
 
 export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
-    const { meetings, users, isLoadingData, fetchZoomData, createMeetings, updateMatchings, isExecuting } = useZoomStore();
+    const { meetings, users, isLoadingData, isInitialized, fetchZoomData, createMeetings, updateMatchings, isExecuting } = useZoomStore();
 
     // Usar hook reutilizable para mapa de anfitriones
     const hostMap = useHostMap();
@@ -39,16 +39,15 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
         }
     }, [open]);
 
-    // Cargar datos de Zoom si no están cargados
+    // Cargar datos de Zoom si no están inicializados
     useEffect(() => {
-        if (open && meetings.length === 0 && !isLoadingData) {
+        if (open && !isInitialized && !isLoadingData) {
             fetchZoomData();
         }
-    }, [open, meetings.length, isLoadingData, fetchZoomData]);
+    }, [open, isInitialized, isLoadingData, fetchZoomData]);
 
-    // Crear instancia del MatchingService (igual que en AssignLinkModal)
+    // Crear instancia del MatchingService (ahora permite arrays vacíos)
     const matcher = useMemo(() => {
-        if (meetings.length === 0) return null;
         return new MatchingService(meetings, users);
     }, [meetings, users]);
 
@@ -117,7 +116,11 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
             .map(line => line.trim())
             .filter(line => line.length > 0);
 
-        if (lines.length === 0 || !matcher) return;
+        if (lines.length === 0) return;
+
+        if (meetings.length === 0) {
+            toast.info("No existing Zoom meetings found.");
+        }
 
         setIsValidating(true);
         // Validación instantánea sin delays artificiales
@@ -250,7 +253,7 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className={cn(
                 "flex flex-col max-h-[85vh]",
-                step === 'input' ? "sm:max-w-lg" : "!max-w-4xl"
+                step === 'input' ? "sm:max-w-lg" : "max-w-4xl!"
             )}>
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
