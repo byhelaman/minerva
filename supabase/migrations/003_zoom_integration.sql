@@ -1,36 +1,30 @@
 -- ============================================
--- ZOOM INTEGRATION: PHASE 1 (Connection & Auth) - VAULT EDITION
+-- Minerva v2 - 003: Zoom Integration (Vault + OAuth + Sync Tables)
 -- ============================================
+-- Ejecutar después de 002_user_management.sql.
 
--- 1. Enable Vault Extension
--- NOTE: If you get "permission denied", enable 'supabase_vault' (and 'pgsodium') manually in Supabase Dashboard > Database > Extensions
+-- 1. Enable Vault Extension (manual si es necesario en Dashboard)
 -- CREATE EXTENSION IF NOT EXISTS supabase_vault;
 
--- 2. Zoom Account Table (Store References to Vault)
+-- =============================================
+-- ZOOM ACCOUNT (Vault References)
+-- =============================================
 CREATE TABLE IF NOT EXISTS public.zoom_account (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    
-    -- Metadata no sensible
     zoom_user_id TEXT NOT NULL,
     zoom_email TEXT NOT NULL,
     zoom_name TEXT,
-    
-    -- Referencias a Vault (UUIDs de la tabla vault.secrets)
     access_token_id UUID NOT NULL,
     refresh_token_id UUID NOT NULL,
-    
     token_type TEXT DEFAULT 'Bearer',
     scope TEXT,
     expires_at TIMESTAMPTZ NOT NULL,
-    
     connected_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Aseguramos que solo haya UNA cuenta conectada
 CREATE UNIQUE INDEX IF NOT EXISTS idx_zoom_account_single ON public.zoom_account ((true));
 
--- RLS: EXTREME SECURITY
 ALTER TABLE public.zoom_account ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Service Role Full Access" ON public.zoom_account
@@ -39,11 +33,6 @@ CREATE POLICY "Service Role Full Access" ON public.zoom_account
     USING (true)
     WITH CHECK (true);
 
--- 3. Función RPC Segura para Guardar Credenciales (Atomic)
--- Esta función:
---   1. Crea secretos en Vault
---   2. Borra cuenta anterior
---   3. Inserta nueva cuenta con referencias
 CREATE OR REPLACE FUNCTION store_zoom_credentials(
     p_user_id TEXT,
     p_email TEXT,
@@ -55,29 +44,27 @@ CREATE OR REPLACE FUNCTION store_zoom_credentials(
 )
 RETURNS VOID
 LANGUAGE plpgsql
-SECURITY DEFINER -- Ejecuta como superuser para acceder a vault
-SET search_path = public, vault, extensions -- Asegura acceso a schemas
+SECURITY DEFINER
+SET search_path = public, vault, extensions
 AS $$
 DECLARE
     v_access_id UUID;
     v_refresh_id UUID;
     v_expires_at TIMESTAMPTZ;
+    v_access_name TEXT;
+    v_refresh_name TEXT;
 BEGIN
-    -- Calcular expiración
     v_expires_at := now() + (p_expires_in || ' seconds')::INTERVAL;
+    v_access_name := 'zoom_access_token_' || p_user_id;
+    v_refresh_name := 'zoom_refresh_token_' || p_user_id;
 
-    -- 1. Guardar secretos en Vault
-    -- vault.create_secret(secret, name, description)
-    v_access_id := vault.create_secret(p_access_token, 'zoom_access_token_' || p_user_id, 'Zoom Access Token');
-    v_refresh_id := vault.create_secret(p_refresh_token, 'zoom_refresh_token_' || p_user_id, 'Zoom Refresh Token');
+    DELETE FROM vault.secrets WHERE name IN (v_access_name, v_refresh_name);
 
-    -- 2. Limpiar cuenta existente (Solo permitimos una cuenta activa)
-    -- Opcional: Limpiar secretos viejos de vault también para no acumular basura?
-    -- Por simplicidad, dejamos que vault acumule o limpiamos manualmente.
-    -- TODO: Implementar limpieza de secretos huérfanos si es necesario.
+    v_access_id := vault.create_secret(p_access_token, v_access_name, 'Zoom Access Token');
+    v_refresh_id := vault.create_secret(p_refresh_token, v_refresh_name, 'Zoom Refresh Token');
+
     DELETE FROM public.zoom_account WHERE id != '00000000-0000-0000-0000-000000000000';
 
-    -- 3. Insertar registro
     INSERT INTO public.zoom_account (
         zoom_user_id, zoom_email, zoom_name,
         access_token_id, refresh_token_id,
@@ -90,8 +77,6 @@ BEGIN
 END;
 $$;
 
--- 4. Vista para recuperar tokens desencriptados (Solo Service Role)
--- Esta vista une zoom_account con vault.decrypted_secrets
 CREATE OR REPLACE VIEW zoom_credentials_decrypted AS
 SELECT
     za.id,
@@ -105,13 +90,12 @@ FROM
 LEFT JOIN vault.decrypted_secrets s_access ON za.access_token_id = s_access.id
 LEFT JOIN vault.decrypted_secrets s_refresh ON za.refresh_token_id = s_refresh.id;
 
--- Proteger la vista: Revocar acceso a public, dar solo a service_role?
--- Las vistas no tienen RLS, pero podemos restringir GRANT.
 REVOKE ALL ON zoom_credentials_decrypted FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON zoom_credentials_decrypted TO service_role;
 
-
--- 5. OAuth States (Igual que antes)
+-- =============================================
+-- OAUTH STATES
+-- =============================================
 CREATE TABLE IF NOT EXISTS public.oauth_states (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     state TEXT NOT NULL UNIQUE,
@@ -126,7 +110,6 @@ ALTER TABLE public.oauth_states ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Service Role Full Access States" ON public.oauth_states
     FOR ALL TO service_role USING (true) WITH CHECK (true);
 
--- Funciones RPC para States
 CREATE OR REPLACE FUNCTION create_oauth_state(p_user_id UUID)
 RETURNS TEXT
 LANGUAGE plpgsql
@@ -154,11 +137,60 @@ BEGIN
     SELECT user_id INTO v_user_id
     FROM public.oauth_states
     WHERE state = p_state AND expires_at > now();
-    
+
     IF v_user_id IS NOT NULL THEN
         DELETE FROM public.oauth_states WHERE state = p_state;
     END IF;
-    
+
     RETURN v_user_id;
 END;
 $$;
+
+-- =============================================
+-- ZOOM SYNC TABLES
+-- =============================================
+CREATE TABLE IF NOT EXISTS public.zoom_users (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    first_name TEXT,
+    last_name TEXT,
+    display_name TEXT,
+    created_at TIMESTAMPTZ,
+    synced_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.zoom_users ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow read for valid roles" ON public.zoom_users
+    FOR SELECT TO authenticated
+    USING (
+        ((auth.jwt() -> 'permissions')::jsonb ? 'meetings.search')
+    );
+
+CREATE POLICY "Allow full access for service_role" ON public.zoom_users
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+CREATE TABLE IF NOT EXISTS public.zoom_meetings (
+    meeting_id TEXT PRIMARY KEY,
+    uuid TEXT,
+    host_id TEXT NOT NULL,
+    topic TEXT,
+    type INTEGER,
+    start_time TIMESTAMPTZ,
+    duration INTEGER,
+    timezone TEXT,
+    join_url TEXT,
+    created_at TIMESTAMPTZ,
+    synced_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.zoom_meetings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow read for valid roles" ON public.zoom_meetings
+    FOR SELECT TO authenticated
+    USING (
+        ((auth.jwt() -> 'permissions')::jsonb ? 'meetings.search')
+    );
+
+CREATE POLICY "Allow full access for service_role" ON public.zoom_meetings
+    FOR ALL TO service_role USING (true) WITH CHECK (true);

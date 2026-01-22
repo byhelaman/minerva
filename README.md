@@ -39,17 +39,11 @@ Execute each file in Supabase **SQL Editor**, following this order:
 
 | Order | File | Description |
 |-------|------|-------------|
-| 1 | `001_roles_permissions.sql` | Roles and permissions tables + seed data |
-| 2 | `002_profiles.sql` | Profiles table + auto-create triggers |
-| 3 | `003_auth_hook.sql` | Auth Hook for JWT Custom Claims |
-| 4 | `004_functions.sql` | RPCs: get_my_profile, update_my_display_name |
-| 5 | `005_policies.sql` | RLS policies using JWT claims |
-| 6 | `006_security_triggers.sql` | Privilege escalation prevention trigger |
-| 7 | `007_user_management.sql` | User Management RPCs (`create_user`, `delete_user`) |
-| 8 | `008_realtime_security.sql` | Enable Realtime for specific roles |
-| 9 | `009_zoom_connection.sql` | Zoom Integration Tables & Vault Setup |
-| 10 | `010_fix_zoom_rpc.sql` | Robust credential storage RPC (prevents duplicate keys) |
-| 11 | `011_create_zoom_sync_tables.sql` | Tables for syncing Zoom Users and Meetings with RLS |
+| 1 | `001_core_access.sql` | Roles, permissions, profiles, auth hook, base RPCs, RLS, security trigger |
+| 2 | `002_user_management.sql` | User/role/permission management RPCs + security checks |
+| 3 | `003_zoom_integration.sql` | Zoom Vault tables, OAuth state, sync tables, and RLS |
+| 4 | `004_webhooks_bug_reports.sql` | Webhook events + cleanup function + bug reports |
+| 5 | `005_realtime_security.sql` | Realtime configuration for profiles |
 
 ## Integrations
 
@@ -94,6 +88,7 @@ In **Dashboard → Authentication → Email Templates**:
 |------|-------|-------------|
 | viewer | 10 | Read-only access to own schedules |
 | operator | 50 | Create/edit schedules, Zoom search |
+| moderator | 60 | Manage Zoom links and assignments |
 | admin | 80 | Manage users and settings |
 | super_admin | 100 | Full system control |
 
