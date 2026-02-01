@@ -14,13 +14,10 @@ export function ExcelUploader() {
 
         setIsProcessing(true);
         try {
-            // Process all files in parallel
             const promises = acceptedFiles.map((file) => parseExcelFile(file));
             const results = await Promise.all(promises);
 
-            // Flatten arrays
-            const allSchedules = results.flat();
-
+            const allSchedules = results.flatMap(r => r.schedules);
             setSchedules(allSchedules);
         } catch (error) {
             console.error(error);

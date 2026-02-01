@@ -34,7 +34,7 @@ import {
     BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
+import { cn, formatTimestampForDisplay } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
@@ -120,7 +120,7 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
                 id: item.id,
                 name: item.name,
                 type: item.folder ? 'folder' : 'file',
-                date: new Date(item.lastModifiedDateTime).toLocaleDateString(),
+                date: formatTimestampForDisplay(item.lastModifiedDateTime),
                 parentId: currentFolderId
             }));
 

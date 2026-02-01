@@ -159,14 +159,17 @@ export function UploadModal({
 
         setIsProcessing(true);
         try {
-            // Process all files in parallel
+            // Procesar archivos en paralelo
             const promises = selectedFiles.map((f) => parseExcelFile(f.file));
             const results = await Promise.all(promises);
 
-            // Flatten arrays
-            const allSchedules = results.flat();
+            const allSchedules = results.flatMap(r => r.schedules);
+            const totalSkipped = results.reduce((sum, r) => sum + r.skipped, 0);
 
-            toast.success(`Successfully parsed ${allSchedules.length} schedules`);
+            if (totalSkipped > 0) {
+                toast.warning(`${totalSkipped} row(s) ignored due to invalid data`);
+            }
+            toast.success(`${allSchedules.length} schedules processed`);
 
             onUploadComplete(allSchedules);
             setSelectedFiles([]);

@@ -9,9 +9,12 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useScheduleStore } from "@/features/schedules/stores/useScheduleStore";
+import { useScheduleSyncStore } from "@/features/schedules/stores/useScheduleSyncStore";
+import { useScheduleUIStore } from "@/features/schedules/stores/useScheduleUIStore";
+import { useScheduleDataStore } from "@/features/schedules/stores/useScheduleDataStore";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { formatDateForDisplay, parseISODate } from "@/lib/utils";
 
 interface PublishToDbModalProps {
     open: boolean;
@@ -19,7 +22,10 @@ interface PublishToDbModalProps {
 }
 
 export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) {
-    const { activeDate, baseSchedules, publishDailyChanges, publishToSupabase, checkIfScheduleExists, publishCooldownUntil } = useScheduleStore();
+    const { publishDailyChanges, publishToSupabase, checkIfScheduleExists, publishCooldownUntil } = useScheduleSyncStore();
+    const { activeDate } = useScheduleUIStore();
+    const { baseSchedules } = useScheduleDataStore();
+
     const [isPublishing, setIsPublishing] = useState(false);
     const [isLoadingCheck, setIsLoadingCheck] = useState(false);
     const [needsOverwrite, setNeedsOverwrite] = useState(false);
@@ -52,8 +58,7 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
 
             // ... (rest of existing logic)
             // Validate date before checking DB
-            const [day, month, year] = activeDate.split('/').map(Number);
-            const scheduleDate = new Date(year, month - 1, day);
+            const scheduleDate = parseISODate(activeDate);
             const today = new Date();
             today.setHours(0, 0, 0, 0);
 
@@ -132,19 +137,19 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
                                 </div>
                             ) : validationError ? (
                                 <span>
-                                    The schedule for <strong>{activeDate}</strong> is not a future date.
+                                    The schedule for <strong>{formatDateForDisplay(activeDate!)}</strong> is not a future date.
                                     <br />
                                     {validationError}
                                 </span>
                             ) : needsOverwrite ? (
                                 <span>
-                                    A schedule for <strong>{activeDate}</strong> has already been published.
+                                    A schedule for <strong>{formatDateForDisplay(activeDate!)}</strong> has already been published.
                                     <br />
                                     If you proceed, it will replace the existing schedule for all users.
                                 </span>
                             ) : (
                                 <>
-                                    Are you sure you want to publish the schedule for <strong>{activeDate}</strong>?
+                                    Are you sure you want to publish the schedule for <strong>{formatDateForDisplay(activeDate!)}</strong>?
                                     <br /><br />
                                     This will:
                                     <ul className="list-disc pl-5 mt-2 space-y-1">

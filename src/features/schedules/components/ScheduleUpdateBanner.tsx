@@ -1,10 +1,12 @@
 import { useEffect, useRef } from "react";
-import { useScheduleStore, PublishedSchedule } from "@/features/schedules/stores/useScheduleStore";
+import { useScheduleSyncStore } from "@/features/schedules/stores/useScheduleSyncStore";
+import { PublishedSchedule } from "@/features/schedules/types";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import { formatDateForDisplay } from "@/lib/utils";
 
 export function ScheduleUpdateBanner() {
-    const { latestPublished, checkForUpdates, downloadPublished, dismissUpdate } = useScheduleStore();
+    const { latestPublished, checkForUpdates, downloadPublished, dismissUpdate } = useScheduleSyncStore();
     const toastIdRef = useRef<string | number | null>(null);
     const lastSeenIdRef = useRef<string | null>(null);
 
@@ -45,7 +47,7 @@ export function ScheduleUpdateBanner() {
             lastSeenIdRef.current = latestPublished.id;
 
             toastIdRef.current = toast("New Schedule Available", {
-                description: `Schedule for ${latestPublished.schedule_date} has been published.`,
+                description: `Schedule for ${formatDateForDisplay(latestPublished.schedule_date)} has been published.`,
                 duration: Infinity, // No auto-dismiss
                 action: {
                     label: "Download",

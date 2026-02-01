@@ -1,32 +1,43 @@
 import { read, utils } from "xlsx";
 import { formatTimeTo24h, parseTimeValue } from "./time-utils";
+import { ScheduleSchema } from "../schemas/schedule-schema";
+import { Schedule } from "../types";
+
+// Re-exportar Schedule para compatibilidad
+export type { Schedule } from "../types";
 
 // =============================================================================
-// TIPOS DE DATOS
+// CONFIGURACIÓN DEL PARSER
 // =============================================================================
 
-export interface Schedule {
-    date: string;
-    shift: string;
-    branch: string;
-    start_time: string;
-    end_time: string;
-    code: string;
-    instructor: string;
-    program: string;
-    minutes: string;
-    units: number;
-}
-
-
+export const PARSER_CONFIG = {
+    METADATA_ROWS: {
+        DATE_ROW_IDX: 1,      // Row 2
+        DATE_COL_IDX: 14,     // Col O
+        LOCATION_ROW_IDX: 1,  // Row 2
+        LOCATION_COL_IDX: 21, // Col V
+        INSTRUCTOR_CODE_ROW: 4, // Row 5
+        INSTRUCTOR_NAME_ROW: 5, // Row 6
+    },
+    DATA: {
+        START_ROW_IDX: 7, // Row 8
+        COLS: {
+            START_TIME: 0, // Col A
+            END_TIME: 3,   // Col D
+            GROUP: 17,     // Col R
+            BLOCK: 19,     // Col T
+            PROGRAM: 25    // Col Z
+        }
+    }
+};
 
 // =============================================================================
-// UTILIDADES GENERALES (Patrones comunes abstraídos)
+// UTILIDADES GENERALES
 // =============================================================================
 
 /** Convierte cualquier valor a string de forma segura (maneja null/undefined) */
 function safeString(val: unknown): string {
-    return String(val ?? "");
+    return String(val ?? "").trim();
 }
 
 /** Verifica si el texto contiene una palabra (case-insensitive, límite de palabra) */
@@ -46,15 +57,12 @@ function findMatchingWord(text: string, words: string[]): string | null {
     return null;
 }
 
-
-
 // =============================================================================
 // HELPERS ESPECÍFICOS DEL DOMINIO
 // =============================================================================
 
 const BRANCH_KEYWORDS = ["CORPORATE", "HUB", "LA MOLINA", "BAW", "KIDS"] as const;
 
-// Mapeo de duraciones: la clave "60" se mapea a "30" por lógica heredada de Python
 const DURATION_MAP: Record<string, string> = {
     "30": "30",
     "45": "45",
@@ -63,38 +71,31 @@ const DURATION_MAP: Record<string, string> = {
     "KIDS": "45",
 };
 
-// Tags especiales que deben ser filtrados (pre-calculado como Set para eficiencia)
 const SPECIAL_TAGS = new Set(
-    [
-        "@Corp | @Corporate",
-        "@Lima 2 | lima2 | @Lima Corporate",
-        "@LC Bulevar Artigas",
-        "@Argentina",
-    ]
-        .flatMap((group) => group.split("|"))
-        .map((tag) => tag.replace(/\s+/g, "").toLowerCase())
+    ["@Corp", "@Corporate", "@Lima2", "lima2", "@LimaCorporate", "@LCBulevarArtigas", "@Argentina"]
+        .map(tag => tag.toLowerCase().replace(/\s/g, ''))
 );
 
-/** Extrae contenido entre paréntesis de un texto */
 function extractParenthesizedContent(text: string): string {
     if (!text) return "";
     const matches = safeString(text).match(/\((.*?)\)/g);
     return matches ? matches.map((m) => m.slice(1, -1)).join(", ") : safeString(text);
 }
 
-/** Extrae palabra clave de sucursal del texto */
 function extractBranchKeyword(text: string): string | null {
     return findMatchingWord(text, [...BRANCH_KEYWORDS]);
 }
 
-/** Filtra tags especiales, retorna null si el texto es un tag especial */
 function filterSpecialTags(text: string): string | null {
     const content = safeString(text);
     const normalized = content.replace(/\s+/g, "").toLowerCase();
-    return SPECIAL_TAGS.has(normalized) ? null : content;
+    // Verificar si contiene algún tag especial
+    for (const tag of SPECIAL_TAGS) {
+        if (normalized.includes(tag)) return null;
+    }
+    return content;
 }
 
-/** Extrae duración del nombre del programa usando el mapeo de duraciones */
 function extractDuration(programName: string): string | null {
     const content = safeString(programName);
     for (const [keyword, duration] of Object.entries(DURATION_MAP)) {
@@ -105,60 +106,52 @@ function extractDuration(programName: string): string | null {
     return null;
 }
 
-
-
-/** Determina el turno según la hora de inicio */
 function determineShift(startTime: string | number): string {
     const { hours } = parseTimeValue(startTime);
-    // P. ZUÑIGA = turno mañana (antes de 14:00)
-    // H. GARCIA = turno tarde (14:00+)
     return hours < 14 ? "P. ZUÑIGA" : "H. GARCIA";
 }
 
-/** Convierte serial de fecha Excel a string formato DD/MM/YYYY */
 function excelDateToString(serial: number): string {
-    // Epoch de Excel: 1 Enero 1900. Epoch de JS: 1 Enero 1970.
-    // Usamos UTC para evitar problemas de zona horaria.
     const utcDays = Math.floor(serial - 25569);
     const date = new Date(utcDays * 86400 * 1000);
-
     const day = String(date.getUTCDate()).padStart(2, "0");
     const month = String(date.getUTCMonth() + 1).padStart(2, "0");
     const year = date.getUTCFullYear();
-    return `${day}/${month}/${year}`;
+    return `${year}-${month}-${day}`; // Formato ISO
 }
 
 // =============================================================================
 // FUNCIÓN PRINCIPAL DE PARSEO
 // =============================================================================
 
-export async function parseExcelFile(file: File): Promise<Schedule[]> {
+export interface ParseResult {
+    schedules: Schedule[];
+    skipped: number;
+}
+
+export async function parseExcelFile(file: File): Promise<ParseResult> {
     const buffer = await file.arrayBuffer();
     const workbook = read(buffer, { type: "array" });
     const schedules: Schedule[] = [];
+    let skipped = 0;
 
     for (const sheetName of workbook.SheetNames) {
         const worksheet = workbook.Sheets[sheetName];
-        // Convertimos la hoja a un array 2D de filas/columnas:
-        // sheet[fila][columna] donde sheet[0] = Fila 1 en Excel, sheet[1] = Fila 2, etc.
-        // Cada fila es un array de celdas: [ColA, ColB, ColC, ...]
-        // Primero intentamos detectar si es un archivo exportado (formato simple)
         const rawSheet = utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][];
+
         if (!rawSheet || rawSheet.length === 0) continue;
 
-        const headerRow = rawSheet[0] as unknown[];
-
-        // Verificamos si los headers coinciden con las propiedades de Schedule
-        // (Al exportar usamos las claves de la interfaz: date, shift, etc.)
-        const isExportedFormat = headerRow && headerRow.some((cell) => {
-            const val = safeString(cell);
-            return val === "start_time" || val === "instructor" || val === "program";
-        });
+        // --- 1. Verificación de formato exportado ---
+        // Los archivos exportados tienen headers: date, shift, branch, start_time, end_time, code, instructor, program, minutes, units, ...
+        // Se verifica la presencia de campos clave de la interfaz Schedule en la fila de encabezados
+        const firstRow = rawSheet[0] as unknown[];
+        const headerCells = firstRow?.slice(0, 10).map(cell => safeString(cell).toLowerCase()) ?? [];
+        const requiredHeaders = ['date', 'start_time', 'end_time', 'program', 'instructor'];
+        const matchedHeaders = requiredHeaders.filter(h => headerCells.includes(h));
+        const isExportedFormat = matchedHeaders.length >= 4; // Al menos 4 de 5 headers requeridos
 
         if (isExportedFormat) {
-            // Parseo simple para archivos exportados
-            const exportData = utils.sheet_to_json(worksheet) as Schedule[];
-            // Normalizar tiempos a 24h para consistencia interna y corregir fechas numéricas
+            const exportData = utils.sheet_to_json(worksheet) as Record<string, unknown>[];
             const normalizedData = exportData.map(item => {
                 let date = item.date;
                 if (typeof date === 'number') {
@@ -167,105 +160,117 @@ export async function parseExcelFile(file: File): Promise<Schedule[]> {
                     date = excelDateToString(parseInt(date.trim(), 10));
                 }
 
-                return {
+                const rawObj = {
                     ...item,
-                    date: safeString(date), // Asegurar que sea string final
-                    start_time: formatTimeTo24h(item.start_time),
-                    end_time: formatTimeTo24h(item.end_time)
+                    date: safeString(date),
+                    start_time: formatTimeTo24h(safeString(item.start_time)),
+                    end_time: formatTimeTo24h(safeString(item.end_time)),
+                    // Asegurar que existan los campos requeridos
+                    program: safeString(item.program),
+                    instructor: safeString(item.instructor),
+                    code: safeString(item.code),
+                    minutes: safeString(item.minutes),
+                    units: safeString(item.units) || '0',
+                    shift: safeString(item.shift) || determineShift(safeString(item.start_time)),
+                    branch: safeString(item.branch)
                 };
-            });
+
+                // Validar con Zod incluso para exportados, por seguridad
+                const result = ScheduleSchema.safeParse(rawObj);
+                if (!result.success) skipped++;
+                return result.success ? result.data : null;
+            }).filter(Boolean) as Schedule[];
+
             schedules.push(...normalizedData);
             continue;
         }
 
-        // Si no es formato exportado, usamos la lógica compleja original
-        const sheet = rawSheet;
+        // --- 2. Validación heurística del formato estándar ---
+        // Verificar si la fila de inicio de datos realmente contiene datos
+        // Fila 8 (Índice 7), Col 0 (Hora) -> Debería ser número o string de hora
+        const startRow = rawSheet[PARSER_CONFIG.DATA.START_ROW_IDX];
+        if (!startRow) {
+            console.warn(`Sheet ${sheetName} is too short`);
+            continue;
+        }
 
-        if (!sheet || sheet.length < 6) continue;
+        // --- 3. Extraer metadatos ---
+        const row0 = rawSheet[PARSER_CONFIG.METADATA_ROWS.DATE_ROW_IDX] as unknown[];
+        const row3 = rawSheet[PARSER_CONFIG.METADATA_ROWS.INSTRUCTOR_CODE_ROW] as unknown[];
+        const row4 = rawSheet[PARSER_CONFIG.METADATA_ROWS.INSTRUCTOR_NAME_ROW] as unknown[];
 
-        try {
-            // Filas de encabezado (ajustadas para comportamiento de Pandas read_excel header=0)
-            const row0 = sheet[1] as unknown[]; // Fila Excel 2
-            const row3 = sheet[4] as unknown[]; // Fila Excel 5
-            const row4 = sheet[5] as unknown[]; // Fila Excel 6
+        if (!row0 || !row3 || !row4) continue;
 
-            // Extraer metadatos del encabezado
-            const scheduleDateVal = row0[14]; // Columna O
-            const locationVal = row0[21];     // Columna V
-            const instructorCode = safeString(row3[0]);
-            const instructorName = safeString(row4[0]);
+        let scheduleDate = safeString(row0[PARSER_CONFIG.METADATA_ROWS.DATE_COL_IDX]);
+        if (/^\d+$/.test(scheduleDate)) scheduleDate = excelDateToString(parseInt(scheduleDate));
 
-            let scheduleDate = safeString(scheduleDateVal);
+        const instructorCode = safeString(row3[0]);
+        const instructorName = safeString(row4[0]);
+        const locationVal = safeString(row0[PARSER_CONFIG.METADATA_ROWS.LOCATION_COL_IDX]);
+        const branchName = extractBranchKeyword(locationVal) ?? "";
 
-            // Detectar fechas numéricas o strings numéricos (ej: "46044")
-            if (typeof scheduleDateVal === "number") {
-                scheduleDate = excelDateToString(scheduleDateVal);
-            } else if (typeof scheduleDateVal === "string" && /^\d+$/.test(scheduleDateVal.trim())) {
-                scheduleDate = excelDateToString(parseInt(scheduleDateVal.trim(), 10));
+        // --- 4. Pre-calcular conteo de grupos ---
+        const groupCounts: Record<string, number> = {};
+        for (let i = PARSER_CONFIG.DATA.START_ROW_IDX; i < rawSheet.length; i++) {
+            const row = rawSheet[i];
+            if (!row) continue;
+            const group = safeString(row[PARSER_CONFIG.DATA.COLS.GROUP]);
+            if (group) groupCounts[group] = (groupCounts[group] || 0) + 1;
+        }
+
+        // --- 5. Iteración de datos con validación Zod ---
+        for (let i = PARSER_CONFIG.DATA.START_ROW_IDX; i < rawSheet.length; i++) {
+            const row = rawSheet[i];
+            if (!row) continue;
+
+            const startTimeRaw = row[PARSER_CONFIG.DATA.COLS.START_TIME];
+            const endTimeRaw = row[PARSER_CONFIG.DATA.COLS.END_TIME];
+            let groupName = safeString(row[PARSER_CONFIG.DATA.COLS.GROUP]);
+            const rawBlock = safeString(row[PARSER_CONFIG.DATA.COLS.BLOCK]);
+            const programName = safeString(row[PARSER_CONFIG.DATA.COLS.PROGRAM]);
+
+            if (!startTimeRaw || !endTimeRaw) continue;
+
+            // Lógica de fallback
+            if (!groupName) {
+                const blockFiltered = filterSpecialTags(rawBlock);
+                if (blockFiltered) groupName = blockFiltered;
+                else continue;
             }
 
-            const branchName = extractBranchKeyword(safeString(locationVal)) ?? "";
+            const startTimeStr = extractParenthesizedContent(safeString(startTimeRaw));
+            const endTimeStr = extractParenthesizedContent(safeString(endTimeRaw));
 
-            // Contar grupos para cálculo de unidades
-            const groupCounts: Record<string, number> = {};
-            for (let i = 7; i < sheet.length; i++) {
-                const group = sheet[i]?.[17];
-                if (group) {
-                    const key = safeString(group);
-                    groupCounts[key] = (groupCounts[key] || 0) + 1;
-                }
+            // Lógica de sucursal
+            const programKeyword = extractBranchKeyword(programName);
+            const branch = programKeyword === "KIDS" && branchName
+                ? `${branchName}/${programKeyword}`
+                : branchName;
+
+            // Construcción del objeto crudo
+            const rawObj = {
+                date: scheduleDate,
+                shift: determineShift(startTimeStr), // Inyectado
+                branch: branch,     // Inyectado
+                start_time: formatTimeTo24h(startTimeStr),
+                end_time: formatTimeTo24h(endTimeStr),
+                code: instructorCode,
+                instructor: instructorName,
+                program: groupName,
+                minutes: extractDuration(programName) ?? "0",
+                units: String(groupCounts[groupName] ?? 0)
+            };
+
+            // VALIDACIÓN ZOD
+            const result = ScheduleSchema.safeParse(rawObj);
+
+            if (result.success) {
+                schedules.push(result.data as Schedule);
+            } else {
+                skipped++;
             }
-
-            // Procesar filas de datos (desde Fila Excel 8 = índice JS 7)
-            for (let i = 7; i < sheet.length; i++) {
-                const row = sheet[i];
-                if (!row) continue;
-
-                const startTime = row[0];
-                const endTime = row[3];
-                let groupName = row[17];   // Columna R
-                const rawBlock = row[19];  // Columna T
-                const programName = row[25]; // Columna Z
-
-                if (!startTime || !endTime) continue;
-
-                // Usar bloque como fallback para nombre de grupo
-                const blockFiltered = rawBlock ? filterSpecialTags(safeString(rawBlock)) : null;
-                if (!groupName || safeString(groupName).trim() === "") {
-                    if (blockFiltered?.trim()) {
-                        groupName = blockFiltered;
-                    } else {
-                        continue;
-                    }
-                }
-
-                const startTimeStr = extractParenthesizedContent(safeString(startTime));
-                const endTimeStr = extractParenthesizedContent(safeString(endTime));
-
-                // Determinar sucursal (agregar KIDS si aplica)
-                const programKeyword = extractBranchKeyword(safeString(programName));
-                const branch =
-                    programKeyword === "KIDS" && branchName
-                        ? `${branchName}/${programKeyword}`
-                        : branchName;
-
-                schedules.push({
-                    date: scheduleDate,
-                    shift: determineShift(startTimeStr),
-                    branch,
-                    start_time: formatTimeTo24h(startTimeStr),
-                    end_time: formatTimeTo24h(endTimeStr),
-                    code: instructorCode,
-                    instructor: instructorName,
-                    program: safeString(groupName),
-                    minutes: extractDuration(safeString(programName)) ?? "0",
-                    units: groupCounts[safeString(groupName)] ?? 0,
-                });
-            }
-        } catch (err) {
-            console.warn(`Error al parsear hoja ${sheetName}:`, err);
         }
     }
 
-    return schedules;
+    return { schedules, skipped };
 }

@@ -550,14 +550,15 @@ function toISODateTime(dateStr: string, timeStr: string): string {
 
         let year: number, month: number, day: number;
 
-        // Intentar formatos manuales: DD/MM/YYYY, YYYY-MM-DD
+        // Primary format: YYYY-MM-DD (ISO 8601)
+        // Legacy fallback: DD/MM/YYYY for backwards compatibility
         if (dateStr.includes('/')) {
             const parts = dateStr.split('/');
             if (parts[0].length === 4) {
                 // YYYY/MM/DD
                 [year, month, day] = parts.map(Number);
             } else {
-                // DD/MM/YYYY (formato Perú/UK)
+                // DD/MM/YYYY (legacy format)
                 [day, month, year] = parts.map(Number);
             }
         } else if (dateStr.includes('-')) {

@@ -3,6 +3,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { type Schedule } from "@schedules/utils/excel-parser";
 import { DataTableColumnHeader } from "./data-table-column-header";
 import { DataTableRowActions } from "./data-table-row-actions";
+import { formatDateForDisplay } from "@/lib/utils";
 
 export const getScheduleColumns = (onDelete?: (s: Schedule) => void): ColumnDef<Schedule>[] => [
     {
@@ -39,7 +40,7 @@ export const getScheduleColumns = (onDelete?: (s: Schedule) => void): ColumnDef<
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="Date" className="justify-center" />
         ),
-        cell: ({ row }) => <div className="w-[80px] mx-auto">{row.getValue("date")}</div>,
+        cell: ({ row }) => <div className="w-[80px] mx-auto">{formatDateForDisplay(row.getValue("date"))}</div>,
     },
     {
         accessorKey: "shift",

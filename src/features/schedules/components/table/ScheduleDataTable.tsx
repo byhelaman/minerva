@@ -52,7 +52,7 @@ interface ScheduleDataTableProps<TData, TValue> {
     setShowLiveMode?: (show: boolean) => void;
     isLiveLoading?: boolean;
     liveTimeFilter?: string; // Hora en formato "HH" para filtrar cuando Live está activo
-    liveDateFilter?: string; // Fecha en formato "DD/MM/YYYY" para filtrar cuando Live está activo
+    liveDateFilter?: string; // Fecha en formato "YYYY-MM-DD" para filtrar cuando Live está activo
     onPublish?: () => void;
     isPublishing?: boolean;
     canPublish?: boolean;

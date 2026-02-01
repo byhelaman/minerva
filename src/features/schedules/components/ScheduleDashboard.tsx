@@ -2,7 +2,7 @@ import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import { UploadModal } from "@schedules/components/modals/UploadModal";
 import { ScheduleDataTable } from "@schedules/components/table/ScheduleDataTable";
 import { getScheduleColumns } from "@schedules/components/table/columns";
-import { Schedule } from "@schedules/utils/excel-parser";
+import { Schedule } from "@schedules/types";
 import { getUniqueScheduleKey } from "@schedules/utils/overlap-utils";
 import { BaseDirectory, exists, readTextFile, remove, writeTextFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
@@ -10,13 +10,18 @@ import { Button } from "@/components/ui/button";
 import { useSettings } from "@/components/settings-provider";
 import { RequirePermission } from "@/components/RequirePermission";
 import { AUTOSAVE_DEBOUNCE_MS, STORAGE_FILES } from "@/lib/constants";
+import { formatDateToISO, formatDateForDisplay } from "@/lib/utils";
 import { Bot, CalendarPlus, CalendarSearch } from "lucide-react";
 import { SearchLinkModal } from "./modals/SearchLinkModal";
 import { CreateLinkModal } from "./modals/CreateLinkModal";
 import { AssignLinkModal } from "./modals/AssignLinkModal";
 import { useZoomStore } from "@/features/matching/stores/useZoomStore";
 import { MatchingService } from "@/features/matching/services/matcher";
-import { useScheduleStore } from "@/features/schedules/stores/useScheduleStore";
+// Atomic Stores
+import { useScheduleDataStore } from "@/features/schedules/stores/useScheduleDataStore";
+import { useScheduleUIStore } from "@/features/schedules/stores/useScheduleUIStore";
+import { useScheduleSyncStore } from "@/features/schedules/stores/useScheduleSyncStore";
+
 import { ScheduleUpdateBanner } from "./ScheduleUpdateBanner";
 import { PublishToDbModal } from "./modals/PublishToDbModal";
 
@@ -27,24 +32,14 @@ export function ScheduleDashboard() {
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
     const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
 
-    // Global Store
-    const {
-        baseSchedules,
-        setBaseSchedules,
-        incidences,
-        setIncidences,
-        activeDate,
-        setActiveDate,
-        getComputedSchedules,
-        refreshMsConfig,
-        // publishDailyChanges, // Used in PublishToDbModal now
-        isPublishing,
-        msConfig
-    } = useScheduleStore();
+    // Store Access
+    const { baseSchedules, setBaseSchedules, incidences, setIncidences, getComputedSchedules } = useScheduleDataStore();
+    const { activeDate, setActiveDate } = useScheduleUIStore();
+    const { refreshMsConfig, isPublishing, msConfig } = useScheduleSyncStore();
 
     // Computed Schedules (Merged with Incidences)
     // Memoize to prevent infinite loops in downstream components (AssignLinkModal) that depend on this array
-    const schedules = useMemo(() => getComputedSchedules(), [baseSchedules, incidences]);
+    const schedules = useMemo(() => getComputedSchedules(), [baseSchedules, incidences, getComputedSchedules]);
 
     const hasLoadedAutosave = useRef(false);
     const autoSaveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -62,7 +57,7 @@ export function ScheduleDashboard() {
     // Init Global Store
     useEffect(() => {
         refreshMsConfig();
-    }, []);
+    }, [refreshMsConfig]);
 
     // Auto-load on mount
     useEffect(() => {
@@ -92,8 +87,6 @@ export function ScheduleDashboard() {
                     const parsedData = JSON.parse(content);
                     if (Array.isArray(parsedData)) {
                         setIncidences(parsedData);
-                        // Ensure we don't toast twice if both succeed, maybe consolidate?
-                        // toast.success("Incidences restored"); 
                     }
                 }
             } catch (error) {
@@ -103,7 +96,7 @@ export function ScheduleDashboard() {
         };
 
         loadAutosave();
-    }, []);
+    }, [setBaseSchedules, setActiveDate, setIncidences]);
 
     // Debounced auto-save for SCHEDULES
     useEffect(() => {
@@ -141,12 +134,6 @@ export function ScheduleDashboard() {
     // Debounced auto-save for INCIDENCES
     useEffect(() => {
         if (!hasLoadedAutosave.current) return;
-        // Autosave for incidences is always ON (critical data), or linked to settings?
-        // Let's respect settings.autoSave for consistency, or maybe force it?
-        // User said "Almacenamiento Temporal debe ser un archivo", hinting it's mandatory.
-        // I will ignore `settings.autoSave` for Incidences or assume it's part of the general logic.
-        // I'll stick to `settings.autoSave` for now to be safe, but maybe `true` is better.
-        // I will use `settings.autoSave` to avoid writing if user explicitly disabled persistence.
         if (!settings.autoSave) return;
 
         if (incidencesSaveTimeout.current) {
@@ -161,7 +148,7 @@ export function ScheduleDashboard() {
             } catch (error) {
                 console.error("Incidences save failed:", error);
             }
-        }, 1000); // 1 sec debounce for incidences (more critical/smaller)
+        }, 1000);
 
         return () => {
             if (incidencesSaveTimeout.current) {
@@ -183,7 +170,7 @@ export function ScheduleDashboard() {
 
         const now = new Date();
         const currentHour = now.getHours().toString().padStart(2, '0');
-        const currentDate = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()}`;
+        const currentDate = formatDateToISO(now);
         setLiveTimeFilter(currentHour);
         setLiveDateFilter(currentDate);
 
@@ -232,7 +219,6 @@ export function ScheduleDashboard() {
     }, [meetings, users, schedules, fetchActiveMeetings]);
 
     const handleUploadComplete = (newData: Schedule[]) => {
-        // ... (Logic adapted to setBaseSchedules)
         const internalKeys = new Set<string>();
         const deduplicatedNewData: Schedule[] = [];
         let internalDuplicates = 0;
@@ -309,7 +295,7 @@ export function ScheduleDashboard() {
                 <div className="flex flex-col gap-1">
                     <h1 className="text-xl font-bold tracking-tight">Management</h1>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span>Active Date: {activeDate || "No Date Selected"}</span>
+                        <span>Active Date: {activeDate ? formatDateForDisplay(activeDate) : "No Date Selected"}</span>
                         {/* Incidence Count Badge could go here */}
                         {incidences.length > 0 && (
                             <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-xs">

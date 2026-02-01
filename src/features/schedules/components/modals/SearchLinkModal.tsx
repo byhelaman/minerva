@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { formatTimestampForDisplay } from "@/lib/utils";
 
 interface SearchLinkModalProps {
     open: boolean;
@@ -108,11 +109,7 @@ const searchColumns: ColumnDef<MeetingRow>[] = [
             if (!val) return <div className="text-center text-muted-foreground">Unknown</div>;
             return (
                 <div className="text-center">
-                    {new Date(val).toLocaleDateString("es-PE", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                    })}
+                    {formatTimestampForDisplay(val)}
                 </div>
             );
         },

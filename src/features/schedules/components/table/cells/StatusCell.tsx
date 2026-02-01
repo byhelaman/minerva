@@ -4,6 +4,7 @@ import { AlertCircle, BadgeCheckIcon, XCircle, RefreshCw, HelpCircle, Hand } fro
 import { AssignmentRow } from "../assignment-columns";
 import { ZoomMeetingCandidate } from "@/features/matching/services/matcher";
 import { Row } from "@tanstack/react-table";
+import { formatTimestampForDisplay } from "@/lib/utils";
 
 interface StatusCellProps {
     row: Row<AssignmentRow>;
@@ -172,11 +173,7 @@ export function StatusCell({
                                         <div className="text-xs font-medium text-muted-foreground mb-1">Series end</div>
                                         <div className="text-sm">
                                             {matched.start_time
-                                                ? new Date(matched.start_time).toLocaleString('en-US', {
-                                                    timeZone: 'America/Lima',
-                                                    dateStyle: 'medium',
-                                                    timeStyle: 'short'
-                                                })
+                                                ? formatTimestampForDisplay(matched.start_time)
                                                 : '—'}
                                         </div>
                                     </div>
