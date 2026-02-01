@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { formatDateForDisplay } from "@/lib/utils";
 
 export function ScheduleUpdateBanner() {
-    const { latestPublished, checkForUpdates, downloadPublished, dismissUpdate } = useScheduleSyncStore();
+    const { latestPublished, checkForUpdates, loadPublishedSchedule, dismissUpdate } = useScheduleSyncStore();
     const toastIdRef = useRef<string | number | null>(null);
     const lastSeenIdRef = useRef<string | null>(null);
 
@@ -51,7 +51,7 @@ export function ScheduleUpdateBanner() {
                 duration: Infinity, // No auto-dismiss
                 action: {
                     label: "Download",
-                    onClick: () => downloadPublished(latestPublished as PublishedSchedule),
+                    onClick: () => loadPublishedSchedule(latestPublished as PublishedSchedule),
                 },
                 cancel: {
                     label: "Dismiss",
@@ -66,7 +66,7 @@ export function ScheduleUpdateBanner() {
             }
             lastSeenIdRef.current = null;
         }
-    }, [latestPublished, downloadPublished, dismissUpdate]);
+    }, [latestPublished, loadPublishedSchedule, dismissUpdate]);
 
     return null;
 }

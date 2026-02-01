@@ -21,14 +21,12 @@ function toExcelColumnWidths(
 /**
  * Publishes daily changes to Excel via Microsoft Graph.
  * @param config Microsoft connection configuration
- * @param incidences List of incidences to log
  * @param activeDate The date being published (YYYY-MM-DD)
  * @param computedSchedules The final schedule data to write
  * @param onStatusUpdate Optional callback for status messages
  */
 export async function publishScheduleToExcel(
     config: SchedulesConfig,
-    incidences: DailyIncidence[],
     activeDate: string,
     computedSchedules: (Schedule | DailyIncidence)[],
     onStatusUpdate?: (msg: string) => void
@@ -42,32 +40,9 @@ export async function publishScheduleToExcel(
         throw new Error('Microsoft account not connected');
     }
 
-    // 1. Sync Incidences Log
-    if (config.incidencesFileId && incidences.length > 0) {
-        notify("Syncing incidence log...");
-        const { data: content, error: listError } = await supabase.functions.invoke('microsoft-graph', {
-            body: { action: 'list-content', fileId: config.incidencesFileId }
-        });
+    // 1. Sync Incidences Log - REMOVED (Handled via DB Sync)
+    // The legacy file-based incidence logging is deprecated.
 
-        if (listError) throw listError;
-
-        const table = content.value.find((i: any) => i.type === 'table');
-        if (!table) throw new Error('No table found in Incidences file.');
-
-        const rows = incidences.map(inc => [
-            inc.date, inc.shift, inc.branch, inc.start_time, inc.end_time,
-            inc.code, inc.instructor, inc.program, inc.minutes, inc.units,
-            inc.status || '', inc.substitute || '', inc.type || '',
-            inc.subtype || '', inc.description || '', inc.department || '',
-            inc.feedback || ''
-        ]);
-
-        const { error: appendError } = await supabase.functions.invoke('microsoft-graph', {
-            body: { action: 'append-row', fileId: config.incidencesFileId, tableId: table.id, values: rows }
-        });
-
-        if (appendError) throw appendError;
-    }
 
     // 2. Publish Daily Schedule File
     if (config.schedulesFolderId && activeDate) {

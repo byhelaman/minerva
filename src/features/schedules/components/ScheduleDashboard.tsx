@@ -33,7 +33,7 @@ export function ScheduleDashboard() {
     const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
 
     // Store Access
-    const { baseSchedules, setBaseSchedules, incidences, setIncidences, getComputedSchedules } = useScheduleDataStore();
+    const { baseSchedules, setBaseSchedules, incidences, getComputedSchedules } = useScheduleDataStore();
     const { activeDate, setActiveDate } = useScheduleUIStore();
     const { refreshMsConfig, isPublishing, msConfig } = useScheduleSyncStore();
 
@@ -43,7 +43,6 @@ export function ScheduleDashboard() {
 
     const hasLoadedAutosave = useRef(false);
     const autoSaveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const incidencesSaveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
     const { settings } = useSettings();
     const { meetings, users, fetchActiveMeetings, isLoadingData } = useZoomStore();
 
@@ -59,14 +58,15 @@ export function ScheduleDashboard() {
         refreshMsConfig();
     }, [refreshMsConfig]);
 
-    // Auto-load on mount
+
+    // Auto-load drafts on mount
     useEffect(() => {
         if (hasLoadedAutosave.current) return;
         hasLoadedAutosave.current = true;
 
         const loadAutosave = async () => {
             try {
-                // Load Base Schedules
+                // Load Base Schedules (Drafts)
                 const schedExists = await exists(STORAGE_FILES.SCHEDULES_DRAFT, { baseDir: BaseDirectory.AppLocalData });
                 if (schedExists) {
                     const content = await readTextFile(STORAGE_FILES.SCHEDULES_DRAFT, { baseDir: BaseDirectory.AppLocalData });
@@ -76,29 +76,19 @@ export function ScheduleDashboard() {
                         if (parsedData.length > 0 && parsedData[0].date) {
                             setActiveDate(parsedData[0].date);
                         }
-                        toast.success("Schedule restored");
+                        toast.success("Draft schedule restored");
                     }
                 }
 
-                // Load Incidences
-                const incExists = await exists(STORAGE_FILES.INCIDENCES_LOG, { baseDir: BaseDirectory.AppLocalData });
-                if (incExists) {
-                    const content = await readTextFile(STORAGE_FILES.INCIDENCES_LOG, { baseDir: BaseDirectory.AppLocalData });
-                    const parsedData = JSON.parse(content);
-                    if (Array.isArray(parsedData)) {
-                        setIncidences(parsedData);
-                    }
-                }
             } catch (error) {
                 console.error("Failed to load autosave:", error);
-                toast.error("Failed to restore previous session");
             }
         };
 
         loadAutosave();
-    }, [setBaseSchedules, setActiveDate, setIncidences]);
+    }, [setBaseSchedules, setActiveDate]);
 
-    // Debounced auto-save for SCHEDULES
+    // Debounced auto-save for SCHEDULES (Drafts Only)
     useEffect(() => {
         if (!hasLoadedAutosave.current) return;
         if (!settings.autoSave) return;
@@ -131,33 +121,8 @@ export function ScheduleDashboard() {
         };
     }, [baseSchedules, settings.autoSave]);
 
-    // Debounced auto-save for INCIDENCES
-    useEffect(() => {
-        if (!hasLoadedAutosave.current) return;
-        if (!settings.autoSave) return;
 
-        if (incidencesSaveTimeout.current) {
-            clearTimeout(incidencesSaveTimeout.current);
-        }
-
-        incidencesSaveTimeout.current = setTimeout(async () => {
-            try {
-                await writeTextFile(STORAGE_FILES.INCIDENCES_LOG, JSON.stringify(incidences, null, 2), {
-                    baseDir: BaseDirectory.AppLocalData,
-                });
-            } catch (error) {
-                console.error("Incidences save failed:", error);
-            }
-        }, 1000);
-
-        return () => {
-            if (incidencesSaveTimeout.current) {
-                clearTimeout(incidencesSaveTimeout.current);
-            }
-        };
-    }, [incidences, settings.autoSave]);
-
-    // Live Mode Logic (Same as before, using 'schedules' which is now computed)
+    // Live Mode Logic 
     const handleLiveModeToggle = useCallback(async (enabled: boolean) => {
         setShowLiveMode(enabled);
 
@@ -269,6 +234,8 @@ export function ScheduleDashboard() {
         });
     };
 
+
+
     const handleClearSchedule = async () => {
         try {
             setBaseSchedules([]);
@@ -278,6 +245,10 @@ export function ScheduleDashboard() {
             if (fileExists) {
                 await remove(STORAGE_FILES.SCHEDULES_DRAFT, { baseDir: BaseDirectory.AppLocalData });
             }
+
+            // Reset version tracking so toast can reappear if there is a server version
+            await useScheduleSyncStore.getState().resetCurrentVersion();
+
             toast.success("Schedule cleared");
         } catch (error) {
             console.error("Error clearing schedule:", error);
@@ -285,9 +256,10 @@ export function ScheduleDashboard() {
         }
     };
 
-    const columns = useMemo(() => getScheduleColumns(handleDeleteSchedule), [baseSchedules]);
-
-    // Date navigation handler (simple prev/next could be added later, for now just display)
+    const columns = useMemo(
+        () => getScheduleColumns(handleDeleteSchedule),
+        [baseSchedules],
+    );
 
     return (
         <>
@@ -296,17 +268,9 @@ export function ScheduleDashboard() {
                     <h1 className="text-xl font-bold tracking-tight">Management</h1>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <span>Active Date: {activeDate ? formatDateForDisplay(activeDate) : "No Date Selected"}</span>
-                        {/* Incidence Count Badge could go here */}
-                        {incidences.length > 0 && (
-                            <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-xs">
-                                {incidences.length} Incidences
-                            </span>
-                        )}
                     </div>
                 </div>
                 <div className="flex gap-2">
-
-
 
                     <RequirePermission permission="meetings.search">
                         <Button
@@ -342,6 +306,9 @@ export function ScheduleDashboard() {
                     </RequirePermission>
                 </div>
             </div>
+
+            <ScheduleUpdateBanner />
+
             {/* Data Table */}
             <ScheduleDataTable
                 columns={columns}
@@ -359,8 +326,6 @@ export function ScheduleDashboard() {
                 isPublishing={isPublishing}
                 canPublish={msConfig.isConnected && schedules.length > 0}
             />
-
-            <ScheduleUpdateBanner />
 
             {/* Upload Modal */}
             <UploadModal
@@ -388,6 +353,8 @@ export function ScheduleDashboard() {
                 onOpenChange={setIsAssignModalOpen}
                 schedules={schedules}
             />
+
+
         </>
     );
 }

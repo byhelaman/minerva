@@ -13,7 +13,6 @@ import { useScheduleSyncStore } from "@/features/schedules/stores/useScheduleSyn
 import { useScheduleUIStore } from "@/features/schedules/stores/useScheduleUIStore";
 import { useScheduleDataStore } from "@/features/schedules/stores/useScheduleDataStore";
 import { Loader2 } from "lucide-react";
-import { toast } from "sonner";
 import { formatDateForDisplay, parseISODate } from "@/lib/utils";
 
 interface PublishToDbModalProps {
@@ -22,105 +21,80 @@ interface PublishToDbModalProps {
 }
 
 export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) {
-    const { publishDailyChanges, publishToSupabase, checkIfScheduleExists, publishCooldownUntil } = useScheduleSyncStore();
+    const { publishToSupabase, isPublishing, checkIfScheduleExists } = useScheduleSyncStore();
     const { activeDate } = useScheduleUIStore();
     const { baseSchedules } = useScheduleDataStore();
 
-    const [isPublishing, setIsPublishing] = useState(false);
     const [isLoadingCheck, setIsLoadingCheck] = useState(false);
-    const [needsOverwrite, setNeedsOverwrite] = useState(false);
     const [validationError, setValidationError] = useState<string | null>(null);
-    const [cooldownRemaining, setCooldownRemaining] = useState(0);
+    const [needsOverwrite, setNeedsOverwrite] = useState(false);
 
-    // Countdown Timer Effect
-    useEffect(() => {
-        if (!publishCooldownUntil) {
-            setCooldownRemaining(0);
-            return;
-        }
-
-        const checkTimer = () => {
-            const now = Date.now();
-            const left = Math.ceil((publishCooldownUntil - now) / 1000);
-            setCooldownRemaining(left > 0 ? left : 0);
-        };
-
-        checkTimer(); // Initial check
-        const interval = setInterval(checkTimer, 1000);
-        return () => clearInterval(interval);
-    }, [publishCooldownUntil]);
-
-    // Verify if schedule exists on open
     useEffect(() => {
         if (open && activeDate) {
-            setNeedsOverwrite(false); // Reset state on open
+            // Reset state on open to prevent flash of stale state
+            setNeedsOverwrite(false);
             setValidationError(null);
 
-            // ... (rest of existing logic)
-            // Validate date before checking DB
-            const scheduleDate = parseISODate(activeDate);
+            checkStatus();
+        }
+        // Removed cleanup on close to prevent UI flash during exit animation
+    }, [open, activeDate]);
+
+    const checkStatus = async () => {
+        if (!activeDate) return;
+
+        setIsLoadingCheck(true);
+        setValidationError(null);
+
+        try {
+            // 1. Validate Date (ensure not empty)
+            if (!activeDate) {
+                setValidationError("No date selected.");
+                return;
+            }
+
+            // 2. Validate Date (must be today or future)
+            const dateObj = parseISODate(activeDate);
             const today = new Date();
             today.setHours(0, 0, 0, 0);
 
-            if (scheduleDate < today) {
-                setValidationError('Only future schedules can be published');
+            if (dateObj < today) {
+                setValidationError("Cannot publish schedules for past dates.");
                 return;
             }
 
-            const check = async () => {
-                setIsLoadingCheck(true);
-                try {
-                    const exists = await checkIfScheduleExists(activeDate);
-                    setNeedsOverwrite(exists);
-                } catch (error) {
-                    console.error("Failed to check schedule existence", error);
-                } finally {
-                    setIsLoadingCheck(false);
-                }
-            };
-            check();
-        } else {
-            // Reset state when closed
-            if (!open) {
-                setIsPublishing(false);
-            }
-        }
-    }, [open, activeDate, checkIfScheduleExists]);
-
-    const performPublish = async (overwrite: boolean) => {
-        if (cooldownRemaining > 0) return; // Prevent action if cooling down
-
-        setIsPublishing(true);
-        try {
-            // 1. Publish to Excel (Both fresh and overwrite need to update Excel)
-            // Note: If this fails, we stop.
-            await publishDailyChanges();
-
-            // 2. Publish to Supabase
-            const result = await publishToSupabase(overwrite);
-
-            // Safety check: if we thought it was fresh but it exists (race condition)
-            if (!result.success && result.exists && !overwrite) {
-                setNeedsOverwrite(true);
-                // Don't close, let user decide to overwrite
+            // 3. Validate Content
+            if (baseSchedules.length === 0) {
+                setValidationError("There are no schedule entries to publish.");
                 return;
             }
 
-            if (result.success) {
-                onOpenChange(false);
-            } else if (result.error) {
-                toast.error(result.error);
-            }
+            // 3. Check Existence
+            const exists = await checkIfScheduleExists(activeDate);
+            setNeedsOverwrite(exists);
+
         } catch (error) {
-            console.error("Publish flow failed", error);
-            toast.error("An unexpected error occurred during publish");
+            console.error("Check failed", error);
         } finally {
-            setIsPublishing(false);
+            setIsLoadingCheck(false);
         }
     };
 
-    const handlePublish = () => performPublish(false);
-    const handleOverwrite = () => performPublish(true);
+    const handlePublish = async () => {
+        const result = await publishToSupabase(false);
+        if (result.success) {
+            onOpenChange(false);
+        } else if (result.exists) {
+            setNeedsOverwrite(true);
+        }
+    };
+
+    const handleOverwrite = async () => {
+        const result = await publishToSupabase(true);
+        if (result.success) {
+            onOpenChange(false);
+        }
+    };
 
     return (
         <AlertDialog open={open} onOpenChange={(val) => !isPublishing && onOpenChange(val)}>
@@ -137,7 +111,7 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
                                 </div>
                             ) : validationError ? (
                                 <span>
-                                    The schedule for <strong>{formatDateForDisplay(activeDate!)}</strong> is not a future date.
+                                    Issue with schedule for <strong>{formatDateForDisplay(activeDate!)}</strong>:
                                     <br />
                                     {validationError}
                                 </span>
@@ -151,15 +125,11 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
                                 <>
                                     Are you sure you want to publish the schedule for <strong>{formatDateForDisplay(activeDate!)}</strong>?
                                     <br /><br />
-                                    This will:
+                                    This action will:
                                     <ul className="list-disc pl-5 mt-2 space-y-1">
-                                        <li>Update the Excel file in OneDrive</li>
-                                        <li>Save the schedule to the database</li>
+                                        <li>Save {baseSchedules.length} entries to the database</li>
                                         <li>Notify all users of the update</li>
                                     </ul>
-                                    <p className="mt-4 text-sm text-muted-foreground">
-                                        Total Records: {baseSchedules.length}
-                                    </p>
                                 </>
                             )}
                         </div>
@@ -176,14 +146,18 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
                                 Cancel
                             </AlertDialogCancel>
                             {needsOverwrite ? (
-                                <AlertDialogAction onClick={handleOverwrite} disabled={isPublishing || cooldownRemaining > 0} className="border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive">
+                                <AlertDialogAction
+                                    onClick={handleOverwrite}
+                                    disabled={isPublishing}
+                                    className="border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
+                                >
                                     {isPublishing ? <Loader2 className="animate-spin" /> : null}
-                                    {cooldownRemaining > 0 ? `Wait ${cooldownRemaining}s` : "Replace"}
+                                    Replace
                                 </AlertDialogAction>
                             ) : (
-                                <AlertDialogAction onClick={handlePublish} disabled={isPublishing || isLoadingCheck || cooldownRemaining > 0}>
+                                <AlertDialogAction onClick={handlePublish} disabled={isPublishing || isLoadingCheck}>
                                     {isPublishing ? <Loader2 className="animate-spin" /> : null}
-                                    {isLoadingCheck ? "Checking..." : (cooldownRemaining > 0 ? `Wait ${cooldownRemaining}s` : "Publish")}
+                                    {isLoadingCheck ? "Checking..." : "Publish"}
                                 </AlertDialogAction>
                             )}
                         </>

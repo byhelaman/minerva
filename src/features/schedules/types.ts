@@ -26,7 +26,7 @@ export interface PublishedSchedule {
     id: string;
     published_by: string | null;
     schedule_date: string;
-    schedule_data: Schedule[];
+    entries_count: number;
     created_at: string;
     updated_at: string;
 }

@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import { formatDateForDisplay, parseISODate } from '@/lib/utils';
+import { formatDateForDisplay } from '@/lib/utils';
 import { PublishedSchedule, SchedulesConfig } from '../types';
-import { publishScheduleToExcel } from '../services/microsoft-publisher';
+import { scheduleEntriesService } from '../services/schedule-entries-service';
 import { useScheduleDataStore } from './useScheduleDataStore';
 import { useScheduleUIStore } from './useScheduleUIStore';
 
@@ -12,15 +12,16 @@ interface ScheduleSyncState {
     msConfig: SchedulesConfig;
     refreshMsConfig: () => Promise<void>;
 
-    // Publish State
-    isPublishing: boolean;
-    publishCooldownUntil: number | null;
-    setPublishCooldownUntil: (timestamp: number | null) => void;
+    // Sync State
+    isSyncing: boolean;
+    isPublishing: boolean; // Renamed concept: Publishing = DB, Syncing = Excel? Or shared?
+    // Let's keep isPublishing for DB, add isSyncing for Excel
 
-    // Core Action: Orchestrates Data + UI + Service
-    publishDailyChanges: () => Promise<void>;
+    // Core Actions
+    publishToSupabase: (overwrite?: boolean) => Promise<{ success: boolean; error?: string; exists?: boolean }>;
+    syncToExcel: () => Promise<void>;
 
-    // Supabase Sync State
+    // Supabase State (Published Schedules Table)
     latestPublished: PublishedSchedule | null;
     currentVersionId: string | null;
     currentVersionUpdatedAt: string | null;
@@ -28,9 +29,10 @@ interface ScheduleSyncState {
 
     checkForUpdates: () => Promise<void>;
     checkIfScheduleExists: (date: string) => Promise<boolean>;
-    publishToSupabase: (overwrite?: boolean) => Promise<{ success: boolean; error?: string; exists?: boolean }>;
-    downloadPublished: (schedule: PublishedSchedule) => void;
     dismissUpdate: (id: string) => void;
+    // Download legacy logic removed or adapted? Adapted to just load date
+    loadPublishedSchedule: (schedule: PublishedSchedule) => void;
+    resetCurrentVersion: () => Promise<void>;
 }
 
 // Helper to get initial state
@@ -51,7 +53,7 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
         incidencesFileName: null
     },
     isPublishing: false,
-    publishCooldownUntil: null,
+    isSyncing: false,
 
     latestPublished: null,
     currentVersionId: getSavedVersion().id || null,
@@ -76,46 +78,127 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
         }
     },
 
-    setPublishCooldownUntil: (timestamp) => set({ publishCooldownUntil: timestamp }),
-
-    publishDailyChanges: async () => {
-        const { msConfig, setPublishCooldownUntil } = get();
-
-        // Access other stores
-        const { incidences, getComputedSchedules } = useScheduleDataStore.getState();
+    publishToSupabase: async (overwrite = false) => {
         const { activeDate } = useScheduleUIStore.getState();
+        const { baseSchedules } = useScheduleDataStore.getState();
 
-        if (!msConfig.isConnected) {
-            toast.error('Microsoft account not connected');
-            return;
-        }
+        if (!activeDate) return { success: false, error: 'No active date selected' };
 
-        if (!activeDate) {
-            toast.error('No active date selected');
-            return;
-        }
+
+        if (baseSchedules.length === 0) return { success: false, error: 'No schedules to publish' };
 
         set({ isPublishing: true });
-        const toastId = toast.loading("Starting publish process...");
 
         try {
+            // 1. Check existence
+            const { data: existing } = await supabase
+                .from('published_schedules')
+                .select('id')
+                .eq('schedule_date', activeDate)
+                .single();
+
+            if (existing && !overwrite) return { success: false, error: 'A schedule is already published for this date', exists: true };
+
+            // 2. Publish Entries (Upsert)
+            await scheduleEntriesService.publishSchedules(baseSchedules, (await supabase.auth.getUser()).data.user?.id || '');
+
+            // 3. Update 'published_schedules' header (without JSONB)
+            const { data: published, error } = await supabase
+                .from('published_schedules')
+                .upsert({
+                    schedule_date: activeDate,
+                    entries_count: baseSchedules.length,
+                    published_by: (await supabase.auth.getUser()).data.user?.id,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'schedule_date' })
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            if (published) {
+                const versionData = { id: published.id, updated_at: published.updated_at };
+                localStorage.setItem('current_schedule_version', JSON.stringify(versionData));
+
+                set({
+                    currentVersionId: published.id,
+                    currentVersionUpdatedAt: published.updated_at,
+                    latestPublished: null
+                });
+            }
+
+            toast.success('Schedule published to Database');
+            return { success: true };
+
+        } catch (e: any) {
+            console.error("Publish to DB failed", e);
+            return { success: false, error: e.message };
+        } finally {
+            set({ isPublishing: false });
+        }
+    },
+
+    syncToExcel: async () => {
+        const { activeDate } = useScheduleUIStore.getState();
+        const { msConfig } = get();
+
+        if (!activeDate) {
+            toast.error("No active date");
+            return;
+        }
+        if (!msConfig.isConnected || !msConfig.schedulesFolderId) {
+            toast.error("Microsoft Excel not connected");
+            return;
+        }
+
+        set({ isSyncing: true });
+        const toastId = toast.loading("Syncing to Excel...");
+
+        try {
+            // Get data from store
+            const { getComputedSchedules } = useScheduleDataStore.getState();
+
+            // Use the microsoft-publisher helper which handles file finding/creation
+            const { publishScheduleToExcel } = await import('../services/microsoft-publisher');
+
             await publishScheduleToExcel(
                 msConfig,
-                incidences,
                 activeDate,
                 getComputedSchedules(),
                 (msg) => toast.loading(msg, { id: toastId })
             );
 
-            toast.success(`Published schedule for ${formatDateForDisplay(activeDate)}`, { id: toastId });
-            setPublishCooldownUntil(Date.now() + 60000);
+            toast.success("Synced successfully", { id: toastId });
 
-        } catch (error: any) {
-            console.error('Publish failed', error);
-            toast.error(`Publish failed: ${error.message}`, { id: toastId });
+            // Mark as synced in DB
+            await scheduleEntriesService.markDateAsSynced(activeDate);
+
+        } catch (e: any) {
+            toast.error(`Sync failed: ${e.message}`, { id: toastId });
         } finally {
-            set({ isPublishing: false });
+            set({ isSyncing: false });
         }
+    },
+
+    loadPublishedSchedule: (schedule: PublishedSchedule) => {
+        const { fetchSchedulesForDate } = useScheduleDataStore.getState();
+        const { setActiveDate } = useScheduleUIStore.getState();
+
+        // Update version tracking
+        const versionData = { id: schedule.id, updated_at: schedule.updated_at };
+        localStorage.setItem('current_schedule_version', JSON.stringify(versionData));
+
+        set({
+            latestPublished: null,
+            currentVersionId: schedule.id,
+            currentVersionUpdatedAt: schedule.updated_at
+        });
+
+        // Set date and fetch data
+        setActiveDate(schedule.schedule_date);
+        fetchSchedulesForDate(schedule.schedule_date);
+
+        toast.success(`Loaded schedule for ${formatDateForDisplay(schedule.schedule_date)}`);
     },
 
     checkForUpdates: async () => {
@@ -123,7 +206,7 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
 
         const { data, error } = await supabase
             .from('published_schedules')
-            .select('*')
+            .select('id, schedule_date, updated_at, entries_count') // No JSONB
             .order('created_at', { ascending: false })
             .limit(1)
             .single();
@@ -148,71 +231,6 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
         return !!data;
     },
 
-    publishToSupabase: async (overwrite = false) => {
-        const { activeDate } = useScheduleUIStore.getState();
-        const { baseSchedules } = useScheduleDataStore.getState();
-
-        if (!activeDate) return { success: false, error: 'No active date selected' };
-
-        const scheduleDate = parseISODate(activeDate);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        if (scheduleDate < today) return { success: false, error: 'Only future schedules can be published' };
-        if (baseSchedules.length === 0) return { success: false, error: 'No schedules to publish' };
-
-        const { data: existing } = await supabase
-            .from('published_schedules')
-            .select('id')
-            .eq('schedule_date', activeDate)
-            .single();
-
-        if (existing && !overwrite) return { success: false, error: 'A schedule is already published for this date', exists: true };
-
-        const { data: published, error } = await supabase
-            .from('published_schedules')
-            .upsert({
-                schedule_date: activeDate,
-                schedule_data: baseSchedules,
-                published_by: (await supabase.auth.getUser()).data.user?.id,
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'schedule_date' })
-            .select()
-            .single();
-
-        if (error) return { success: false, error: error.message };
-
-        if (published) {
-            const versionData = { id: published.id, updated_at: published.updated_at };
-            localStorage.setItem('current_schedule_version', JSON.stringify(versionData));
-
-            set({
-                currentVersionId: published.id,
-                currentVersionUpdatedAt: published.updated_at,
-                latestPublished: null
-            });
-        }
-
-        toast.success('Schedule published to Minerva');
-        return { success: true };
-    },
-
-    downloadPublished: (schedule: PublishedSchedule) => {
-        const versionData = { id: schedule.id, updated_at: schedule.updated_at };
-        localStorage.setItem('current_schedule_version', JSON.stringify(versionData));
-
-        // Sync across stores
-        useScheduleDataStore.getState().setBaseSchedules(schedule.schedule_data);
-        useScheduleUIStore.getState().setActiveDate(schedule.schedule_date);
-
-        set({
-            latestPublished: null,
-            currentVersionId: schedule.id,
-            currentVersionUpdatedAt: schedule.updated_at
-        });
-        toast.success(`Schedule for ${formatDateForDisplay(schedule.schedule_date)} downloaded`);
-    },
-
     dismissUpdate: (id: string) => {
         const { dismissedVersions } = get();
         const updated = [...dismissedVersions, id];
@@ -221,5 +239,17 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
             dismissedVersions: updated,
             latestPublished: null
         });
+    },
+
+    resetCurrentVersion: async () => {
+        localStorage.removeItem('current_schedule_version');
+        set({
+            currentVersionId: null,
+            currentVersionUpdatedAt: null,
+            latestPublished: null
+        });
+
+        // Check for updates to show the toast again if there is a version on server
+        await get().checkForUpdates();
     }
 }));
