@@ -1,20 +1,20 @@
 export const SCHEDULE_TABLE_CONFIG = {
-    // Estilo visual de la tabla (Blue Medium)
-    style: "TableStyleMedium2",
+    // Estilo visual de la tabla (Gris claro - Table Style Light 1)
+    style: "TableStyleLight1",
 
     // Ancho de columnas en caracteres (aprox. ancho de un '0')
     // 10 chars ≈ 70-80px
     columns: {
-        "date": 12,        // ~100px
-        "shift": 12,
-        "branch": 15,
-        "start_time": 12,
-        "end_time": 12,
+        "date": 10,
+        "shift": 10,
+        "branch": 10,
+        "start_time": 8,
+        "end_time": 8,
         "code": 10,
-        "instructor": 25,  // ~200px
+        "instructor": 15,  // ~120px
         "program": 40,     // ~320px (Ancho para nombres largos)
-        "minutes": 8,
-        "units": 8,
+        "minutes": 6,
+        "units": 6,
         "status": 12,
         "substitute": 20,
         "type": 15,
@@ -22,6 +22,12 @@ export const SCHEDULE_TABLE_CONFIG = {
         "description": 60, // ~480px (Muy ancho para comentarios)
         "department": 20,
         "feedback": 50     // ~400px
+    },
+
+    // Configuración de fuente
+    font: {
+        name: "Aptos Narrow",
+        size: 11
     }
 };
 

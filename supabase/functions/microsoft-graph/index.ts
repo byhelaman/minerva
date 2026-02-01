@@ -83,7 +83,7 @@ serve(async (req: Request) => {
         const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
         await verifyPermission(req, supabase, 'system.manage')
 
-        const { action, folderId, fileId, sheetId, tableId, range, name, values, keyColumns, columns, style } = await req.json()
+        const { action, folderId, fileId, sheetId, tableId, range, name, values, keyColumns, columns, style, font } = await req.json()
 
         // === READ ACTIONS ===
 
@@ -480,6 +480,102 @@ serve(async (req: Request) => {
             })
         }
 
+        if (action === 'replace-table-data') {
+            if (!fileId || !tableId || !sheetId || !values) throw new Error('File ID, Table ID, Sheet ID and Values are required')
+            const token = await getAccessToken(supabase)
+
+            // 1. Get current table row count to clear excess later if needed
+            const oldRangeUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/tables/${tableId}/range?$select=rowCount`
+            const oldRangeRes = await fetch(oldRangeUrl, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            let oldRowCount = 0
+            if (oldRangeRes.ok) {
+                const oldData = await oldRangeRes.json()
+                oldRowCount = oldData.rowCount || 0
+            }
+
+            // 2. Calculate write range
+            const numRows = values.length
+            const numCols = values[0].length
+            const startCell = range || 'B2'
+
+            const getColumnLetter = (index: number) => {
+                let letter = ""
+                while (index >= 0) {
+                    letter = String.fromCharCode((index % 26) + 65) + letter
+                    index = Math.floor(index / 26) - 1
+                }
+                return letter
+            }
+
+            const parseCell = (cell: string) => {
+                const match = cell.match(/^([A-Z]+)([0-9]+)$/i)
+                if (!match) return { col: 0, row: 1 }
+                const colStr = match[1].toUpperCase()
+                const row = parseInt(match[2], 10)
+                let col = 0
+                for (let i = 0; i < colStr.length; i++) col = col * 26 + (colStr.charCodeAt(i) - 64)
+                return { col: col - 1, row }
+            }
+
+            const { col: startCol, row: startRow } = parseCell(startCell)
+            const endColLetter = getColumnLetter(startCol + numCols - 1)
+            const endRow = startRow + numRows - 1
+            const calculatedRange = `${startCell}:${endColLetter}${endRow}`
+
+            // 3. Write new data to worksheet
+            const writeUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/worksheets/${sheetId}/range(address='${calculatedRange}')`
+            const writeRes = await fetch(writeUrl, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ values })
+            })
+
+            if (!writeRes.ok) {
+                const err = await writeRes.json().catch(() => ({}))
+                throw new Error(err.error?.message || 'Failed to write replacement data')
+            }
+
+            // 4. Resize table to match new data
+            const resizeUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/tables/${tableId}/resize`
+            await fetch(resizeUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ targetRange: calculatedRange })
+            })
+
+            // 5. Clear leftover rows if old table was bigger
+            if (oldRowCount > numRows) {
+                const clearStartRow = endRow + 1
+                const clearEndRow = startRow + oldRowCount - 1
+                const startColLetter = getColumnLetter(startCol)
+                const clearRange = `${startColLetter}${clearStartRow}:${endColLetter}${clearEndRow}`
+
+                await fetch(
+                    `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/worksheets/${sheetId}/range(address='${clearRange}')/clear`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ applyTo: 'Contents' })
+                    }
+                )
+            }
+
+            return new Response(JSON.stringify({ success: true, count: numRows }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            })
+        }
+
         if (action === 'upsert-rows-by-key') {
             if (!fileId || (!tableId && !sheetId) || !values || !keyColumns) throw new Error('File ID, Table/Sheet ID, Values, and Key Columns are required')
             const token = await getAccessToken(supabase)
@@ -627,12 +723,10 @@ serve(async (req: Request) => {
             })
 
             if (!updateRes.ok) {
-                // If 404, maybe table deleted? 
+                // If 404, maybe table deleted?
                 const err = await updateRes.json().catch(() => ({}))
 
                 if (updateRes.status === 404 || err.error?.code === 'ItemNotFound') {
-                    // We can't write, but we don't want 500.
-                    // Maybe return success: false?
                     throw new Error(`Sync Error: Table not found during write. Please try again.`)
                 }
 
@@ -656,7 +750,7 @@ serve(async (req: Request) => {
             const promises = Object.entries(columns).map(async ([colLetter, width]) => {
                 // Ensure colLetter is just letter e.g. "A" -> "A:A"
                 const rangeAddr = `${colLetter}:${colLetter}`;
-                const url = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/worksheets/${sheetId}/range(address='${rangeAddr}')/format/columnWidth`
+                const url = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/worksheets/${sheetId}/range(address='${rangeAddr}')/format`
 
                 return fetch(url, {
                     method: 'PATCH',
@@ -666,6 +760,39 @@ serve(async (req: Request) => {
             });
 
             await Promise.all(promises);
+
+            return new Response(JSON.stringify({ success: true }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            })
+        }
+
+        if (action === 'format-font') {
+            if (!fileId || !font) throw new Error('File ID and Font Config required')
+            const token = await getAccessToken(supabase)
+
+            // Apply to specific range or fallback to usedRange
+            let graphUrl = ''
+            if (range) {
+                graphUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/worksheets/${sheetId}/range(address='${range}')/format/font`
+            } else if (tableId) {
+                graphUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/tables/${tableId}/range/format/font`
+            } else {
+                graphUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/worksheets/${sheetId}/usedRange/format/font`
+            }
+
+            const response = await fetch(graphUrl, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(font)
+            })
+
+            if (!response.ok) {
+                const err = await response.json()
+                throw new Error(err.error?.message || 'Failed to update font')
+            }
 
             return new Response(JSON.stringify({ success: true }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }

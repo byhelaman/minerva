@@ -2,6 +2,22 @@ import { supabase } from '@/lib/supabase';
 import { extractYearMonth } from '@/lib/utils';
 import { DailyIncidence, Schedule, SchedulesConfig } from '../types';
 
+/** Converts column-name-keyed char widths to Excel-letter-keyed pixel widths (table starts at col B) */
+function toExcelColumnWidths(
+    config: Record<string, number>,
+    headers: string[]
+): Record<string, number> {
+    const CHAR_WIDTH_PX = 7;
+    const result: Record<string, number> = {};
+    headers.forEach((name, i) => {
+        if (config[name] !== undefined) {
+            // Table starts at column B (char code 66), so index 0 -> B, 1 -> C, etc.
+            result[String.fromCharCode(66 + i)] = Math.round(config[name] * CHAR_WIDTH_PX);
+        }
+    });
+    return result;
+}
+
 /**
  * Publishes daily changes to Excel via Microsoft Graph.
  * @param config Microsoft connection configuration
@@ -167,7 +183,7 @@ export async function publishScheduleToExcel(
                 });
 
                 // Apply Styling
-                notify(`Applying styles...`);
+                // notify(`Applying styles...`);
                 // Note: We need to ensure excel-styles is imported or moved.
                 // Assuming it is accessible relative to this file or we will refactor imports.
                 const { SCHEDULE_TABLE_CONFIG } = await import('../utils/excel-styles');
@@ -176,30 +192,48 @@ export async function publishScheduleToExcel(
                     body: { action: 'update-table-style', fileId: fileId, tableId: newTable.id, style: SCHEDULE_TABLE_CONFIG.style }
                 });
 
+                const columnWidths = toExcelColumnWidths(SCHEDULE_TABLE_CONFIG.columns, headers);
                 await supabase.functions.invoke('microsoft-graph', {
-                    body: { action: 'format-columns', fileId: fileId, sheetId: worksheetId, columns: SCHEDULE_TABLE_CONFIG.columns }
+                    body: { action: 'format-columns', fileId: fileId, sheetId: worksheetId, columns: columnWidths }
                 });
 
-            } else {
-                // 2. Upsert
-                notify(`Smart Upserting rows...`);
-                const { SCHEDULE_TABLE_CONFIG } = await import('../utils/excel-styles');
+                if (SCHEDULE_TABLE_CONFIG.font) {
+                    // notify(`Applying font...`);
+                    await supabase.functions.invoke('microsoft-graph', {
+                        body: {
+                            action: 'format-font',
+                            fileId: fileId,
+                            sheetId: worksheetId,
+                            range: 'A:Z', // Apply to whole sheet or used range if omitted. Let's use usedRange by omitting range if possible, but our IDL says if range is omitted it logic might vary. Let's target the whole sheet columns A-Z as a safe bet or just pass nothing for usedRange logic in edge function.
+                            // Actually looking at my edge function impl: if (!range && !tableId) -> usedRange.
+                            // So we can just omit range and tableId here to target usedRange of the sheet.
+                            // BUT wait, create-table was just called. 
+                            // The user request implies the whole table/sheet should have this font.
+                            // Let's target the table specifically if possible? 
+                            // Creating the table returns an ID. We have newTable.id.
+                            // Let's use tableId to be safe and specific to the table, or usedRange for the whole sheet. 
+                            // "el tamaño de la fuente debe ser 11 tipografia Aptos Narrow" - usually implies the whole document or at least the table.
+                            // Let's go with usedRange (omit range/tableId) to ensure headers and everything get it.
+                            font: SCHEDULE_TABLE_CONFIG.font
+                        }
+                    });
+                }
 
-                const { error: upsertError } = await supabase.functions.invoke('microsoft-graph', {
+            } else {
+                // 2. Replace existing table data
+                notify(`Replacing schedule data...`);
+
+                const { error: replaceError } = await supabase.functions.invoke('microsoft-graph', {
                     body: {
-                        action: 'upsert-rows-by-key',
+                        action: 'replace-table-data',
                         fileId: fileId,
                         tableId: table.id,
                         sheetId: worksheetId,
                         values: values,
-                        keyColumns: ['date', 'program', 'start_time', 'instructor']
+                        range: 'B2'
                     }
                 });
-                if (upsertError) throw upsertError;
-
-                await supabase.functions.invoke('microsoft-graph', {
-                    body: { action: 'format-columns', fileId: fileId, sheetId: worksheetId, columns: SCHEDULE_TABLE_CONFIG.columns }
-                });
+                if (replaceError) throw replaceError;
             }
 
         } catch (tableError: any) {
