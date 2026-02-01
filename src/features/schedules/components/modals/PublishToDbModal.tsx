@@ -19,11 +19,30 @@ interface PublishToDbModalProps {
 }
 
 export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) {
-    const { activeDate, baseSchedules, publishDailyChanges, publishToSupabase, checkIfScheduleExists } = useScheduleStore();
+    const { activeDate, baseSchedules, publishDailyChanges, publishToSupabase, checkIfScheduleExists, publishCooldownUntil } = useScheduleStore();
     const [isPublishing, setIsPublishing] = useState(false);
     const [isLoadingCheck, setIsLoadingCheck] = useState(false);
     const [needsOverwrite, setNeedsOverwrite] = useState(false);
     const [validationError, setValidationError] = useState<string | null>(null);
+    const [cooldownRemaining, setCooldownRemaining] = useState(0);
+
+    // Countdown Timer Effect
+    useEffect(() => {
+        if (!publishCooldownUntil) {
+            setCooldownRemaining(0);
+            return;
+        }
+
+        const checkTimer = () => {
+            const now = Date.now();
+            const left = Math.ceil((publishCooldownUntil - now) / 1000);
+            setCooldownRemaining(left > 0 ? left : 0);
+        };
+
+        checkTimer(); // Initial check
+        const interval = setInterval(checkTimer, 1000);
+        return () => clearInterval(interval);
+    }, [publishCooldownUntil]);
 
     // Verify if schedule exists on open
     useEffect(() => {
@@ -31,6 +50,7 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
             setNeedsOverwrite(false); // Reset state on open
             setValidationError(null);
 
+            // ... (rest of existing logic)
             // Validate date before checking DB
             const [day, month, year] = activeDate.split('/').map(Number);
             const scheduleDate = new Date(year, month - 1, day);
@@ -63,6 +83,8 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
     }, [open, activeDate, checkIfScheduleExists]);
 
     const performPublish = async (overwrite: boolean) => {
+        if (cooldownRemaining > 0) return; // Prevent action if cooling down
+
         setIsPublishing(true);
         try {
             // 1. Publish to Excel (Both fresh and overwrite need to update Excel)
@@ -149,14 +171,14 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
                                 Cancel
                             </AlertDialogCancel>
                             {needsOverwrite ? (
-                                <AlertDialogAction onClick={handleOverwrite} disabled={isPublishing} className="border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive">
+                                <AlertDialogAction onClick={handleOverwrite} disabled={isPublishing || cooldownRemaining > 0} className="border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive">
                                     {isPublishing ? <Loader2 className="animate-spin" /> : null}
-                                    Replace
+                                    {cooldownRemaining > 0 ? `Wait ${cooldownRemaining}s` : "Replace"}
                                 </AlertDialogAction>
                             ) : (
-                                <AlertDialogAction onClick={handlePublish} disabled={isPublishing || isLoadingCheck}>
-                                    {isPublishing || isLoadingCheck ? <Loader2 className="animate-spin" /> : null}
-                                    {isLoadingCheck ? "Checking..." : "Publish"}
+                                <AlertDialogAction onClick={handlePublish} disabled={isPublishing || isLoadingCheck || cooldownRemaining > 0}>
+                                    {isPublishing ? <Loader2 className="animate-spin" /> : null}
+                                    {isLoadingCheck ? "Checking..." : (cooldownRemaining > 0 ? `Wait ${cooldownRemaining}s` : "Publish")}
                                 </AlertDialogAction>
                             )}
                         </>

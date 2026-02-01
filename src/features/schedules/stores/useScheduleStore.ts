@@ -55,6 +55,7 @@ interface ScheduleState {
 
     // Publish Action (Excel)
     isPublishing: boolean;
+    publishCooldownUntil: number | null; // Timestamp when cooldown expires
     publishDailyChanges: () => Promise<void>;
 
     // Published Schedules (Supabase)
@@ -67,6 +68,8 @@ interface ScheduleState {
     publishToSupabase: (overwrite?: boolean) => Promise<{ success: boolean; error?: string; exists?: boolean }>;
     downloadPublished: (schedule: PublishedSchedule) => void;
     dismissUpdate: (id: string) => void;
+
+    setPublishCooldownUntil: (timestamp: number | null) => void;
 }
 
 // Helper to get initial state
@@ -83,6 +86,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
     incidences: [],
     activeDate: null,
     isPublishing: false,
+    publishCooldownUntil: null,
     latestPublished: null,
     currentVersionId: getSavedVersion().id || null,
     currentVersionUpdatedAt: getSavedVersion().updated_at || null,
@@ -99,6 +103,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
     setBaseSchedules: (schedules) => set({ baseSchedules: schedules }),
     setIncidences: (incidences) => set({ incidences }),
     setActiveDate: (date) => set({ activeDate: date }),
+    setPublishCooldownUntil: (timestamp) => set({ publishCooldownUntil: timestamp }),
 
     upsertIncidence: (newIncidence) => {
         set(state => {
@@ -164,6 +169,8 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
         }
 
         set({ isPublishing: true });
+        // Use a persistent toast ID to update messages
+        const toastId = toast.loading("Starting publish process...");
 
         try {
             if (msConfig.incidencesFileId && incidences.length > 0) {
@@ -189,7 +196,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
                 });
 
                 if (appendError) throw appendError;
-                toast.success(`Synced ${incidences.length} incidences to log`);
+                toast.success(`Synced ${incidences.length} incidences to log`, { id: toastId });
             }
 
             if (msConfig.schedulesFolderId && activeDate) {
@@ -203,35 +210,57 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
                     year = parts[0]; month = parts[1];
                 }
 
-                const monthNames = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
-                const monthName = monthNames[parseInt(month) - 1];
-                const yearMonth = `${year}_${month}`; // 2024_02
-                const yearMonthHyphen = `${year}-${month}`; // 2024-02
+                const standardName = `${year}_${month.toString().padStart(2, '0')}_Schedules.xlsx`;
+
+                toast.loading(`Checking for file: ${standardName}...`, { id: toastId });
 
                 const { data: children, error: childrenError } = await supabase.functions.invoke('microsoft-graph', {
                     body: { action: 'list-children', folderId: msConfig.schedulesFolderId }
                 });
                 if (childrenError) throw childrenError;
 
-                const monthlyFile = children.value.find((f: any) => {
-                    const name = f.name.toLowerCase();
-                    return name.endsWith('.xlsx') && (
-                        name.includes(monthName.toLowerCase()) || name.includes(yearMonth) || name.includes(yearMonthHyphen)
-                    );
-                });
+                let fileId = children.value.find((f: any) => f.name === standardName)?.id;
 
-                if (!monthlyFile) throw new Error(`Could not find a schedule file for "${monthName}"`);
+                if (!fileId) {
+                    toast.loading(`Creating new file: ${standardName}...`, { id: toastId });
+                    try {
+                        const XLSX = await import('xlsx');
+                        const wb = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(wb, [], "Sheet1");
+                        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
 
-                const sheetName = activeDate;
+                        const { data: createdFile, error: uploadError } = await supabase.functions.invoke('microsoft-graph', {
+                            body: {
+                                action: 'upload-file',
+                                folderId: msConfig.schedulesFolderId,
+                                name: standardName,
+                                values: wbout
+                            }
+                        });
+
+                        if (uploadError) throw uploadError;
+                        fileId = createdFile.id;
+
+                        toast.loading(`File created. Waiting for propagation...`, { id: toastId });
+
+                    } catch (createError: any) {
+                        throw new Error(`Failed to create new schedule file: ${createError.message}`);
+                    }
+                }
+
+                if (!fileId) throw new Error("Could not target schedule file");
+
+                const sheetName = activeDate.replace(/\//g, '-');
                 let worksheetId = null;
 
+                toast.loading(`Preparing worksheet: ${sheetName}...`, { id: toastId });
                 const { data: createData, error: createError } = await supabase.functions.invoke('microsoft-graph', {
-                    body: { action: 'create-worksheet', fileId: monthlyFile.id, name: sheetName }
+                    body: { action: 'create-worksheet', fileId: fileId, name: sheetName }
                 });
 
                 if (createError) {
                     const { data: sheetsContent } = await supabase.functions.invoke('microsoft-graph', {
-                        body: { action: 'list-worksheets', fileId: monthlyFile.id }
+                        body: { action: 'list-worksheets', fileId: fileId }
                     });
                     const existingSheet = sheetsContent?.value?.find((s: any) => s.name === sheetName);
                     if (existingSheet) worksheetId = existingSheet.id;
@@ -242,27 +271,100 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
 
                 if (!worksheetId) throw new Error("Could not target worksheet");
 
-                const headers = ["Time Start", "Time End", "Program", "Instructor", "Room", "Status", "Comments"];
+                const headers = [
+                    "date", "shift", "branch", "start_time", "end_time",
+                    "code", "instructor", "program", "minutes", "units",
+                    "status", "substitute", "type", "subtype", "description",
+                    "department", "feedback"
+                ];
+
                 const dataRows = computed.map(s => {
                     const inc = s as DailyIncidence;
                     return [
-                        s.start_time, s.end_time, s.program, s.instructor, s.branch,
-                        inc.status || '', inc.description || ''
+                        s.date, s.shift, s.branch, s.start_time, s.end_time,
+                        s.code, s.instructor, s.program, s.minutes, s.units,
+                        inc.status || '', inc.substitute || '', inc.type || '',
+                        inc.subtype || '', inc.description || '', inc.department || '',
+                        inc.feedback || ''
                     ];
                 });
 
                 const values = [headers, ...dataRows];
 
-                const { error: writeError } = await supabase.functions.invoke('microsoft-graph', {
-                    body: { action: 'update-range', fileId: monthlyFile.id, sheetId: worksheetId, values: values, range: 'A1' }
-                });
+                // --- Smart Sync & Table Management ---
+                try {
+                    toast.loading(`Syncing data...`, { id: toastId });
 
-                if (writeError) throw writeError;
-                toast.success(`Published schedule for ${activeDate}`);
+                    const { data: tablesData } = await supabase.functions.invoke('microsoft-graph', {
+                        body: { action: 'list-tables', fileId: fileId, sheetId: worksheetId }
+                    });
+
+                    const tables = tablesData?.value || [];
+                    const table = tables[0];
+
+                    if (!table) {
+                        // 1. Create Table (New Day)
+                        toast.loading(`Writing new table...`, { id: toastId });
+
+                        const { data: updateData, error: writeError } = await supabase.functions.invoke('microsoft-graph', {
+                            body: { action: 'update-range', fileId: fileId, sheetId: worksheetId, values: values, range: 'B2' }
+                        });
+                        if (writeError) throw writeError;
+
+                        const fullAddress = updateData.address;
+                        const rangeAddress = fullAddress.includes('!') ? fullAddress.split('!')[1] : fullAddress;
+
+                        const { data: newTable } = await supabase.functions.invoke('microsoft-graph', {
+                            body: { action: 'create-table', fileId: fileId, sheetId: worksheetId, range: rangeAddress }
+                        });
+
+                        // Apply Styling
+                        toast.loading(`Applying styles...`, { id: toastId });
+                        const { SCHEDULE_TABLE_CONFIG } = await import('../utils/excel-styles');
+
+                        await supabase.functions.invoke('microsoft-graph', {
+                            body: { action: 'update-table-style', fileId: fileId, tableId: newTable.id, style: SCHEDULE_TABLE_CONFIG.style }
+                        });
+
+                        await supabase.functions.invoke('microsoft-graph', {
+                            body: { action: 'format-columns', fileId: fileId, sheetId: worksheetId, columns: SCHEDULE_TABLE_CONFIG.columns }
+                        });
+
+                    } else {
+                        // 2. Upsert
+                        toast.loading(`Smart Upserting rows...`, { id: toastId });
+                        const { SCHEDULE_TABLE_CONFIG } = await import('../utils/excel-styles');
+
+                        const { error: upsertError } = await supabase.functions.invoke('microsoft-graph', {
+                            body: {
+                                action: 'upsert-rows-by-key',
+                                fileId: fileId,
+                                tableId: table.id,
+                                sheetId: worksheetId,
+                                values: values,
+                                keyColumns: ['date', 'program', 'start_time', 'instructor']
+                            }
+                        });
+                        if (upsertError) throw upsertError;
+
+                        await supabase.functions.invoke('microsoft-graph', {
+                            body: { action: 'format-columns', fileId: fileId, sheetId: worksheetId, columns: SCHEDULE_TABLE_CONFIG.columns }
+                        });
+                    }
+
+                } catch (tableError: any) {
+                    console.error("Failed to manage Excel table/upsert", tableError);
+                    toast.error(`Sync warning: ${tableError.message}`, { id: toastId });
+                    return; // Stop success toast
+                }
+
+                toast.success(`Published schedule for ${activeDate}`, { id: toastId });
+                // Start Cooldown (60 seconds)
+                set({ publishCooldownUntil: Date.now() + 60000 });
             }
         } catch (error: any) {
             console.error('Publish failed', error);
-            toast.error(`Publish failed: ${error.message}`);
+            toast.error(`Publish failed: ${error.message}`, { id: toastId });
         } finally {
             set({ isPublishing: false });
         }
