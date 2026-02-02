@@ -102,7 +102,7 @@ function buildZoomPatchBody(req: UpdateRequest): Record<string, unknown> {
 
 // Construir body para POST (Create) a Zoom API
 function buildZoomCreateBody(req: RequestItem): Record<string, unknown> {
-    return {
+    const body: Record<string, unknown> = {
         topic: req.topic,
         type: req.type || 8, // Por defecto 8 (Recurrente hora fija)
         start_time: req.start_time,
@@ -111,6 +111,12 @@ function buildZoomCreateBody(req: RequestItem): Record<string, unknown> {
         recurrence: req.recurrence,
         settings: req.settings
     }
+
+    if (req.schedule_for) {
+        body.schedule_for = req.schedule_for
+    }
+
+    return body
 }
 
 serve(async (req: Request) => {

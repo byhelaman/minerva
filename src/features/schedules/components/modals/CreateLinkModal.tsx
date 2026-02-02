@@ -11,6 +11,7 @@ import { MatchingService } from "@/features/matching/services/matcher";
 import { ArrowLeft, Loader2, HelpCircle, RefreshCw, Hand, PlusCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useHostMap } from "@schedules/hooks/useHostMap";
+import { useInstructors } from "@schedules/hooks/useInstructors";
 import { getCreateLinkColumns, type ValidationResult, type ValidationStatus } from "@schedules/components/table/create-link-columns";
 
 interface CreateLinkModalProps {
@@ -97,6 +98,7 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
                 join_url: matchedMeeting?.join_url,
                 matchedTopic: matchedMeeting?.topic,
                 host_id: matchedMeeting?.host_id,
+                created_at: matchedMeeting?.created_at,
             };
         });
 
@@ -161,6 +163,7 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
                 join_url: matchedMeeting?.join_url,
                 matchedTopic: matchedMeeting?.topic,
                 host_id: matchedMeeting?.host_id,
+                created_at: matchedMeeting?.created_at,
             };
         });
 
@@ -295,6 +298,16 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
         }));
     };
 
+    // Manejador para cambiar fecha seleccionada
+    const handleDateChange = (rowId: string, date: string) => {
+        setValidationResults(prev => prev.map(row => {
+            if (row.id === rowId) {
+                return { ...row, selected_date: date };
+            }
+            return row;
+        }));
+    };
+
     // Manejador para cambiar hora de inicio
     const handleTimeChange = (rowId: string, time: string) => {
         setValidationResults(prev => prev.map(row => {
@@ -305,10 +318,23 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
         }));
     };
 
+    // Manejador para cambiar host seleccionado
+    const handleHostChange = (rowId: string, host: string, email: string, _id: string) => {
+        setValidationResults(prev => prev.map(row => {
+            if (row.id === rowId) {
+                return { ...row, selected_host: host, selected_host_email: email };
+            }
+            return row;
+        }));
+    };
+
+    // Lista de hosts disponibles usando el hook centralizado
+    const hostsList = useInstructors();
+
     // Columnas con manejador memorizado
     const columns = useMemo(() =>
-        getCreateLinkColumns(hostMap, handleSelectCandidate, handleMarkAsNew, handleRevertToAmbiguous, handleRevertToExists, dailyOnly, handleTimeChange),
-        [hostMap, dailyOnly]
+        getCreateLinkColumns(hostMap, handleSelectCandidate, handleMarkAsNew, handleRevertToAmbiguous, handleRevertToExists, dailyOnly, handleDateChange, handleTimeChange, handleHostChange, hostsList),
+        [hostMap, dailyOnly, hostsList]
     );
 
     // Líneas analizadas para vista previa
@@ -318,7 +344,7 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className={cn(
                 "flex flex-col max-h-[85vh]",
-                step === 'input' ? "sm:max-w-lg" : "max-w-4xl!"
+                step === 'input' ? "sm:max-w-lg" : "max-w-5xl!"
             )}>
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
@@ -476,7 +502,9 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
                                             .filter(r => r.status === 'to_create')
                                             .map(r => ({
                                                 topic: r.inputName,
-                                                startTime: r.start_time
+                                                startTime: r.start_time,
+                                                selectedDate: r.selected_date,
+                                                schedule_for: r.selected_host_email // Ya tenemos el email directamente
                                             }));
 
                                         const updates = selectedRows

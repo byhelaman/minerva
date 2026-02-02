@@ -84,6 +84,13 @@ export function BugReportButton() {
         if (!stored) return { allowed: true, secondsRemaining: 0 }
 
         const expiry = parseInt(stored, 10)
+
+        // Handle corrupted/invalid localStorage values
+        if (isNaN(expiry)) {
+            localStorage.removeItem(STORAGE_KEYS.RATE_LIMIT)
+            return { allowed: true, secondsRemaining: 0 }
+        }
+
         if (Date.now() >= expiry) {
             localStorage.removeItem(STORAGE_KEYS.RATE_LIMIT)
             return { allowed: true, secondsRemaining: 0 }

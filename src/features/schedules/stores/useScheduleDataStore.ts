@@ -53,6 +53,9 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
     },
 
     updateIncidence: async (newIncidence: DailyIncidence) => {
+        // Store previous state for potential rollback
+        const previousIncidences = get().incidences;
+
         // Optimistic update
         set(state => {
             const filtered = state.incidences.filter(i =>
@@ -66,16 +69,22 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
 
         // DB Update
         try {
-            await scheduleEntriesService.updateIncidence({
+            const wasUpdated = await scheduleEntriesService.updateIncidence({
                 date: newIncidence.date,
                 program: newIncidence.program,
                 start_time: newIncidence.start_time,
                 instructor: newIncidence.instructor
             }, newIncidence);
+
+            if (!wasUpdated) {
+                // Revert optimistic update - schedule doesn't exist in DB
+                set({ incidences: previousIncidences });
+                throw new Error('SCHEDULE_NOT_PUBLISHED');
+            }
         } catch (error) {
-            console.error("Failed to update incidence", error);
-            toast.error("Failed to save incidence");
-            // Revert? (Complex without previous state, let's assume reliability for now or reload)
+            // Revert optimistic update on any error
+            set({ incidences: previousIncidences });
+            throw error;
         }
     },
 

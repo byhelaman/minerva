@@ -1,4 +1,5 @@
 import { forwardRef } from "react";
+import { format } from "date-fns";
 import { type ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "@schedules/components/table/data-table-column-header";
 import { Badge } from "@/components/ui/badge";
@@ -6,9 +7,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { CheckCircle2, HelpCircle, RefreshCw, MoreHorizontal, Hand, Plus, Undo2 } from "lucide-react";
+import { CheckCircle2, HelpCircle, RefreshCw, MoreHorizontal, Hand, Plus, Undo2, CalendarDays, Clock2, ChevronDown, X } from "lucide-react";
 import { toast } from "sonner";
-import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import { formatTimestampForDisplay, cn } from "@/lib/utils";
+import { InstructorSelector } from "../modals/InstructorSelector";
+import type { Instructor } from "../../hooks/useInstructors";
 
 // Tipos para el resultado de validación
 export type ValidationStatus = 'to_create' | 'exists' | 'ambiguous' | 'manual';
@@ -27,6 +33,7 @@ export interface ValidationResult {
         host_id?: string;
     }>;
     host_id?: string;
+    created_at?: string; // ISO date string for when the meeting was created
     forcedNew?: boolean; // Indica que fue marcado manualmente como nuevo desde ambiguous
     previousMatch?: { // Guarda el match original cuando se marca como nuevo desde exists
         meeting_id: string;
@@ -35,6 +42,9 @@ export interface ValidationResult {
         host_id?: string;
     };
     start_time?: string; // HH:MM format for daily meetings
+    selected_date?: string; // YYYY-MM-DD format for daily meetings (optional, defaults to today)
+    selected_host?: string; // Selected host name for daily meetings (optional)
+    selected_host_email?: string; // Selected host email for daily meetings
 }
 
 // Estilos de badge por status
@@ -78,7 +88,10 @@ export const getCreateLinkColumns = (
     onRevertToAmbiguous?: (rowId: string) => void,
     onRevertToExists?: (rowId: string) => void,
     dailyOnly?: boolean,
-    onTimeChange?: (rowId: string, time: string) => void
+    onDateChange?: (rowId: string, date: string) => void,
+    onTimeChange?: (rowId: string, time: string) => void,
+    onHostChange?: (rowId: string, host: string, email: string, id: string) => void,
+    hostsList?: Instructor[]
 ): ColumnDef<ValidationResult>[] => [
         {
             id: "select",
@@ -219,21 +232,14 @@ export const getCreateLinkColumns = (
                                                     {hostMap.get(result.host_id || '') || result.host_id || '—'}
                                                 </div>
                                             </div>
-                                            {result.join_url && (
-                                                <div>
-                                                    <div className="text-xs font-medium text-muted-foreground mb-1">Join URL</div>
-                                                    <div className="text-sm">
-                                                        <a
-                                                            href={result.join_url}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="text-blue-600 hover:underline truncate block"
-                                                        >
-                                                            {result.join_url}
-                                                        </a>
-                                                    </div>
+                                            <div>
+                                                <div className="text-xs font-medium text-muted-foreground mb-1">Created At</div>
+                                                <div className="text-sm">
+                                                    {result.created_at
+                                                        ? formatTimestampForDisplay(result.created_at)
+                                                        : '—'}
                                                 </div>
-                                            )}
+                                            </div>
                                         </div>
                                         {onMarkAsNew && (
                                             <Button
@@ -326,31 +332,139 @@ export const getCreateLinkColumns = (
                 );
             },
         },
-        // Time column - only visible when dailyOnly is true
+        // Date & Time column - only visible when dailyOnly is true
         ...(dailyOnly ? [{
-            id: "start_time",
-            size: 90,
+            id: "date_time",
+            size: 170,
             header: () => (
                 <div className="flex items-center justify-center gap-1 font-medium text-muted-foreground">
-                    Time
+                    Date & Time
+                </div>
+            ),
+            cell: ({ row }: { row: any }) => {
+                const result = row.original as ValidationResult;
+
+                if (result.status !== 'to_create') {
+                    return <div className="text-center text-muted-foreground">—</div>;
+                }
+
+                const selectedDate = result.selected_date
+                    ? new Date(result.selected_date + 'T00:00:00')
+                    : undefined;
+
+                const hasDate = !!selectedDate;
+                const hasTime = !!result.start_time;
+                const dateDisplay = hasDate ? format(selectedDate, 'dd/MM/yyyy') : 'Today';
+                const timeDisplay = hasTime ? result.start_time : '09:00';
+
+                return (
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className={cn(
+                                    "h-8 w-full justify-between text-left font-normal",
+                                    !hasDate && !hasTime && "text-muted-foreground"
+                                )}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <CalendarDays className="opacity-50" />
+                                    <span className="truncate flex gap-1.5">
+                                        <span className={cn(!hasDate && hasTime && "text-muted-foreground")}>{dateDisplay}</span>
+                                        <span className={cn(!hasTime && hasDate && "text-muted-foreground")}>{timeDisplay}</span>
+                                    </span>
+                                </div>
+                                <ChevronDown className="opacity-50" />
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start" onWheel={(e) => e.stopPropagation()}>
+                            <div className="border-b p-3">
+                                <Field className="gap-2">
+                                    <FieldLabel htmlFor={`time-${result.id}`}>
+                                        <div className="w-full flex items-center justify-between">
+                                            <span>Start Time</span>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                onClick={() => {
+                                                    onTimeChange?.(result.id, '');
+                                                    onDateChange?.(result.id, '');
+                                                }}
+                                                className="h-6 w-6"
+                                            >
+                                                <RefreshCw className="size-3.5" />
+                                            </Button>
+                                        </div>
+                                    </FieldLabel>
+                                    <InputGroup>
+                                        <InputGroupInput
+                                            id={`time-${result.id}`}
+                                            type="time"
+                                            value={result.start_time || '09:00'}
+                                            onChange={(e) => onTimeChange?.(result.id, e.target.value)}
+                                            className="appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
+                                        />
+                                        <InputGroupAddon>
+                                            <Clock2 className="text-muted-foreground" />
+                                        </InputGroupAddon>
+                                        <InputGroupAddon align="inline-end">
+                                            45min
+                                        </InputGroupAddon>
+                                    </InputGroup>
+                                    {(!hasDate || !hasTime) && (
+                                        <FieldDescription className="text-xs">
+                                            Defaults: {!hasDate && 'Today'}{!hasDate && !hasTime && ', '}{!hasTime && '09:00'}
+                                        </FieldDescription>
+                                    )}
+                                </Field>
+                            </div>
+                            <Calendar
+                                mode="single"
+                                selected={selectedDate}
+                                onSelect={(date) => {
+                                    if (date) {
+                                        const y = date.getFullYear();
+                                        const m = String(date.getMonth() + 1).padStart(2, '0');
+                                        const d = String(date.getDate()).padStart(2, '0');
+                                        onDateChange?.(result.id, `${y}-${m}-${d}`);
+                                    }
+                                }}
+                                className="[--cell-size:--spacing(7)]"
+                            />
+
+                        </PopoverContent>
+                    </Popover>
+                );
+            },
+        } as ColumnDef<ValidationResult>] : []),
+        // Host column - only visible when dailyOnly is true
+        ...(dailyOnly ? [{
+            id: "selected_host",
+            size: 180,
+            header: () => (
+                <div className="flex items-center gap-1 font-medium text-muted-foreground justify-center">
+                    Host
                 </div>
             ),
             cell: ({ row }: { row: any }) => {
                 const result = row.original as ValidationResult;
                 const status = result.status;
 
-                // Only show input for 'to_create' status
+                // Only show selector for 'to_create' status
                 if (status !== 'to_create') {
                     return <div className="text-center text-muted-foreground">—</div>;
                 }
 
                 return (
-                    <Input
-                        type="time"
-                        value={result.start_time || ''}
-                        onChange={(e) => onTimeChange?.(result.id, e.target.value)}
-                        className="h-8 w-full text-center text-sm font-mono [&::-webkit-calendar-picker-indicator]:hidden"
-                    />
+                    <div className="w-full">
+                        <InstructorSelector
+                            value={result.selected_host || ''}
+                            onChange={(host, email, id) => onHostChange?.(result.id, host, email, id)}
+                            instructors={hostsList || []}
+                            className="max-w-[200px]"
+                        />
+                    </div>
                 );
             },
         } as ColumnDef<ValidationResult>] : []),
@@ -361,13 +475,10 @@ export const getCreateLinkColumns = (
                 const result = row.original;
                 const hasJoinUrl = !!result.join_url;
 
-                const handleCopyDetails = async () => {
-                    const topic = result.matchedTopic || result.inputName;
-                    const details = result.join_url
-                        ? `${topic}\n${result.join_url}`
-                        : topic;
-                    await navigator.clipboard.writeText(details);
-                    toast.success("Details copied to clipboard");
+                const handleCopyJoinUrl = async () => {
+                    if (!result.join_url) return;
+                    await navigator.clipboard.writeText(result.join_url);
+                    toast.success("Join URL copied to clipboard");
                 };
 
                 return (
@@ -381,10 +492,10 @@ export const getCreateLinkColumns = (
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                                 <DropdownMenuItem
-                                    onClick={handleCopyDetails}
+                                    onClick={handleCopyJoinUrl}
                                     disabled={!hasJoinUrl}
                                 >
-                                    Copy details
+                                    Copy join URL
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>

@@ -25,24 +25,25 @@ import { INCIDENCE_PRESETS } from "../../constants/incidence-presets";
 import { InstructorSelector } from "./InstructorSelector";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
+import { Loader2 } from "lucide-react";
 
 // Zod validation schema
 const incidenceFormSchema = z.object({
-    status: z.string().min(1, "Status is required"),
+    status: z.string().optional(),
     type: z.string().min(1, "Type is required"),
     subtype: z.string().min(1, "Subtype is required"),
     substitute: z.string().optional(),
     description: z.string().optional(),
-    department: z.string().min(1, "Department is required"),
+    department: z.string().optional(),
 }).refine((data) => {
-    // If status is 'Substitute', substitute field is required
-    if (data.status === 'Substitute' && (!data.substitute || data.substitute.trim() === '')) {
+    // Department is required UNLESS type is 'Novedad'
+    if (data.type !== 'Novedad' && (!data.department || data.department.trim() === '')) {
         return false;
     }
     return true;
 }, {
-    message: "Substitute Instructor is required when status is 'Substitute'",
-    path: ["substitute"],
+    message: "Department is required",
+    path: ["department"],
 });
 
 type IncidenceFormValues = z.infer<typeof incidenceFormSchema>;
@@ -141,7 +142,7 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
             });
             setSelectedPreset(null);
         } else {
-            form.setValue("status", preset.status || "");
+            form.setValue("status", preset.status || "Yes");
             form.setValue("type", preset.type);
             form.setValue("subtype", preset.subtype);
             form.setValue("description", preset.description);
@@ -150,9 +151,13 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
         }
     };
 
-    const onSubmit = async (values: IncidenceFormValues) => {
-        if (!schedule) return;
+    // Local submitting state for robust button disabling
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
+    const onSubmit = async (values: IncidenceFormValues) => {
+        if (!schedule || isSubmitting) return;
+
+        setIsSubmitting(true);
         form.clearErrors();
 
         try {
@@ -181,15 +186,22 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
             };
 
             await updateIncidence(incidence);
+            toast.success("Incidence updated");
             onOpenChange(false);
         } catch (error) {
             console.error("Failed to save incidence:", error);
-            toast.error("Failed to save incidence");
+
+            if (error instanceof Error && error.message === 'SCHEDULE_NOT_PUBLISHED') {
+                toast.error("This schedule has not been published. Please publish it first before adding incidences.");
+            } else {
+                toast.error("Failed to save incidence");
+            }
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
     if (!schedule) return null;
-
 
 
     return (
@@ -225,13 +237,16 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                                         <FormItem className="">
                                             <FormLabel className="text-xs">Was the class taught?</FormLabel>
                                             <FormControl>
-                                                <Switch
-                                                    checked={field.value === "Yes"}
-                                                    onCheckedChange={(checked) => {
-                                                        field.onChange(checked ? "Yes" : "No");
-                                                    }}
-                                                    className="h-[20px] w-[36px] [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
-                                                />
+                                                <div className="flex items-center gap-2">
+                                                    <Switch
+                                                        checked={field.value === "Yes"}
+                                                        onCheckedChange={(checked) => {
+                                                            field.onChange(checked ? "Yes" : "No");
+                                                        }}
+                                                        className="h-[20px] w-[36px] [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
+                                                    />
+                                                    <span className="text-sm">{field.value || "No"}</span>
+                                                </div>
                                             </FormControl>
                                         </FormItem>
                                     )}
@@ -308,7 +323,7 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                                                 <FormControl>
                                                     <InstructorSelector
                                                         value={field.value || ""}
-                                                        onChange={field.onChange}
+                                                        onChange={(value, _email, _id) => field.onChange(value)}
                                                         instructors={uniqueInstructors}
                                                         className="max-w-[225px]"
                                                     />
@@ -358,7 +373,9 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                                                     <SelectContent>
                                                         <SelectItem value="Problemas de salud">Problemas de salud</SelectItem>
                                                         <SelectItem value="Imprevistos en red eléctrica">Imprevistos en red eléctrica</SelectItem>
+                                                        <SelectItem value="Cancelación manual">Cancelación manual</SelectItem>
                                                         <SelectItem value="Beneficio cancelación">Beneficio cancelación</SelectItem>
+                                                        <SelectItem value="No fue programada">No fue programada</SelectItem>
                                                         <SelectItem value="No debió ser programada">No debió ser programada</SelectItem>
                                                         <SelectItem value="Fuera de disponibilidad">Fuera de disponibilidad</SelectItem>
                                                         <SelectItem value="Instructor sin competencias">Instructor sin competencias</SelectItem>
@@ -428,11 +445,12 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                             </div>
                         </ScrollArea>
                         <DialogFooter className="mt-6">
-                            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                                 Cancel
                             </Button>
-                            <Button type="submit" disabled={form.formState.isSubmitting}>
-                                {form.formState.isSubmitting ? "Saving..." : "Save Changes"}
+                            <Button type="submit" disabled={isSubmitting}>
+                                {isSubmitting && <Loader2 className="animate-spin" />}
+                                {isSubmitting ? "Saving..." : "Save Changes"}
                             </Button>
                         </DialogFooter>
                     </form>

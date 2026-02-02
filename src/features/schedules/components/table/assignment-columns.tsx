@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ZoomMeetingCandidate } from "@/features/matching/services/matcher";
 import { StatusCell } from "./cells/StatusCell";
 import { InstructorCell } from "./cells/InstructorCell";
+import type { Instructor } from "../../hooks/useInstructors";
 
 // Definir la estructura de los datos de asignación
 // Esto extiende Schedule pero se centra en el aspecto de la asignación
@@ -29,9 +30,9 @@ export interface AssignmentRow extends Schedule {
 
 // Modificado para aceptar lista dinámica de instructores, mapa de hosts, y callbacks
 export const getAssignmentColumns = (
-    instructorsList: string[] = [],
+    instructorsList: Instructor[] = [],
     hostMap: Map<string, string> = new Map(),
-    onInstructorChange?: (rowId: string, newInstructor: string) => void,
+    onInstructorChange?: (rowId: string, newInstructor: string, email: string, id: string) => void,
     onManualModeToggle?: (rowId: string) => void,
     onSelectCandidate?: (rowId: string, candidate: ZoomMeetingCandidate) => void,
     onDeselectCandidate?: (rowId: string) => void,

@@ -41,7 +41,7 @@ interface ZoomState {
     triggerSync: () => Promise<void>;
     runMatching: (schedules: Schedule[]) => Promise<void>;
     resolveConflict: (schedule: Schedule, selectedMeeting: ZoomMeetingCandidate) => void;
-    createMeetings: (items: (string | { topic: string; startTime?: string })[], options?: { dailyOnly?: boolean }) => Promise<{ succeeded: number; failed: number; errors: string[] }>;
+    createMeetings: (items: (string | { topic: string; startTime?: string; selectedDate?: string; schedule_for?: string })[], options?: { dailyOnly?: boolean }) => Promise<{ succeeded: number; failed: number; errors: string[] }>;
     updateMatchings: (updates: { meeting_id: string; topic?: string; schedule_for?: string }[]) => Promise<{ succeeded: number; failed: number; errors: string[] }>;
     executeAssignments: (schedules?: Schedule[]) => Promise<{ succeeded: number; failed: number; errors: string[] }>;
 
@@ -378,14 +378,14 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
         }
     },
 
-    createMeetings: async (items: (string | { topic: string; startTime?: string })[], options?: { dailyOnly?: boolean }) => {
+    createMeetings: async (items: (string | { topic: string; startTime?: string; selectedDate?: string; schedule_for?: string })[], options?: { dailyOnly?: boolean }) => {
         set({ isExecuting: true });
         try {
             const dailyOnly = options?.dailyOnly ?? false;
 
             // Normalizar ítems a objetos
             const meetingConfigs = items.map(item =>
-                typeof item === 'string' ? { topic: item, startTime: undefined } : item
+                typeof item === 'string' ? { topic: item, startTime: undefined, selectedDate: undefined, schedule_for: undefined } : item
             );
 
             // Construir solicitudes
@@ -397,14 +397,15 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
                 const todayDateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
 
                 requests = meetingConfigs.map(config => {
+                    const dateStr = config.selectedDate || todayDateStr;
                     let startTimeStr;
 
                     if (config.startTime) {
                         // Usar hora específica ingresada
-                        startTimeStr = `${todayDateStr}T${config.startTime}:00`;
+                        startTimeStr = `${dateStr}T${config.startTime}:00`;
                     } else {
                         // Por defecto 9AM
-                        startTimeStr = `${todayDateStr}T09:00:00`;
+                        startTimeStr = `${dateStr}T09:00:00`;
                     }
 
                     return {
@@ -414,6 +415,7 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
                         start_time: startTimeStr,
                         duration: 45, // Requested default
                         timezone: 'America/Lima',
+                        schedule_for: config.schedule_for, // Optional: email of host
                         settings: {
                             join_before_host: true,
                             waiting_room: true
@@ -441,6 +443,7 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
                     start_time: startTimeStr,
                     duration: 60,
                     timezone: 'America/Lima',
+                    schedule_for: config.schedule_for,
                     recurrence: {
                         type: 2, // Weekly
                         repeat_interval: 1,

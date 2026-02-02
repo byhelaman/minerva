@@ -1,13 +1,17 @@
 import { useMemo, useState } from "react";
 import { secureSaveFile } from "@/lib/secure-export";
 import { type Table } from "@tanstack/react-table";
-import { Search, X, ChevronDown, User, CalendarCheck, Download, Save, Trash2, XCircle, RefreshCw, BadgeCheckIcon, HelpCircle, Hand, Clock1, Clock2, Clock3, Clock4, Clock5, Clock6, Clock7, Clock8, Clock9, Clock10, Clock11, Clock12, Radio, Loader2, AlertTriangle, CloudUpload } from "lucide-react";
+import { Search, X, ChevronDown, User, CalendarCheck, Download, Save, Trash2, XCircle, RefreshCw, BadgeCheckIcon, HelpCircle, Hand, Clock1, Clock2, Clock3, Clock4, Clock5, Clock6, Clock7, Clock8, Clock9, Clock10, Clock11, Clock12, Radio, Loader2, AlertTriangle, CloudUpload, CloudDownload } from "lucide-react";
 import { utils, write } from "xlsx";
 import { toast } from "sonner";
 import { writeTextFile, BaseDirectory } from "@tauri-apps/plugin-fs";
 
 import { Button } from "@/components/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import { useScheduleSyncStore } from "@/features/schedules/stores/useScheduleSyncStore";
+import { useScheduleUIStore } from "@/features/schedules/stores/useScheduleUIStore";
+import { formatDateForDisplay } from "@/lib/utils";
+
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -161,6 +165,52 @@ export function DataTableToolbar<TData>({
 
     // Settings: Actions Respect Filters
     const { settings } = useSettings();
+    const { getLatestCloudVersion, loadPublishedSchedule } = useScheduleSyncStore();
+    const { activeDate } = useScheduleUIStore();
+
+    // State for Restore Confirmation
+    const [showRestoreDialog, setShowRestoreDialog] = useState(false);
+    const [pendingRestoreData, setPendingRestoreData] = useState<any>(null); // PublishedSchedule
+    const [isCheckingCloud, setIsCheckingCloud] = useState(false);
+
+    const handleCheckCloud = async () => {
+        // activeDate might be null if table is empty.
+        // We now support searching the latest global version.
+
+        setIsCheckingCloud(true);
+        const toastId = toast.loading("Checking cloud version...");
+
+        try {
+            const { exists, data, error } = await getLatestCloudVersion(activeDate);
+
+            if (error) {
+                toast.error("Error checking cloud: " + error, { id: toastId });
+                return;
+            }
+
+            if (!exists || !data) {
+                toast.error("No published version found", { id: toastId });
+                return;
+            }
+
+            toast.dismiss(toastId);
+            setPendingRestoreData(data);
+            setShowRestoreDialog(true);
+
+        } catch (e) {
+            console.error(e);
+            toast.error("Failed to check cloud", { id: toastId });
+        } finally {
+            setIsCheckingCloud(false);
+        }
+    };
+
+    const handleConfirmRestore = () => {
+        if (pendingRestoreData) {
+            loadPublishedSchedule(pendingRestoreData);
+            setShowRestoreDialog(false);
+        }
+    };
 
     // Helper to get the correct data source based on settings
     const getActionData = (): Schedule[] => {
@@ -410,17 +460,17 @@ export function DataTableToolbar<TData>({
                     {!hideActions && (
                         <DropdownMenu modal={false}>
                             <DropdownMenuTrigger asChild>
-                                <Button size="sm" variant="outline" disabled={!hasSchedules}>
+                                <Button size="sm" variant="outline">
                                     Actions
                                     <ChevronDown />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="start">
-                                <DropdownMenuItem onClick={handleCopyInstructors}>
+                                <DropdownMenuItem onClick={handleCopyInstructors} disabled={!hasSchedules}>
                                     <User />
                                     Copy Instructors
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={handleCopySchedule}>
+                                <DropdownMenuItem onClick={handleCopySchedule} disabled={!hasSchedules}>
                                     <CalendarCheck />
                                     Copy Schedule
                                 </DropdownMenuItem>
@@ -431,12 +481,18 @@ export function DataTableToolbar<TData>({
                                         {isPublishing ? "Publishing..." : "Publish Schedule"}
                                     </DropdownMenuItem>
                                 </RequirePermission>
+                                <RequirePermission permission="schedules.manage">
+                                    <DropdownMenuItem onClick={handleCheckCloud} disabled={isCheckingCloud}>
+                                        {isCheckingCloud ? <Loader2 className="animate-spin" /> : <CloudDownload />}
+                                        {isCheckingCloud ? "Checking..." : "Check the Cloud"}
+                                    </DropdownMenuItem>
+                                </RequirePermission>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={onSaveSchedule}>
+                                <DropdownMenuItem onClick={onSaveSchedule} disabled={!hasSchedules}>
                                     <Save />
                                     Save Schedule
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={onExportExcel}>
+                                <DropdownMenuItem onClick={onExportExcel} disabled={!hasSchedules}>
                                     <Download />
                                     Export to Excel
                                 </DropdownMenuItem>
@@ -473,6 +529,29 @@ export function DataTableToolbar<TData>({
                                     setShowClearDialog(false);
                                 }}>
                                     Clear Schedule
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+
+                    {/* Restore Confirmation Dialog */}
+                    <AlertDialog open={showRestoreDialog} onOpenChange={setShowRestoreDialog}>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Restore Schedule from Cloud?</AlertDialogTitle>
+                                <AlertDialogDescription asChild className="space-y-2">
+                                    <div>
+                                        <div>A saved schedule with a date was found. {formatDateForDisplay(pendingRestoreData?.schedule_date)}. <br />
+                                            Includes {pendingRestoreData?.entries_count} elements.
+                                        </div>
+                                        <span>This will replace your current table content.</span>
+                                    </div>
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleConfirmRestore}>
+                                    Download & Replace
                                 </AlertDialogAction>
                             </AlertDialogFooter>
                         </AlertDialogContent>

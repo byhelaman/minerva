@@ -21,9 +21,10 @@ export interface IncidencePreset {
 export const INCIDENCE_PRESETS: IncidencePreset[] = [
     {
         label: "Enfermedad Instructor",
+        status: "Yes",
         type: "Instructor",
         subtype: "Problemas de salud",
-        description: "Instructor reporta encontrarse mal de salud / se busca reemplazo",
+        description: "Instructor reportó encontrarse mal de salud / se busca reemplazo",
         department: "Q&T"
     },
     {
@@ -35,14 +36,24 @@ export const INCIDENCE_PRESETS: IncidencePreset[] = [
         department: ""
     },
     {
-        label: "Clase No Programada",
-        type: "Servicios",
+        label: "Falta Programación",
+        status: "Yes",
+        type: "Programación",
+        subtype: "No fue programada",
+        description: "Clase no fue programada / se busca reemplazo",
+        department: "Programación Latam"
+    },
+    {
+        label: "Programación Errónea",
+        status: "No",
+        type: "Programación",
         subtype: "No debió ser programada",
-        description: "Retirar clase / asignar nptts / clase no debió ser programada",
-        department: ""
+        description: "Retirar clase / asignar nptts",
+        department: "Programación Latam"
     },
     {
         label: "Sin Disponibilidad",
+        status: "Yes",
         type: "Programación",
         subtype: "Fuera de disponibilidad",
         description: "Instructor no cuenta con disponibilidad / se busca reemplazo",
@@ -50,13 +61,15 @@ export const INCIDENCE_PRESETS: IncidencePreset[] = [
     },
     {
         label: "Problema Eléctrico",
+        status: "Yes",
         type: "Instructor",
         subtype: "Imprevistos en red eléctrica",
-        description: "Instructor presenta problemas con red eléctrica / se busca reemplazo",
+        description: "Instructor presentó problemas con red eléctrica / se busca reemplazo",
         department: "Q&T"
     },
     {
         label: "Cruce de Horario",
+        status: "Yes",
         type: "Programación",
         subtype: "Cruce de programación",
         description: "Clase fue programada con cruce / se busca reemplazo",
@@ -64,6 +77,7 @@ export const INCIDENCE_PRESETS: IncidencePreset[] = [
     },
     {
         label: "Instructor Bloqueado",
+        status: "Yes",
         type: "Programación",
         subtype: "Instructor con bloqueo",
         description: "Instructor tenía bloqueo sin embargo fue programado / se busca reemplazo",
@@ -71,13 +85,15 @@ export const INCIDENCE_PRESETS: IncidencePreset[] = [
     },
     {
         label: "Emergencia Personal",
+        status: "Yes",
         type: "Instructor",
         subtype: "Otros",
-        description: "Instructor reporta emergencia personal o familiar / se busca reemplazo",
+        description: "Instructor reportó emergencia personal o familiar / se busca reemplazo",
         department: "Q&T"
     },
     {
         label: "Cambio de Horario",
+        status: "Yes",
         type: "Programación",
         subtype: "Programación en otro horario",
         description: "Clase debe ser programada en otro horario / coordinación en proceso",
@@ -93,9 +109,10 @@ export const INCIDENCE_PRESETS: IncidencePreset[] = [
     },
     {
         label: "Horario Fijo Omitido",
+        status: "Yes",
         type: "Programación",
         subtype: "Omisión de horario fijo",
-        description: "Clase no fue programada en horario fijo establecido",
+        description: "Clase no fue programada en horario fijo establecido ",
         department: "Programación Latam"
     },
 ];

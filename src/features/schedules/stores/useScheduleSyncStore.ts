@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { formatDateForDisplay } from '@/lib/utils';
+import { jwtDecode } from "jwt-decode";
 import { PublishedSchedule, SchedulesConfig } from '../types';
 import { scheduleEntriesService } from '../services/schedule-entries-service';
 import { useScheduleDataStore } from './useScheduleDataStore';
@@ -33,6 +34,8 @@ interface ScheduleSyncState {
     // Download legacy logic removed or adapted? Adapted to just load date
     loadPublishedSchedule: (schedule: PublishedSchedule) => void;
     resetCurrentVersion: () => Promise<void>;
+    resetSyncState: () => void;
+    getLatestCloudVersion: (date?: string | null) => Promise<{ exists: boolean; data?: PublishedSchedule; error?: string }>;
 }
 
 // Helper to get initial state
@@ -61,6 +64,17 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
     dismissedVersions: JSON.parse(localStorage.getItem('dismissed_schedule_versions') || '[]'),
 
     refreshMsConfig: async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        try {
+            const claims: any = jwtDecode(session.access_token);
+            const permissions = claims.permissions || [];
+            if (!permissions.includes('system.view')) return;
+        } catch (e) {
+            return;
+        }
+
         const { data, error } = await supabase.functions.invoke('microsoft-auth', {
             body: { action: 'status' }
         });
@@ -204,6 +218,17 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
     checkForUpdates: async () => {
         const { dismissedVersions, currentVersionId, currentVersionUpdatedAt } = get();
 
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        try {
+            const claims: any = jwtDecode(session.access_token);
+            const permissions = claims.permissions || [];
+            if (!permissions.includes('schedules.read')) return;
+        } catch (e) {
+            return;
+        }
+
         const { data, error } = await supabase
             .from('published_schedules')
             .select('id, schedule_date, updated_at, entries_count') // No JSONB
@@ -233,7 +258,13 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
 
     dismissUpdate: (id: string) => {
         const { dismissedVersions } = get();
-        const updated = [...dismissedVersions, id];
+        let updated = [...dismissedVersions, id];
+
+        // Keep only the last 10 versions to prevent localStorage bloat
+        if (updated.length > 10) {
+            updated = updated.slice(-10);
+        }
+
         localStorage.setItem('dismissed_schedule_versions', JSON.stringify(updated));
         set({
             dismissedVersions: updated,
@@ -251,5 +282,44 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
 
         // Check for updates to show the toast again if there is a version on server
         await get().checkForUpdates();
+    },
+
+    resetSyncState: () => {
+        set({
+            latestPublished: null, // Clear the "New Version" toast trigger
+            // We might keep msConfig? Or clear it too?
+            // For security, clearing sensitive operational state is good.
+            isPublishing: false,
+            isSyncing: false
+        });
+    },
+
+    getLatestCloudVersion: async (date?: string | null) => {
+        try {
+            let query = supabase
+                .from('published_schedules')
+                .select('id, schedule_date, updated_at, entries_count, published_by'); // Added published_by
+
+            if (date) {
+                query = query.eq('schedule_date', date);
+            } else {
+                // If no date, get the absolute latest uploaded
+                query = query.order('updated_at', { ascending: false }).limit(1);
+            }
+
+            // Execute query
+            const { data, error } = await query.maybeSingle(); // Use maybeSingle to handle 0 or 1 result gracefully
+
+            if (error) {
+                throw error;
+            }
+
+            if (!data) return { exists: false };
+
+            return { exists: true, data: data as PublishedSchedule };
+        } catch (e: any) {
+            console.error("Error fetching cloud version:", e);
+            return { exists: false, error: e.message };
+        }
     }
 }));

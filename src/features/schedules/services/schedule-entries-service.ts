@@ -129,9 +129,10 @@ export const scheduleEntriesService = {
 
     /**
      * Update a specific entry's incidence data (IncidenceModal).
+     * Returns true if the update was successful (row existed), false otherwise.
      */
-    async updateIncidence(key: { date: string, program: string, start_time: string, instructor: string }, changes: Partial<DailyIncidence>) {
-        const { error } = await supabase
+    async updateIncidence(key: { date: string, program: string, start_time: string, instructor: string }, changes: Partial<DailyIncidence>): Promise<boolean> {
+        const { data, error } = await supabase
             .from('schedule_entries')
             .update({
                 status: changes.status,
@@ -143,9 +144,13 @@ export const scheduleEntriesService = {
                 feedback: changes.feedback,
                 // Automatically triggers updated_at via database trigger
             })
-            .match(key);
+            .match(key)
+            .select();
 
         if (error) throw error;
+
+        // Return true if at least one row was updated
+        return (data?.length ?? 0) > 0;
     },
 
     /**

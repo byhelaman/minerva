@@ -32,7 +32,8 @@ INSERT INTO public.roles (name, description, hierarchy_level) VALUES
     ('admin', 'Manage users and system settings', 80),
     ('moderator', 'Can assign users and manage Zoom links', 60),
     ('operator', 'Work with schedules and Zoom data', 50),
-    ('viewer', 'Read-only access to own schedules', 10);
+    ('viewer', 'Read-only access to own schedules', 10),
+    ('guest', 'Unverified user. No access to data.', 0);
 
 INSERT INTO public.permissions (name, description, min_role_level) VALUES
     ('schedules.read', 'View own schedules', 10),
@@ -44,7 +45,8 @@ INSERT INTO public.permissions (name, description, min_role_level) VALUES
     ('users.view', 'View list of users', 80),
     ('users.manage', 'Create, delete, and change user roles', 80),
     ('system.view', 'View system settings', 80),
-    ('system.manage', 'Modify system settings', 100);
+    ('system.manage', 'Modify system settings', 100),
+    ('reports.view', 'View system reports', 80);
 
 INSERT INTO public.role_permissions (role, permission) VALUES
     ('viewer', 'schedules.read'),
@@ -64,6 +66,7 @@ INSERT INTO public.role_permissions (role, permission) VALUES
     ('admin', 'users.view'),
     ('admin', 'users.manage'),
     ('admin', 'system.view'),
+    ('admin', 'reports.view'),
     ('super_admin', 'schedules.read'),
     ('super_admin', 'schedules.write'),
     ('super_admin', 'schedules.manage'),
@@ -73,7 +76,8 @@ INSERT INTO public.role_permissions (role, permission) VALUES
     ('super_admin', 'users.view'),
     ('super_admin', 'users.manage'),
     ('super_admin', 'system.view'),
-    ('super_admin', 'system.manage');
+    ('super_admin', 'system.manage'),
+    ('super_admin', 'reports.view');
 
 -- =============================================
 -- PROFILES
@@ -82,7 +86,7 @@ CREATE TABLE public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT NOT NULL,
     display_name TEXT,
-    role TEXT REFERENCES public.roles(name) DEFAULT 'viewer' NOT NULL,
+    role TEXT REFERENCES public.roles(name) DEFAULT 'guest' NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
@@ -97,11 +101,12 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-    INSERT INTO public.profiles (id, email, display_name)
+    INSERT INTO public.profiles (id, email, display_name, role)
     VALUES (
         NEW.id,
         NEW.email,
-        COALESCE(NEW.raw_user_meta_data->>'display_name', split_part(NEW.email, '@', 1))
+        COALESCE(NEW.raw_user_meta_data->>'display_name', split_part(NEW.email, '@', 1)),
+        'guest'
     );
     RETURN NEW;
 END;
@@ -163,9 +168,9 @@ BEGIN
         claims := jsonb_set(claims, '{hierarchy_level}', to_jsonb(user_hierarchy_level));
         claims := jsonb_set(claims, '{permissions}', to_jsonb(COALESCE(user_permissions, ARRAY[]::text[])));
     ELSE
-        claims := jsonb_set(claims, '{user_role}', '"viewer"');
-        claims := jsonb_set(claims, '{hierarchy_level}', '10');
-        claims := jsonb_set(claims, '{permissions}', '["schedules.read"]');
+        claims := jsonb_set(claims, '{user_role}', '"guest"');
+        claims := jsonb_set(claims, '{hierarchy_level}', '0');
+        claims := jsonb_set(claims, '{permissions}', '[]');
     END IF;
 
     event := jsonb_set(event, '{claims}', claims);

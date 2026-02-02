@@ -150,7 +150,7 @@ export function ProfilePage() {
                                     </CardDescription>
                                 </div>
                                 <Badge variant="secondary" className="capitalize">
-                                    {profile?.role || "User"}
+                                    {(profile?.role || "Guest").replace(/_/g, " ")}
                                 </Badge>
                             </div>
                         </CardHeader>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import { jwtDecode } from "jwt-decode";
 import { BaseDirectory, readTextFile, writeTextFile, exists } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
 import SyncWorker from "../workers/sync-linked-source.worker.ts?worker"; // Importación de worker de Vite
@@ -36,10 +37,22 @@ export function useLinkedSourceSync() {
         const loadCache = async () => {
             setIsRestoringCache(true);
             try {
-                // 0. Verificar sesión antes de llamar a la API
+                // 0. Verificar sesión y permisos antes de llamar a la API
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session) {
                     console.log("No session, skipping cache validation");
+                    setIsRestoringCache(false);
+                    return;
+                }
+
+                try {
+                    const claims: any = jwtDecode(session.access_token);
+                    const permissions = claims.permissions || [];
+                    if (!permissions.includes('reports.view')) {
+                        setIsRestoringCache(false);
+                        return;
+                    }
+                } catch (e) {
                     setIsRestoringCache(false);
                     return;
                 }
@@ -99,6 +112,20 @@ export function useLinkedSourceSync() {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) {
                 console.error("No active session for sync");
+                setIsSyncing(false);
+                return;
+            }
+
+            try {
+                const claims: any = jwtDecode(session.access_token);
+                const permissions = claims.permissions || [];
+                // Allow sync if user has reports.view (Viewer) OR system.manage (Admin) - though reports.view is the standard
+                if (!permissions.includes('reports.view')) {
+                    console.warn("Unauthorized sync attempt");
+                    setIsSyncing(false);
+                    return;
+                }
+            } catch (e) {
                 setIsSyncing(false);
                 return;
             }

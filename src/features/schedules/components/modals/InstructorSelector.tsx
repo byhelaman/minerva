@@ -4,11 +4,12 @@ import { Check, ChevronsUpDown } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import type { Instructor } from "../../hooks/useInstructors";
 
 interface InstructorSelectorProps {
     value?: string;
-    onChange: (value: string) => void;
-    instructors: string[];
+    onChange: (value: string, email: string, id: string) => void;
+    instructors: Instructor[];
     disabled?: boolean;
     className?: string;
 }
@@ -43,19 +44,19 @@ export function InstructorSelector({ value, onChange, instructors, disabled, cla
                         <CommandGroup>
                             {instructors.map((inst) => (
                                 <CommandItem
-                                    key={inst}
-                                    value={inst}
+                                    key={inst.email}
+                                    value={inst.display_name}
                                     onSelect={() => {
-                                        onChange(inst);
+                                        onChange(inst.display_name, inst.email, inst.id);
                                         setOpen(false);
                                     }}
                                 >
                                     <Check
                                         className={
-                                            value === inst ? "opacity-100" : "opacity-0"
+                                            value === inst.display_name ? "opacity-100" : "opacity-0"
                                         }
                                     />
-                                    <span className="truncate">{inst}</span>
+                                    <span className="truncate">{inst.display_name}</span>
                                 </CommandItem>
                             ))}
                         </CommandGroup>

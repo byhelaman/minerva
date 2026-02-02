@@ -60,7 +60,9 @@ function App() {
           } />
 
           <Route path="/reports" element={
-            <ReportsPage />
+            <ProtectedRoute requiredPermission="reports.view">
+              <ReportsPage />
+            </ProtectedRoute>
           } />
         </Route>
       </Routes>

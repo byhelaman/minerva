@@ -82,22 +82,20 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
     const hostMap = useHostMap();
 
     // Handler para cambiar instructor de una fila
-    const handleInstructorChange = (rowId: string, newInstructor: string) => {
+    const handleInstructorChange = (rowId: string, newInstructor: string, email: string, id: string) => {
         // Actualizar el instructor en los matchResults del store
         const currentResults = useZoomStore.getState().matchResults;
-        const zoomUsers = useZoomStore.getState().users;
 
-        // Buscar el usuario de Zoom por display_name exacto (viene del dropdown)
-        const foundUser = zoomUsers.find(u => u.display_name === newInstructor);
-        const newFoundInstructor = foundUser ? {
-            id: foundUser.id,
-            email: foundUser.email,
-            display_name: foundUser.display_name || `${foundUser.first_name} ${foundUser.last_name}`
-        } : undefined;
+        // Ya tenemos todos los datos directamente del selector
+        const newFoundInstructor = {
+            id,
+            email,
+            display_name: newInstructor
+        };
 
         const updatedResults = currentResults.map(r => {
-            const id = getRowId(r.schedule);
-            if (id === rowId) {
+            const rowKey = getRowId(r.schedule);
+            if (rowKey === rowId) {
                 // Crear backup del estado si no existe
                 const { originalState: existingBackup, ...currentState } = r;
                 const backup: Omit<MatchResult, 'originalState'> = existingBackup || currentState;

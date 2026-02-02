@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { jwtDecode } from "jwt-decode";
 import { logger } from "@/lib/logger";
 import { toast } from "sonner";
+import { useScheduleSyncStore } from "@/features/schedules/stores/useScheduleSyncStore";
 
 // Tipos
 export interface Profile {
@@ -250,6 +251,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 localStorage.removeItem(key);
             }
         });
+
+        // Limpiar estado de Zustand (memoria)
+        useScheduleSyncStore.getState().resetSyncState();
 
         toast.dismiss();
         await supabase.auth.signOut();
