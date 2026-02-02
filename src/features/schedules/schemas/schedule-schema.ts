@@ -16,7 +16,16 @@ export const ScheduleSchema = z.object({
     instructor: z.string().default(''),   // Puede estar vacío
     program: z.string().min(1, "Program/Group is missing"),
     minutes: z.string().regex(/^\d+$/, "Minutes must be numeric").default('0'),
-    units: z.string().regex(/^\d+$/, "Units must be numeric").default('0')
+    units: z.string().regex(/^\d+$/, "Units must be numeric").default('0'),
+
+    // Optional incidence fields
+    status: z.string().optional(),
+    substitute: z.string().optional(),
+    type: z.string().optional(),
+    subtype: z.string().optional(),
+    description: z.string().optional(),
+    department: z.string().optional(),
+    feedback: z.string().optional(),
 });
 
 export type ValidatedSchedule = z.infer<typeof ScheduleSchema>;

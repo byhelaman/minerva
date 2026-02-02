@@ -3,6 +3,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { type Schedule } from "@/features/schedules/utils/excel-parser";
 import { DataTableColumnHeader } from "@/features/schedules/components/table/data-table-column-header";
 import { DataTableRowActions } from "@/features/schedules/components/table/data-table-row-actions";
+import { formatDateForDisplay } from "@/lib/utils";
 
 export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDef<Schedule>[] => [
     {
@@ -41,7 +42,7 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDe
             <DataTableColumnHeader column={column} title="date" className="justify-center" />
         ),
         cell: ({ row }) => <div className="w-[100px] text-center">
-            {row.getValue("date")}
+            {formatDateForDisplay(row.getValue("date"))}
         </div>,
     },
     {
@@ -80,24 +81,20 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDe
         ),
     },
     {
-        accessorKey: "status",
-        size: 80,
+        accessorKey: "end_time",
+        size: 100,
         header: ({ column }) => (
-            <DataTableColumnHeader column={column} title="status" />
+            <DataTableColumnHeader column={column} title="end time" />
         ),
-        cell: ({ row }) => (
-            <div className="text-center">{row.getValue("status")}</div>
-        )
+        cell: ({ row }) => <div className="text-center">{row.getValue("end_time")}</div>,
     },
     {
-        accessorKey: "description",
-        size: 500,
+        accessorKey: "code",
+        size: 100,
         header: ({ column }) => (
-            <DataTableColumnHeader column={column} title="description" />
+            <DataTableColumnHeader column={column} title="code" />
         ),
-        cell: ({ row }) => (
-            <div className="truncate max-w-[480px]">{row.getValue("description")}</div>
-        )
+        cell: ({ row }) => <div className="text-center">{row.getValue("code")}</div>,
     },
     {
         accessorKey: "instructor",
@@ -138,20 +135,14 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDe
         cell: ({ row }) => <div className="w-[50px] text-center">{row.getValue("units")}</div>,
     },
     {
-        accessorKey: "end_time",
-        size: 100,
+        accessorKey: "status",
+        size: 80,
         header: ({ column }) => (
-            <DataTableColumnHeader column={column} title="end time" />
+            <DataTableColumnHeader column={column} title="status" />
         ),
-        cell: ({ row }) => <div className="text-center">{row.getValue("end_time")}</div>,
-    },
-    {
-        accessorKey: "code",
-        size: 100,
-        header: ({ column }) => (
-            <DataTableColumnHeader column={column} title="code" />
-        ),
-        cell: ({ row }) => <div className="text-center">{row.getValue("code")}</div>,
+        cell: ({ row }) => (
+            <div className="text-center">{row.getValue("status")}</div>
+        )
     },
     {
         accessorKey: "substitute",
@@ -176,6 +167,16 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDe
             <DataTableColumnHeader column={column} title="subtype" />
         ),
         cell: ({ row }) => <div className="text-center">{row.getValue("subtype")}</div>,
+    },
+    {
+        accessorKey: "description",
+        size: 500,
+        header: ({ column }) => (
+            <DataTableColumnHeader column={column} title="description" />
+        ),
+        cell: ({ row }) => (
+            <div className="truncate max-w-[480px]">{row.getValue("description")}</div>
+        )
     },
     {
         accessorKey: "department",

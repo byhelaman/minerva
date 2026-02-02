@@ -200,6 +200,41 @@ export const scheduleEntriesService = {
     },
 
     /**
+     * Fetch all entries that have incidence data (status IS NOT NULL).
+     * Used for the consolidated incidences Excel export.
+     */
+    async getAllIncidences(): Promise<DailyIncidence[]> {
+        const { data, error } = await supabase
+            .from('schedule_entries')
+            .select('*')
+            .not('status', 'is', null)
+            .order('date', { ascending: true })
+            .order('start_time', { ascending: true });
+
+        if (error) throw error;
+
+        return (data || []).map(row => ({
+            date: row.date,
+            program: row.program,
+            start_time: row.start_time,
+            instructor: row.instructor,
+            shift: row.shift,
+            branch: row.branch,
+            end_time: row.end_time,
+            code: row.code,
+            minutes: row.minutes,
+            units: row.units,
+            status: row.status,
+            substitute: row.substitute || undefined,
+            type: row.type || undefined,
+            subtype: row.subtype || undefined,
+            description: row.description || undefined,
+            department: row.department || undefined,
+            feedback: row.feedback || undefined,
+        }));
+    },
+
+    /**
      * Mark a date as synced
      */
     async markDateAsSynced(date: string) {

@@ -39,6 +39,9 @@
     "src",
     "tests"
   ],
+  "exclude": [
+    "src/features/system/_archive"
+  ],
   "references": [
     {
       "path": "./tsconfig.node.json"

@@ -76,6 +76,12 @@ const SPECIAL_TAGS = new Set(
         .map(tag => tag.toLowerCase().replace(/\s/g, ''))
 );
 
+const ALLOWED_HEADERS = new Set([
+    "date", "shift", "branch", "start_time", "end_time", "code", "instructor",
+    "program", "minutes", "units", "status", "substitute", "type", "subtype",
+    "description", "department", "feedback"
+]);
+
 function extractParenthesizedContent(text: string): string {
     if (!text) return "";
     const matches = safeString(text).match(/\((.*?)\)/g);
@@ -129,7 +135,7 @@ export interface ParseResult {
     skipped: number;
 }
 
-export async function parseExcelFile(file: File): Promise<ParseResult> {
+export async function parseExcelFile(file: File, options?: { strictValidation?: boolean }): Promise<ParseResult> {
     const buffer = await file.arrayBuffer();
     const workbook = read(buffer, { type: "array" });
     const schedules: Schedule[] = [];
@@ -145,10 +151,25 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
         // Los archivos exportados tienen headers: date, shift, branch, start_time, end_time, code, instructor, program, minutes, units, ...
         // Se verifica la presencia de campos clave de la interfaz Schedule en la fila de encabezados
         const firstRow = rawSheet[0] as unknown[];
-        const headerCells = firstRow?.slice(0, 10).map(cell => safeString(cell).toLowerCase()) ?? [];
+        const headerCells = firstRow?.slice(0, 20).map(cell => safeString(cell).toLowerCase()) ?? [];
+
         const requiredHeaders = ['date', 'start_time', 'end_time', 'program', 'instructor'];
         const matchedHeaders = requiredHeaders.filter(h => headerCells.includes(h));
         const isExportedFormat = matchedHeaders.length >= 4; // Al menos 4 de 5 headers requeridos
+
+        // Strict Validation Logic
+        if (options?.strictValidation) {
+            // Must be exported format
+            if (!isExportedFormat) {
+                throw new Error("Invalid file format. Ensure headers are present.");
+            }
+
+            // Check for unauthorized columns
+            const invalidHeaders = headerCells.filter(h => h && !ALLOWED_HEADERS.has(h));
+            if (invalidHeaders.length > 0) {
+                throw new Error(`Unauthorized columns found: ${invalidHeaders.join(", ")}`);
+            }
+        }
 
         if (isExportedFormat) {
             const exportData = utils.sheet_to_json(worksheet) as Record<string, unknown>[];
@@ -163,8 +184,8 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
                 const rawObj = {
                     ...item,
                     date: safeString(date),
-                    start_time: formatTimeTo24h(safeString(item.start_time)),
-                    end_time: formatTimeTo24h(safeString(item.end_time)),
+                    start_time: formatTimeTo24h(item.start_time as string | number),
+                    end_time: formatTimeTo24h(item.end_time as string | number),
                     // Asegurar que existan los campos requeridos
                     program: safeString(item.program),
                     instructor: safeString(item.instructor),
@@ -172,7 +193,15 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
                     minutes: safeString(item.minutes),
                     units: safeString(item.units) || '0',
                     shift: safeString(item.shift) || determineShift(safeString(item.start_time)),
-                    branch: safeString(item.branch)
+                    branch: safeString(item.branch),
+                    // Incidence fields
+                    status: safeString(item.status),
+                    substitute: safeString(item.substitute),
+                    type: safeString(item.type),
+                    subtype: safeString(item.subtype),
+                    description: safeString(item.description),
+                    department: safeString(item.department),
+                    feedback: safeString(item.feedback)
                 };
 
                 // Validar con Zod incluso para exportados, por seguridad

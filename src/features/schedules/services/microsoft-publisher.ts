@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { extractYearMonth } from '@/lib/utils';
 import { DailyIncidence, Schedule, SchedulesConfig } from '../types';
+import { scheduleEntriesService } from './schedule-entries-service';
 
 /** Converts column-name-keyed char widths to Excel-letter-keyed pixel widths (table starts at col B) */
 function toExcelColumnWidths(
@@ -216,4 +217,115 @@ export async function publishScheduleToExcel(
             throw new Error(`Sync warning: ${tableError.message}`);
         }
     }
+}
+
+/**
+ * Publishes ALL incidences (from all dates) to a single consolidated Excel file.
+ * Rewrites the entire table on each sync — no read/compare needed.
+ */
+export async function publishIncidencesToExcel(
+    config: SchedulesConfig,
+    onStatusUpdate?: (msg: string) => void
+): Promise<void> {
+    const notify = (msg: string) => {
+        if (onStatusUpdate) onStatusUpdate(msg);
+    };
+
+    if (!config.isConnected) {
+        throw new Error('Microsoft account not connected');
+    }
+    if (!config.incidencesFileId) {
+        throw new Error('Incidences file not configured');
+    }
+
+    notify('Fetching all incidences...');
+    const allIncidences = await scheduleEntriesService.getAllIncidences();
+
+    const headers = [
+        "date", "shift", "branch", "start_time", "end_time",
+        "code", "instructor", "program", "minutes", "units",
+        "status", "substitute", "type", "subtype", "description",
+        "department", "feedback"
+    ];
+
+    const dataRows = allIncidences.map(inc => [
+        inc.date, inc.shift, inc.branch, inc.start_time, inc.end_time,
+        inc.code, inc.instructor, inc.program, inc.minutes, inc.units,
+        inc.status || '', inc.substitute || '', inc.type || '',
+        inc.subtype || '', inc.description || '', inc.department || '',
+        inc.feedback || ''
+    ]);
+
+    const values = [headers, ...dataRows];
+    const fileId = config.incidencesFileId;
+
+    notify('Checking incidences file...');
+
+    // List existing content (tables/sheets)
+    const { data: content, error: contentError } = await supabase.functions.invoke('microsoft-graph', {
+        body: { action: 'list-content', fileId }
+    });
+    if (contentError) throw contentError;
+
+    const items = content.value as { id: string; name: string; type: string }[];
+    const existingTable = items.find(i => i.type === 'table');
+
+    if (existingTable) {
+        // Replace existing table data
+        notify('Replacing incidences data...');
+
+        // Get the sheet that contains this table to use as anchor
+        const existingSheet = items.find(i => i.type === 'sheet');
+
+        const { error: replaceError } = await supabase.functions.invoke('microsoft-graph', {
+            body: {
+                action: 'replace-table-data',
+                fileId,
+                tableId: existingTable.id,
+                sheetId: existingSheet?.id,
+                values,
+                range: 'B2'
+            }
+        });
+        if (replaceError) throw replaceError;
+    } else {
+        // No table exists — write data and create a table
+        notify('Creating incidences table...');
+
+        // Use the first sheet
+        const sheet = items.find(i => i.type === 'sheet');
+        if (!sheet) throw new Error('No worksheet found in incidences file');
+
+        const { data: updateData, error: writeError } = await supabase.functions.invoke('microsoft-graph', {
+            body: { action: 'update-range', fileId, sheetId: sheet.id, values, range: 'B2' }
+        });
+        if (writeError) throw writeError;
+
+        const fullAddress = updateData.address;
+        const rangeAddress = fullAddress.includes('!') ? fullAddress.split('!')[1] : fullAddress;
+
+        const { data: newTable } = await supabase.functions.invoke('microsoft-graph', {
+            body: { action: 'create-table', fileId, sheetId: sheet.id, range: rangeAddress }
+        });
+
+        // Apply styling
+        const { SCHEDULE_TABLE_CONFIG } = await import('../utils/excel-styles');
+
+        await supabase.functions.invoke('microsoft-graph', {
+            body: { action: 'update-table-style', fileId, tableId: newTable.id, style: SCHEDULE_TABLE_CONFIG.style }
+        });
+
+        const columnWidths = toExcelColumnWidths(SCHEDULE_TABLE_CONFIG.columns, headers);
+        await supabase.functions.invoke('microsoft-graph', {
+            body: { action: 'format-columns', fileId, sheetId: sheet.id, columns: columnWidths }
+        });
+
+        if (SCHEDULE_TABLE_CONFIG.font) {
+            await supabase.functions.invoke('microsoft-graph', {
+                body: { action: 'format-font', fileId, sheetId: sheet.id, font: SCHEDULE_TABLE_CONFIG.font }
+            });
+        }
+    }
+
+    notify('Incidences synced');
 }

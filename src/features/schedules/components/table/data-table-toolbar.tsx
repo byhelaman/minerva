@@ -283,7 +283,12 @@ export function DataTableToolbar<TData>({
                 };
             });
 
-            const ws = utils.json_to_sheet(dataToExport);
+            const ws = utils.json_to_sheet(dataToExport, {
+                header: [
+                    "date", "shift", "branch", "start_time", "end_time", "code",
+                    "instructor", "program", "minutes", "units"
+                ]
+            });
             const wb = utils.book_new();
             utils.book_append_sheet(wb, ws, "Schedule");
 

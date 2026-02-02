@@ -7,6 +7,7 @@ import { PublishedSchedule, SchedulesConfig } from '../types';
 import { scheduleEntriesService } from '../services/schedule-entries-service';
 import { useScheduleDataStore } from './useScheduleDataStore';
 import { useScheduleUIStore } from './useScheduleUIStore';
+import { mergeSchedulesWithIncidences } from '../utils/merge-utils';
 
 interface ScheduleSyncState {
     // MS Config State
@@ -20,7 +21,7 @@ interface ScheduleSyncState {
 
     // Core Actions
     publishToSupabase: (overwrite?: boolean) => Promise<{ success: boolean; error?: string; exists?: boolean }>;
-    syncToExcel: () => Promise<void>;
+    syncToExcel: (date?: string) => Promise<void>;
 
     // Supabase State (Published Schedules Table)
     latestPublished: PublishedSchedule | null;
@@ -152,12 +153,12 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
         }
     },
 
-    syncToExcel: async () => {
-        const { activeDate } = useScheduleUIStore.getState();
+    syncToExcel: async (date?: string) => {
+        const targetDate = date || useScheduleUIStore.getState().activeDate;
         const { msConfig } = get();
 
-        if (!activeDate) {
-            toast.error("No active date");
+        if (!targetDate) {
+            toast.error("No date selected");
             return;
         }
         if (!msConfig.isConnected || !msConfig.schedulesFolderId) {
@@ -169,23 +170,34 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
         const toastId = toast.loading("Syncing to Excel...");
 
         try {
-            // Get data from store
-            const { getComputedSchedules } = useScheduleDataStore.getState();
+            // 1. Fetch schedule entries for this date from Supabase
+            const { schedules, incidences } = await scheduleEntriesService.getSchedulesByDate(targetDate);
 
-            // Use the microsoft-publisher helper which handles file finding/creation
-            const { publishScheduleToExcel } = await import('../services/microsoft-publisher');
+            // Merge incidences on top of base schedules
+            const computedSchedules = mergeSchedulesWithIncidences(schedules, incidences);
+
+            // 2. Publish daily schedule sheet (monthly file)
+            const { publishScheduleToExcel, publishIncidencesToExcel } = await import('../services/microsoft-publisher');
 
             await publishScheduleToExcel(
                 msConfig,
-                activeDate,
-                getComputedSchedules(),
+                targetDate,
+                computedSchedules,
                 (msg) => toast.loading(msg, { id: toastId })
             );
 
+            // 3. Publish consolidated incidences file
+            if (msConfig.incidencesFileId) {
+                await publishIncidencesToExcel(
+                    msConfig,
+                    (msg) => toast.loading(msg, { id: toastId })
+                );
+            }
+
             toast.success("Synced successfully", { id: toastId });
 
-            // Mark as synced in DB
-            await scheduleEntriesService.markDateAsSynced(activeDate);
+            // 4. Mark date as synced in DB
+            await scheduleEntriesService.markDateAsSynced(targetDate);
 
         } catch (e: any) {
             toast.error(`Sync failed: ${e.message}`, { id: toastId });

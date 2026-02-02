@@ -10,9 +10,7 @@ export interface Schedule {
     program: string;
     minutes: string;
     units: string;
-}
-
-export interface DailyIncidence extends Schedule {
+    // Optional incidence fields
     status?: string;
     substitute?: string;
     type?: string;
@@ -21,6 +19,8 @@ export interface DailyIncidence extends Schedule {
     department?: string;
     feedback?: string;
 }
+
+export type DailyIncidence = Schedule;
 
 export interface PublishedSchedule {
     id: string;

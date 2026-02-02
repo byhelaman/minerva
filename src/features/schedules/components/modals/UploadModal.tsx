@@ -22,6 +22,7 @@ interface UploadModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onUploadComplete: (schedules: Schedule[]) => void;
+    strictValidation?: boolean;
 }
 
 const MAX_FILES = 5;
@@ -39,6 +40,7 @@ export function UploadModal({
     open,
     onOpenChange,
     onUploadComplete,
+    strictValidation
 }: UploadModalProps) {
     const [selectedFiles, setSelectedFiles] = useState<FileInfo[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -160,7 +162,7 @@ export function UploadModal({
         setIsProcessing(true);
         try {
             // Procesar archivos en paralelo
-            const promises = selectedFiles.map((f) => parseExcelFile(f.file));
+            const promises = selectedFiles.map((f) => parseExcelFile(f.file, { strictValidation }));
             const results = await Promise.all(promises);
 
             const allSchedules = results.flatMap(r => r.schedules);

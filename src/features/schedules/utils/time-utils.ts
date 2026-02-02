@@ -13,8 +13,10 @@ interface ParsedTime {
 /** Parsea tiempo desde serial de Excel o string a horas/minutos */
 export function parseTimeValue(value: string | number): ParsedTime {
     // Serial de Excel (fracción del día: 0.5 = 12:00, 0.75 = 18:00)
-    if (typeof value === "number") {
-        const totalMinutes = Math.round(value * 24 * 60);
+    // También maneja strings numéricos (ej: "0.75")
+    const numValue = Number(value);
+    if (!isNaN(numValue) && typeof value !== 'string') {
+        const totalMinutes = Math.round(numValue * 24 * 60);
         return {
             hours: Math.floor(totalMinutes / 60) % 24,
             minutes: totalMinutes % 60,
@@ -22,6 +24,15 @@ export function parseTimeValue(value: string | number): ParsedTime {
     }
 
     const text = safeString(value).trim();
+
+    // Si es un string numérico (ej: "0.708333") tratarlo como serial
+    if (!isNaN(Number(text)) && text.length > 0 && !text.includes(":")) {
+        const totalMinutes = Math.round(Number(text) * 24 * 60);
+        return {
+            hours: Math.floor(totalMinutes / 60) % 24,
+            minutes: totalMinutes % 60,
+        };
+    }
 
     // Intentar parsear formato AM/PM (ej: "2:30 PM", "8:00 a.m.")
     const ampmMatch = text.match(/(\d{1,2}):(\d{2})\s*(AM|PM|a\.m\.|p\.m\.)/i);

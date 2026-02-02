@@ -10,6 +10,7 @@ interface ScheduleDataState {
     // The new service returns { schedules, incidences }.
     // Let's keep them separated here to match previous structure, but source them from DB.
     incidences: DailyIncidence[];
+    incidencesVersion: number; // Incremented on every incidence mutation
 
     isLoading: boolean;
 
@@ -27,6 +28,7 @@ interface ScheduleDataState {
 export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
     baseSchedules: [],
     incidences: [],
+    incidencesVersion: 0,
     isLoading: false,
 
     setBaseSchedules: (schedules) => set({ baseSchedules: schedules }),
@@ -43,7 +45,11 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
             // "ScheduleDashboard (Cargar desde Supabase por fecha)".
 
             // Let's assume for now valid schedules from DB replace local state when explicitly fetching.
-            set({ baseSchedules: schedules, incidences });
+            set(state => ({
+                baseSchedules: schedules,
+                incidences,
+                incidencesVersion: state.incidencesVersion + 1
+            }));
         } catch (error) {
             console.error("Failed to fetch schedules", error);
             toast.error("Failed to load schedule data");
@@ -64,7 +70,10 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
                     i.start_time === newIncidence.start_time &&
                     i.instructor === newIncidence.instructor)
             );
-            return { incidences: [...filtered, newIncidence] };
+            return {
+                incidences: [...filtered, newIncidence],
+                incidencesVersion: state.incidencesVersion + 1
+            };
         });
 
         // DB Update
@@ -78,12 +87,18 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
 
             if (!wasUpdated) {
                 // Revert optimistic update - schedule doesn't exist in DB
-                set({ incidences: previousIncidences });
+                set(state => ({
+                    incidences: previousIncidences,
+                    incidencesVersion: state.incidencesVersion + 1
+                }));
                 throw new Error('SCHEDULE_NOT_PUBLISHED');
             }
         } catch (error) {
             // Revert optimistic update on any error
-            set({ incidences: previousIncidences });
+            set(state => ({
+                incidences: previousIncidences,
+                incidencesVersion: state.incidencesVersion + 1
+            }));
             throw error;
         }
     },

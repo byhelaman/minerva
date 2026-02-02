@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { CheckCircle2, HelpCircle, RefreshCw, MoreHorizontal, Hand, Plus, Undo2, CalendarDays, Clock2, ChevronDown, X } from "lucide-react";
+import { CheckCircle2, HelpCircle, RefreshCw, MoreHorizontal, Hand, Plus, Undo2, CalendarDays, Clock2, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
