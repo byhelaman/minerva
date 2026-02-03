@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { useAuth } from "@/components/auth-provider";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -25,7 +26,8 @@ import { INCIDENCE_PRESETS } from "../../constants/incidence-presets";
 import { InstructorSelector } from "./InstructorSelector";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
-import { Loader2 } from "lucide-react";
+import { BrushCleaning, Loader2, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 // Zod validation schema
 const incidenceFormSchema = z.object({
@@ -56,8 +58,11 @@ interface IncidenceModalProps {
 }
 
 export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: IncidenceModalProps) {
-    const { updateIncidence, incidences } = useScheduleDataStore();
+    const { updateIncidence, deleteIncidence, incidences } = useScheduleDataStore();
+    const { hasPermission } = useAuth();
+    const canEdit = hasPermission("schedules.manage");
     const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Get unique instructors from Supabase (Zoom users)
     const uniqueInstructors = useInstructors();
@@ -114,14 +119,14 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                     department: initialValues.department || "",
                 });
             } else {
-                // Priority 3: Reset to empty form
+                // Priority 3: Use schedule's existing fields (from Excel/computed) or defaults
                 form.reset({
-                    status: "Yes",
-                    type: "",
-                    subtype: "",
-                    substitute: "",
-                    description: "",
-                    department: "",
+                    status: schedule.status || "Yes",
+                    type: schedule.type || "",
+                    subtype: schedule.subtype || "",
+                    substitute: schedule.substitute || "",
+                    description: schedule.description || "",
+                    department: schedule.department || "",
                 });
             }
             setSelectedPreset(null);
@@ -192,7 +197,11 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
             console.error("Failed to save incidence:", error);
 
             if (error instanceof Error && error.message === 'SCHEDULE_NOT_PUBLISHED') {
-                toast.error("This schedule has not been published. Please publish it first before adding incidences.");
+                if (canEdit) {
+                    toast.error("This schedule has not been published. Please publish it first before adding incidences.");
+                } else {
+                    toast.error("Update failed. You lack permission to edit this schedule.");
+                }
             } else {
                 toast.error("Failed to save incidence");
             }
@@ -201,6 +210,40 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
         }
     };
 
+    const handleDelete = async () => {
+        if (!schedule || isDeleting) return;
+        setIsDeleting(true);
+        try {
+            await deleteIncidence({
+                date: schedule.date,
+                program: schedule.program,
+                start_time: schedule.start_time,
+                instructor: schedule.instructor,
+                shift: schedule.shift,
+                branch: schedule.branch,
+                end_time: schedule.end_time,
+                code: schedule.code,
+                minutes: schedule.minutes,
+                units: schedule.units,
+                type: "Novedad" // Dummy type to satisfy type checker, will be ignored by delete
+            });
+            onOpenChange(false);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    // Check if there is an actual incidence saved to show the delete button
+    const existingIncidence = schedule ? incidences.find(i =>
+        i.date === schedule.date &&
+        i.program === schedule.program &&
+        i.start_time === schedule.start_time &&
+        i.instructor === schedule.instructor &&
+        i.type // Ensure it has a type (active incidence)
+    ) : null;
+
     if (!schedule) return null;
 
 
@@ -208,9 +251,16 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="gap-6">
                 <DialogHeader>
-                    <DialogTitle>Incidence Details</DialogTitle>
+                    <div className="flex gap-2 items-center">
+                        <DialogTitle>Incidence Details</DialogTitle>
+                        {!canEdit && (
+                            <Badge variant="outline">
+                                Read Only
+                            </Badge>
+                        )}
+                    </div>
                     <DialogDescription>
-                        Update status and details for this class.
+                        {canEdit ? "Update status and details for this class." : "View details for this class. You do not have permission to edit."}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -239,6 +289,7 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                                             <FormControl>
                                                 <div className="flex items-center gap-2">
                                                     <Switch
+                                                        disabled={!canEdit}
                                                         checked={field.value === "Yes"}
                                                         onCheckedChange={(checked) => {
                                                             field.onChange(checked ? "Yes" : "No");
@@ -257,11 +308,11 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                                     <Label className="text-xs">Quick Presets</Label>
                                     <ToggleGroup
                                         type="single"
+                                        disabled={!canEdit}
                                         value={selectedPreset || ""}
                                         className="flex flex-wrap"
                                         spacing={2}
                                         onValueChange={(value) => {
-                                            // Si value es vacío o undefined, significa que se deseleccionó
                                             if (!value) {
                                                 form.reset({
                                                     status: "Yes",
@@ -275,7 +326,6 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                                                 return;
                                             }
 
-                                            // Si es el mismo preset, deseleccionar (toggle off)
                                             if (value === selectedPreset) {
                                                 form.reset({
                                                     status: "Yes",
@@ -289,7 +339,6 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                                                 return;
                                             }
 
-                                            // Aplicar nuevo preset
                                             const preset = INCIDENCE_PRESETS.find((preset) => preset.label === value);
                                             if (preset) {
                                                 applyPreset(preset);
@@ -308,8 +357,6 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                                             </ToggleGroupItem>
                                         ))}
                                     </ToggleGroup>
-                                    <div className="flex  gap-2">
-                                    </div>
                                 </div>
 
                                 {/* Substitute & Type */}
@@ -322,6 +369,7 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                                                 <FormLabel className="text-xs">Substitute</FormLabel>
                                                 <FormControl>
                                                     <InstructorSelector
+                                                        disabled={!canEdit}
                                                         value={field.value || ""}
                                                         onChange={(value, _email, _id) => field.onChange(value)}
                                                         instructors={uniqueInstructors}
@@ -338,7 +386,7 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                                         render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel className="text-xs">Type</FormLabel>
-                                                <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                                                <Select disabled={!canEdit} onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
                                                     <FormControl>
                                                         <SelectTrigger className="w-full">
                                                             <SelectValue placeholder="Select" />
@@ -349,6 +397,7 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                                                         <SelectItem value="Novedad">Novedad</SelectItem>
                                                         <SelectItem value="Programación">Programación</SelectItem>
                                                         <SelectItem value="Servicios">Servicios</SelectItem>
+                                                        <SelectItem value="Sistema">Sistema</SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                                 <FormMessage />
@@ -364,7 +413,7 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                                         render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel className="text-xs">Subtype</FormLabel>
-                                                <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                                                <Select disabled={!canEdit} onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
                                                     <FormControl>
                                                         <SelectTrigger className="w-full">
                                                             <SelectValue placeholder="Select" />
@@ -399,7 +448,7 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                                         render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel className="text-xs">Department</FormLabel>
-                                                <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                                                <Select disabled={!canEdit} onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
                                                     <FormControl>
                                                         <SelectTrigger className="w-full">
                                                             <SelectValue placeholder="Select" />
@@ -432,6 +481,7 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                                             <FormLabel className="text-xs">Description</FormLabel>
                                             <FormControl>
                                                 <Textarea
+                                                    disabled={!canEdit}
                                                     placeholder="Add details..."
                                                     rows={3}
                                                     className="resize-none"
@@ -444,14 +494,30 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                                 />
                             </div>
                         </ScrollArea>
-                        <DialogFooter className="mt-6">
-                            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-                                Cancel
-                            </Button>
-                            <Button type="submit" disabled={isSubmitting}>
-                                {isSubmitting && <Loader2 className="animate-spin" />}
-                                {isSubmitting ? "Saving..." : "Save Changes"}
-                            </Button>
+                        <DialogFooter className="mt-6 flex sm:justify-between gap-2">
+                            {canEdit && existingIncidence ? (
+                                <Button
+                                    variant="secondary"
+                                    onClick={handleDelete}
+                                    disabled={isDeleting}
+                                    className="border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
+                                >
+                                    {isDeleting ? <Loader2 className="animate-spin" /> : <BrushCleaning />}
+                                    <span className="sr-only">Delete</span>
+                                </Button>
+                            ) : <div></div>}
+
+                            <div className="flex gap-2 justify-end flex-1">
+                                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+                                    {canEdit ? "Cancel" : "Close"}
+                                </Button>
+                                {canEdit && (
+                                    <Button type="submit" disabled={isSubmitting}>
+                                        {isSubmitting && <Loader2 className="animate-spin" />}
+                                        {isSubmitting ? "Saving..." : "Save Changes"}
+                                    </Button>
+                                )}
+                            </div>
                         </DialogFooter>
                     </form>
                 </Form>

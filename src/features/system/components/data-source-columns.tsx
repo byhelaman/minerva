@@ -58,7 +58,7 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDe
     },
     {
         accessorKey: "branch",
-        size: 140,
+        size: 120,
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="branch" />
         ),
@@ -70,7 +70,7 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDe
     },
     {
         accessorKey: "start_time",
-        size: 150,
+        size: 130,
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="time" className="justify-center" />
         ),
@@ -142,7 +142,10 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDe
         ),
         cell: ({ row }) => (
             <div className="text-center">{row.getValue("status")}</div>
-        )
+        ),
+        filterFn: (row, id, value) => {
+            return value.includes(row.getValue(id));
+        },
     },
     {
         accessorKey: "substitute",
@@ -154,11 +157,14 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDe
     },
     {
         accessorKey: "type",
-        size: 100,
+        size: 150,
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="type" />
         ),
-        cell: ({ row }) => <div className="text-center">{row.getValue("type")}</div>,
+        cell: ({ row }) => <div>{row.getValue("type")}</div>,
+        filterFn: (row, id, value) => {
+            return value.includes(row.getValue(id));
+        },
     },
     {
         accessorKey: "subtype",

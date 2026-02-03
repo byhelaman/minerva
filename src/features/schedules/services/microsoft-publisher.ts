@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { extractYearMonth } from '@/lib/utils';
+// import { extractYearMonth } from '@/lib/utils';
 import { DailyIncidence, Schedule, SchedulesConfig } from '../types';
 import { scheduleEntriesService } from './schedule-entries-service';
 
@@ -27,12 +27,13 @@ function toExcelColumnWidths(
  * @param onStatusUpdate Optional callback for status messages
  */
 export async function publishScheduleToExcel(
-    config: SchedulesConfig,
-    activeDate: string,
-    computedSchedules: (Schedule | DailyIncidence)[],
-    onStatusUpdate?: (msg: string) => void
+    _config: SchedulesConfig,
+    _activeDate: string,
+    _computedSchedules: (Schedule | DailyIncidence)[],
+    _onStatusUpdate?: (msg: string) => void
 ): Promise<void> {
 
+    /* ONLY INCIDENCES LOG IS ACTIVE
     const notify = (msg: string) => {
         if (onStatusUpdate) onStatusUpdate(msg);
     };
@@ -41,11 +42,9 @@ export async function publishScheduleToExcel(
         throw new Error('Microsoft account not connected');
     }
 
-    // 1. Sync Incidences Log - REMOVED (Handled via DB Sync)
-    // The legacy file-based incidence logging is deprecated.
-
-
-    // 2. Publish Daily Schedule File
+    // ... (rest of the code commented out)
+    
+     // 2. Publish Daily Schedule File
     if (config.schedulesFolderId && activeDate) {
         const { year, month } = extractYearMonth(activeDate);
 
@@ -217,6 +216,7 @@ export async function publishScheduleToExcel(
             throw new Error(`Sync warning: ${tableError.message}`);
         }
     }
+    */
 }
 
 /**
@@ -257,42 +257,54 @@ export async function publishIncidencesToExcel(
     ]);
 
     const values = [headers, ...dataRows];
+    // Prioritize Table ID from config, then File ID
     const fileId = config.incidencesFileId;
+    const targetTableId = config.incidencesTableId;
 
     notify('Checking incidences file...');
 
-    // List existing content (tables/sheets)
+    // 1. List valid tables to verify existence or find a fallback
     const { data: content, error: contentError } = await supabase.functions.invoke('microsoft-graph', {
         body: { action: 'list-content', fileId }
     });
     if (contentError) throw contentError;
 
     const items = content.value as { id: string; name: string; type: string }[];
-    const existingTable = items.find(i => i.type === 'table');
 
-    if (existingTable) {
-        // Replace existing table data
-        notify('Replacing incidences data...');
+    // Determine which table to use
+    // A. Use Configured Table ID if it exists in the file
+    let activeTable = targetTableId ? items.find(i => i.id === targetTableId && i.type === 'table') : null;
 
-        // Get the sheet that contains this table to use as anchor
-        const existingSheet = items.find(i => i.type === 'sheet');
+    // B. Fallback: Use the FIRST table found (if no specific table linked)
+    if (!activeTable) {
+        activeTable = items.find(i => i.type === 'table');
+    }
 
-        const { error: replaceError } = await supabase.functions.invoke('microsoft-graph', {
+    if (activeTable) {
+        // Smart Sync: Upsert rows based on keys to preserve history
+        notify(`Smart Syncing to table '${activeTable.name}'...`);
+
+        // Key columns to identify unique rows: Date + Program + StartTime + Instructor
+        const keyColumns = ["date", "program", "start_time", "instructor"];
+
+        const { error: upsertError } = await supabase.functions.invoke('microsoft-graph', {
             body: {
-                action: 'replace-table-data',
+                action: 'upsert-rows-by-key',
                 fileId,
-                tableId: existingTable.id,
-                sheetId: existingSheet?.id,
-                values,
-                range: 'B2'
+                tableId: activeTable.id,
+                values: values, // Includes headers
+                keyColumns: keyColumns,
+                range: 'B2' // Explicitly match the table start
             }
         });
-        if (replaceError) throw replaceError;
+
+        if (upsertError) throw upsertError;
+        notify('Smart Sync complete.');
     } else {
         // No table exists — write data and create a table
         notify('Creating incidences table...');
 
-        // Use the first sheet
+        // Use the first sheet or configured worksheet (if we added that logic, here we just find first sheet)
         const sheet = items.find(i => i.type === 'sheet');
         if (!sheet) throw new Error('No worksheet found in incidences file');
 

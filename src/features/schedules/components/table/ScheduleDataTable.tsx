@@ -57,6 +57,10 @@ interface ScheduleDataTableProps<TData, TValue> {
     isPublishing?: boolean;
     canPublish?: boolean;
     initialColumnVisibility?: VisibilityState;
+    showTypeFilter?: boolean;
+    hideStatusFilter?: boolean;
+    customActionItems?: React.ReactNode;
+    hideDefaultActions?: boolean;
 }
 
 export function ScheduleDataTable<TData, TValue>({
@@ -115,23 +119,18 @@ export function ScheduleDataTable<TData, TValue>({
         }
     }, [props.showLiveMode, props.liveTimeFilter, props.liveDateFilter]);
 
-    // Función para agregar un status al filtro de status
+    // Función para agregar un status al filtro de status (solo expande filtros existentes)
     const addStatusFilter = React.useCallback((status: string) => {
         setColumnFilters(prev => {
             const statusFilter = prev.find(f => f.id === 'status');
-            if (statusFilter) {
-                const currentValues = statusFilter.value as string[];
-                if (!currentValues.includes(status)) {
-                    return prev.map(f =>
-                        f.id === 'status'
-                            ? { ...f, value: [...currentValues, status] }
-                            : f
-                    );
-                }
-                return prev;
-            }
-            // Si no hay filtro de status activo, crear uno nuevo con el status
-            return [...prev, { id: 'status', value: [status] }];
+            if (!statusFilter) return prev; // No crear filtro si no hay uno activo
+            const currentValues = statusFilter.value as string[];
+            if (currentValues.includes(status)) return prev;
+            return prev.map(f =>
+                f.id === 'status'
+                    ? { ...f, value: [...currentValues, status] }
+                    : f
+            );
         });
     }, []);
 
@@ -275,6 +274,10 @@ export function ScheduleDataTable<TData, TValue>({
                 onPublish={onPublish}
                 isPublishing={isPublishing}
                 canPublish={canPublish}
+                showTypeFilter={props.showTypeFilter}
+                hideStatusFilter={props.hideStatusFilter}
+                customActionItems={props.customActionItems}
+                hideDefaultActions={props.hideDefaultActions}
             />
 
             {/* Table */}

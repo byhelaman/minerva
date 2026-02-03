@@ -255,6 +255,7 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
                 matchedCandidate: r.matchedCandidate,
                 ambiguousCandidates: r.ambiguousCandidates,
                 manualMode: r.manualMode,
+                originalStatus: r.originalState?.status,
                 found_instructor: r.found_instructor
             };
         });
@@ -383,6 +384,7 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
                             hideOverlaps={true}
                             disableRefresh={isExecuting}
                             initialPageSize={100}
+                            hideStatusFilter={false}
                         />
                     )}
                 </div>

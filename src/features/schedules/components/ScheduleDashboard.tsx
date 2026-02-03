@@ -75,6 +75,8 @@ export function ScheduleDashboard() {
                         setBaseSchedules(parsedData);
                         if (parsedData.length > 0 && parsedData[0].date) {
                             setActiveDate(parsedData[0].date);
+                            // Also fetch incidences from DB without overwriting the draft
+                            useScheduleDataStore.getState().fetchIncidencesForDate(parsedData[0].date);
                         }
                         toast.success("Draft schedule restored");
                     }

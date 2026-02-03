@@ -25,6 +25,7 @@ export interface AssignmentRow extends Schedule {
     matchedCandidate?: ZoomMeetingCandidate; // Assigned meeting details
     ambiguousCandidates?: ZoomMeetingCandidate[]; // List of ambiguous options
     manualMode?: boolean; // Habilita edición manual de checkbox e instructor
+    originalStatus?: 'assigned' | 'to_update' | 'not_found' | 'ambiguous' | 'manual'; // Status antes de edición manual
     found_instructor?: { id: string; email: string; display_name: string }; // Instructor encontrado en Zoom
 }
 
@@ -148,7 +149,12 @@ export const getAssignmentColumns = (
                 />
             ),
             filterFn: (row, id, value) => {
-                return value.includes(row.getValue(id));
+                if (value.includes(row.getValue(id))) return true;
+                // Mantener filas en edición activa visibles si su status original coincide con el filtro
+                if (row.original.manualMode && row.original.originalStatus) {
+                    return value.includes(row.original.originalStatus);
+                }
+                return false;
             },
             enableGlobalFilter: false,
         },

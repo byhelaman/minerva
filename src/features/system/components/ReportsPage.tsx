@@ -8,7 +8,7 @@ import { IncidenceModal } from "@/features/schedules/components/modals/Incidence
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Loader2, Upload, CloudUpload } from "lucide-react";
+import { CalendarIcon, Loader2, CloudUpload, RefreshCcw, DatabaseBackup, CalendarDays, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -20,8 +20,9 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-    AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { RequirePermission } from "@/components/RequirePermission";
 
 import { scheduleEntriesService } from "@/features/schedules/services/schedule-entries-service";
 import { useScheduleSyncStore } from "@/features/schedules/stores/useScheduleSyncStore";
@@ -49,6 +50,8 @@ export function ReportsPage() {
 
     // Sync store
     const { isSyncing, syncToExcel, msConfig, refreshMsConfig } = useScheduleSyncStore();
+
+    const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
 
     // Keep data store in sync for IncidenceModal
     const { setBaseSchedules } = useScheduleDataStore();
@@ -98,15 +101,20 @@ export function ReportsPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [incidencesVersion]);
 
+    // State for delete confirmation
+    const [scheduleToDelete, setScheduleToDelete] = useState<Schedule | null>(null);
+
     // Build columns with row click handler
-    const columns: ColumnDef<Schedule | DailyIncidence>[] = getDataSourceColumns(() => {
-        // onDelete not needed here — we pass undefined
-    }).map(col => {
+    const columns: ColumnDef<Schedule | DailyIncidence>[] = getDataSourceColumns(
+        // Pass delete handler
+        (schedule) => setScheduleToDelete(schedule)
+    ).map(col => {
         // Skip select and actions columns — they don't need click handlers
         if (col.id === "select" || col.id === "actions") return col;
 
         // Wrap cell renderer to add click-to-edit
         const originalCell = col.cell;
+        // ... (rest is same)
         return {
             ...col,
             cell: (props: any) => {
@@ -158,12 +166,13 @@ export function ReportsPage() {
                                 variant="outline"
                                 size="sm"
                                 className={cn(
-                                    "justify-start text-left font-normal",
-                                    !selectedDate && "text-muted-foreground"
+                                    "justify-start text-left font-normal gap-2",
+                                    !selectedDate && "text-muted-foreground",
                                 )}
                             >
-                                <CalendarIcon />
-                                {format(selectedDate, "PPP")}
+                                <CalendarDays className="opacity-50" />
+                                {format(selectedDate, "dd/MM/yyyy")}
+                                <ChevronDown className="opacity-50" />
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="end">
@@ -179,29 +188,10 @@ export function ReportsPage() {
 
 
                     {/* Import Schedules (UI Only) */}
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setUploadModalOpen(true)}
-                    >
-                        <CloudUpload />
-                        Upload Data
-                    </Button>
+                    {/* Moved to Table Actions */}
 
                     {/* Sync to Excel */}
-                    <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button
-                                disabled={isSyncing || !canSync || !hasData}
-                                size="sm"
-                            >
-                                {isSyncing && (
-                                    <Loader2 className="animate-spin" />
-                                )}
-                                <Upload />
-                                {isSyncing ? "Syncing..." : "Sync to Excel"}
-                            </Button>
-                        </AlertDialogTrigger>
+                    <AlertDialog open={confirmSyncOpen} onOpenChange={setConfirmSyncOpen}>
                         <AlertDialogContent>
                             <AlertDialogHeader>
                                 <AlertDialogTitle>Sync to Excel?</AlertDialogTitle>
@@ -212,7 +202,10 @@ export function ReportsPage() {
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleSync}>
+                                <AlertDialogAction onClick={() => {
+                                    handleSync();
+                                    setConfirmSyncOpen(false);
+                                }}>
                                     Confirm Sync
                                 </AlertDialogAction>
                             </AlertDialogFooter>
@@ -240,8 +233,40 @@ export function ReportsPage() {
                             data={tableData}
                             hideFilters={true}
                             hideUpload={true}
-                            hideActions={true}
                             hideOverlaps={true}
+                            hideDefaultActions={true}
+                            customActionItems={
+                                <>
+                                    <RequirePermission permission="schedules.manage">
+                                        <DropdownMenuItem onClick={() => setUploadModalOpen(true)}>
+                                            <CloudUpload />
+                                            Upload Data
+                                        </DropdownMenuItem>
+                                    </RequirePermission>
+
+                                    <DropdownMenuItem
+                                        disabled={isSyncing || !canSync || !hasData}
+                                        onClick={() => {
+                                            setConfirmSyncOpen(true);
+                                        }}
+                                    >
+                                        {isSyncing ? (
+                                            <Loader2 className="animate-spin" />
+                                        ) : (
+                                            <DatabaseBackup />
+                                        )}
+                                        {isSyncing ? "Syncing..." : "Sync to Excel"}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+
+                                    <RequirePermission permission="schedules.manage">
+                                        <DropdownMenuItem onClick={() => fetchData()} disabled={isLoading}>
+                                            <RefreshCcw className={cn(isLoading && "animate-spin")} />
+                                            Refresh Table
+                                        </DropdownMenuItem>
+                                    </RequirePermission>
+                                </>
+                            }
                             initialColumnVisibility={{
                                 shift: false,
                                 end_time: false,
@@ -249,13 +274,14 @@ export function ReportsPage() {
                                 minutes: false,
                                 units: false,
                                 substitute: false,
+                                subtype: false,
                                 description: false,
                                 department: false,
                                 feedback: false,
                             }}
                             initialPageSize={100}
-                            onRefresh={fetchData}
-                            disableRefresh={isLoading}
+                            showTypeFilter={true}
+                            hideStatusFilter={true}
                         />
                     </div>
                 )}
@@ -287,6 +313,38 @@ export function ReportsPage() {
                 data={importedData}
                 onConfirm={fetchData}
             />
+
+            {/* Delete Schedule Confirmation */}
+            <AlertDialog open={!!scheduleToDelete} onOpenChange={(open) => !open && setScheduleToDelete(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Schedule Entry?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete this class from the schedule?
+                            <br />
+                            <span className="font-medium my-2 block">
+                                {scheduleToDelete?.program} <br />
+                                {scheduleToDelete?.start_time} - {scheduleToDelete?.end_time} <br />
+                                {scheduleToDelete?.instructor}
+                            </span>
+                            This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            className="border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
+                            onClick={async () => {
+                                if (scheduleToDelete) {
+                                    await useScheduleDataStore.getState().deleteSchedule(scheduleToDelete);
+                                    setScheduleToDelete(null);
+                                }
+                            }}>
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

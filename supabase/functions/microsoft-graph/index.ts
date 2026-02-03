@@ -733,6 +733,22 @@ serve(async (req: Request) => {
                 throw new Error(err.error?.message || 'Failed to write upserted data')
             }
 
+            // 3. Resize Table (Crucial for adding new rows)
+            if (tableId) {
+                // If we wrote to a sheet range, the Table Object might not auto-resize.
+                // We must explicitly tell the table to embrace the new range.
+                const resizeUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/tables/${tableId}/resize`
+                await fetch(resizeUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`, // Use fresh token if needed, usually same token ok
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ targetRange: calculatedRange })
+                })
+                // We ignore resize errors (e.g. if range overlaps another table) as the data is at least written.
+            }
+
             return new Response(JSON.stringify({ success: true, count: finalValues.length }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             })

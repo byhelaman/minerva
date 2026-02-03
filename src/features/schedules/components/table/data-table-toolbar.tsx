@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { secureSaveFile } from "@/lib/secure-export";
 import { type Table } from "@tanstack/react-table";
-import { Search, X, ChevronDown, User, CalendarCheck, Download, Save, Trash2, XCircle, RefreshCw, BadgeCheckIcon, HelpCircle, Hand, Clock1, Clock2, Clock3, Clock4, Clock5, Clock6, Clock7, Clock8, Clock9, Clock10, Clock11, Clock12, Radio, Loader2, AlertTriangle, CloudUpload, CloudDownload } from "lucide-react";
+import { Search, X, ChevronDown, User, CalendarCheck, Download, Save, Trash2, XCircle, RefreshCw, HelpCircle, Hand, Clock1, Clock2, Clock3, Clock4, Clock5, Clock6, Clock7, Clock8, Clock9, Clock10, Clock11, Clock12, Radio, Loader2, AlertTriangle, CloudUpload, CloudDownload, MonitorCog, Info, Wrench, BadgeCheck } from "lucide-react";
 import { utils, write } from "xlsx";
 import { toast } from "sonner";
 import { writeTextFile, BaseDirectory } from "@tauri-apps/plugin-fs";
@@ -48,11 +48,20 @@ const branchOptions = [
 ];
 
 const defaultStatusOptions = [
-    { label: "Assigned", value: "assigned", icon: BadgeCheckIcon },
+    { label: "Assigned", value: "assigned", icon: BadgeCheck },
     { label: "To Update", value: "to_update", icon: RefreshCw },
     { label: "Not Found", value: "not_found", icon: XCircle },
     { label: "Ambiguous", value: "ambiguous", icon: HelpCircle },
     { label: "Manual", value: "manual", icon: Hand },
+];
+
+// Incidence type options
+const incidenceTypeOptions = [
+    { label: "Instructor", value: "Instructor", icon: User },
+    { label: "Novedad", value: "Novedad", icon: Info },
+    { label: "Programación", value: "Programación", icon: CalendarCheck },
+    { label: "Servicios", value: "Servicios", icon: Wrench },
+    { label: "Sistema", value: "Sistema", icon: MonitorCog },
 ];
 
 // Mapeo de hora a icono de reloj (usa hora en formato 12h)
@@ -103,6 +112,10 @@ interface DataTableToolbarProps<TData> {
     onPublish?: () => void;
     isPublishing?: boolean;
     canPublish?: boolean;
+    showTypeFilter?: boolean;
+    hideStatusFilter?: boolean;
+    customActionItems?: React.ReactNode;
+    hideDefaultActions?: boolean;
 }
 
 export function DataTableToolbar<TData>({
@@ -126,6 +139,10 @@ export function DataTableToolbar<TData>({
     onPublish,
     isPublishing = false,
     canPublish = false,
+    showTypeFilter = false,
+    hideStatusFilter = false,
+    customActionItems,
+    hideDefaultActions = false,
 }: DataTableToolbarProps<TData>) {
     const isFiltered =
         table.getState().columnFilters.length > 0 ||
@@ -156,6 +173,24 @@ export function DataTableToolbar<TData>({
                 icon: getClockIcon(hour),
             }));
     }, [fullData]);
+
+    // Determine if we should show incidence type filter based on data
+    // If data contains incidence types (Instructor, Novedad, etc.), show type filter options
+    const hasIncidenceData = useMemo(() => {
+        const data = fullData as (Schedule & { type?: string })[];
+        if (!data || data.length === 0) return false;
+
+        // Check if any row has a type value (incidence data)
+        return data.some((item) => item.type);
+    }, [fullData]);
+
+    // Resolve status options - use default assignment options unless custom provided
+    const resolvedStatusOptions = useMemo(() => {
+        if (statusOptions !== defaultStatusOptions) {
+            return statusOptions;
+        }
+        return statusOptions;
+    }, [statusOptions]);
 
     const hasSchedules = table.getFilteredRowModel().rows.length > 0;
     const isTableEmpty = !fullData || fullData.length === 0;
@@ -365,13 +400,25 @@ export function DataTableToolbar<TData>({
                     </InputGroup>
 
                     {/* Safe check for Status column to avoid console errors if it doesn't exist */}
-                    {(() => {
+                    {!hideStatusFilter && !hasIncidenceData && (() => {
                         const statusColumn = table.getAllColumns().find(c => c.id === "status");
                         return statusColumn && statusColumn.getCanFilter() ? (
                             <DataTableFacetedFilter
                                 column={statusColumn}
                                 title="Status"
-                                options={statusOptions}
+                                options={resolvedStatusOptions}
+                            />
+                        ) : null;
+                    })()}
+
+                    {/* Type filter for incidence data */}
+                    {(hasIncidenceData || showTypeFilter) && (() => {
+                        const typeColumn = table.getAllColumns().find(c => c.id === "type");
+                        return typeColumn && typeColumn.getCanFilter() ? (
+                            <DataTableFacetedFilter
+                                column={typeColumn}
+                                title="Type"
+                                options={incidenceTypeOptions}
                             />
                         ) : null;
                     })()}
@@ -432,24 +479,26 @@ export function DataTableToolbar<TData>({
                 <div className="flex items-center gap-2">
                     {/* Live Mode Toggle */}
                     {setShowLiveMode && (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setShowLiveMode(!showLiveMode)}
-                            disabled={isLiveLoading || isTableEmpty}
-                            className={cn(
-                                "h-8 border-dashed",
-                                showLiveMode &&
-                                "border-green-500/50 bg-green-500/10 text-green-600 hover:bg-green-500/20 hover:text-green-600 hover:border-green-500/50 dark:border-green-500/50 dark:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20 dark:hover:text-green-400"
-                            )}
-                        >
-                            {isLiveLoading ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                                <Radio className={cn("h-4 w-4", showLiveMode && "animate-pulse")} />
-                            )}
-                            {showLiveMode && activeMeetingsCount > 0 ? `Live (${activeMeetingsCount})` : "Live"}
-                        </Button>
+                        <RequirePermission permission="meetings.search">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setShowLiveMode(!showLiveMode)}
+                                disabled={isLiveLoading || isTableEmpty}
+                                className={cn(
+                                    "h-8 border-dashed",
+                                    showLiveMode &&
+                                    "border-green-500/50 bg-green-500/10 text-green-600 hover:bg-green-500/20 hover:text-green-600 hover:border-green-500/50 dark:border-green-500/50 dark:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20 dark:hover:text-green-400"
+                                )}
+                            >
+                                {isLiveLoading ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Radio className={cn("h-4 w-4", showLiveMode && "animate-pulse")} />
+                                )}
+                                {showLiveMode && activeMeetingsCount > 0 ? `Live (${activeMeetingsCount})` : "Live"}
+                            </Button>
+                        </RequirePermission>
                     )}
                     <DataTableViewOptions table={table} />
                     {onRefresh && (
@@ -471,36 +520,43 @@ export function DataTableToolbar<TData>({
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="start">
-                                <DropdownMenuItem onClick={handleCopyInstructors} disabled={!hasSchedules}>
-                                    <User />
-                                    Copy Instructors
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={handleCopySchedule} disabled={!hasSchedules}>
-                                    <CalendarCheck />
-                                    Copy Schedule
-                                </DropdownMenuItem>
-                                <RequirePermission permission="schedules.manage">
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={onPublish} disabled={!canPublish || isPublishing}>
-                                        {isPublishing ? <Loader2 className="animate-spin" /> : <CloudUpload />}
-                                        {isPublishing ? "Publishing..." : "Publish Schedule"}
-                                    </DropdownMenuItem>
-                                </RequirePermission>
-                                <RequirePermission permission="schedules.manage">
-                                    <DropdownMenuItem onClick={handleCheckCloud} disabled={isCheckingCloud}>
-                                        {isCheckingCloud ? <Loader2 className="animate-spin" /> : <CloudDownload />}
-                                        {isCheckingCloud ? "Checking..." : "Check the Cloud"}
-                                    </DropdownMenuItem>
-                                </RequirePermission>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={onSaveSchedule} disabled={!hasSchedules}>
-                                    <Save />
-                                    Save Schedule
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={onExportExcel} disabled={!hasSchedules}>
-                                    <Download />
-                                    Export to Excel
-                                </DropdownMenuItem>
+                                {customActionItems}
+                                {customActionItems && !hideDefaultActions && <DropdownMenuSeparator />}
+
+                                {!hideDefaultActions && (
+                                    <>
+                                        <DropdownMenuItem onClick={handleCopyInstructors} disabled={!hasSchedules}>
+                                            <User />
+                                            Copy Instructors
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={handleCopySchedule} disabled={!hasSchedules}>
+                                            <CalendarCheck />
+                                            Copy Schedule
+                                        </DropdownMenuItem>
+                                        <RequirePermission permission="schedules.manage">
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem onClick={onPublish} disabled={!canPublish || isPublishing}>
+                                                {isPublishing ? <Loader2 className="animate-spin" /> : <CloudUpload />}
+                                                {isPublishing ? "Publishing..." : "Publish Schedule"}
+                                            </DropdownMenuItem>
+                                        </RequirePermission>
+                                        <RequirePermission permission="schedules.manage">
+                                            <DropdownMenuItem onClick={handleCheckCloud} disabled={isCheckingCloud}>
+                                                {isCheckingCloud ? <Loader2 className="animate-spin" /> : <CloudDownload />}
+                                                {isCheckingCloud ? "Checking..." : "Check the Cloud"}
+                                            </DropdownMenuItem>
+                                        </RequirePermission>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={onSaveSchedule} disabled={!hasSchedules}>
+                                            <Save />
+                                            Save Schedule
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={onExportExcel} disabled={!hasSchedules}>
+                                            <Download />
+                                            Export to Excel
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
 
                                 {onClearSchedule && (
                                     <>

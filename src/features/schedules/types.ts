@@ -37,4 +37,8 @@ export interface SchedulesConfig {
     incidencesFileId: string | null;
     schedulesFolderName: string | null;
     incidencesFileName: string | null;
+    incidencesWorksheetId: string | null;
+    incidencesWorksheetName: string | null;
+    incidencesTableId: string | null;
+    incidencesTableName: string | null;
 }

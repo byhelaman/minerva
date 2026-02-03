@@ -7,7 +7,7 @@ import { PublishedSchedule, SchedulesConfig } from '../types';
 import { scheduleEntriesService } from '../services/schedule-entries-service';
 import { useScheduleDataStore } from './useScheduleDataStore';
 import { useScheduleUIStore } from './useScheduleUIStore';
-import { mergeSchedulesWithIncidences } from '../utils/merge-utils';
+// import { mergeSchedulesWithIncidences } from '../utils/merge-utils';
 
 interface ScheduleSyncState {
     // MS Config State
@@ -54,7 +54,11 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
         schedulesFolderId: null,
         incidencesFileId: null,
         schedulesFolderName: null,
-        incidencesFileName: null
+        incidencesFileName: null,
+        incidencesWorksheetId: null,
+        incidencesWorksheetName: null,
+        incidencesTableId: null,
+        incidencesTableName: null
     },
     isPublishing: false,
     isSyncing: false,
@@ -87,7 +91,11 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
                     schedulesFolderId: data.account.schedules_folder?.id,
                     incidencesFileId: data.account.incidences_file?.id,
                     schedulesFolderName: data.account.schedules_folder?.name,
-                    incidencesFileName: data.account.incidences_file?.name
+                    incidencesFileName: data.account.incidences_file?.name,
+                    incidencesWorksheetId: data.account.incidences_worksheet?.id,
+                    incidencesWorksheetName: data.account.incidences_worksheet?.name,
+                    incidencesTableId: data.account.incidences_table?.id,
+                    incidencesTableName: data.account.incidences_table?.name
                 }
             });
         }
@@ -171,20 +179,22 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
 
         try {
             // 1. Fetch schedule entries for this date from Supabase
-            const { schedules, incidences } = await scheduleEntriesService.getSchedulesByDate(targetDate);
+            // const { schedules, incidences } = await scheduleEntriesService.getSchedulesByDate(targetDate);
 
             // Merge incidences on top of base schedules
-            const computedSchedules = mergeSchedulesWithIncidences(schedules, incidences);
+            // const computedSchedules = mergeSchedulesWithIncidences(schedules, incidences);
 
             // 2. Publish daily schedule sheet (monthly file)
-            const { publishScheduleToExcel, publishIncidencesToExcel } = await import('../services/microsoft-publisher');
+            const { /* publishScheduleToExcel, */ publishIncidencesToExcel } = await import('../services/microsoft-publisher');
 
+            /*
             await publishScheduleToExcel(
                 msConfig,
                 targetDate,
                 computedSchedules,
                 (msg) => toast.loading(msg, { id: toastId })
             );
+            */
 
             // 3. Publish consolidated incidences file
             if (msConfig.incidencesFileId) {

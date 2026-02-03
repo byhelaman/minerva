@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { AlertCircle, BadgeCheckIcon, XCircle, RefreshCw, HelpCircle, Hand } from "lucide-react";
+import { AlertCircle, XCircle, RefreshCw, HelpCircle, Hand, BadgeCheck } from "lucide-react";
 import { AssignmentRow } from "../assignment-columns";
 import { ZoomMeetingCandidate } from "@/features/matching/services/matcher";
 import { Row } from "@tanstack/react-table";
@@ -19,7 +19,6 @@ export function StatusCell({
     hostMap,
     onSelectCandidate,
     onDeselectCandidate,
-    onAddStatusFilter
 }: StatusCellProps) {
     const status = row.getValue("status") as string;
     const matched = row.original.matchedCandidate;
@@ -29,7 +28,7 @@ export function StatusCell({
     if (status === 'assigned') {
         badge = (
             <Badge variant="outline" className="border-green-600 text-green-600 bg-green-50 dark:bg-green-950/20 dark:border-green-500 dark:text-green-400 cursor-pointer hover:bg-green-100 user-select-none">
-                <BadgeCheckIcon />
+                <BadgeCheck />
                 Assigned
             </Badge>
         );
@@ -127,10 +126,6 @@ export function StatusCell({
                                                         onDeselectCandidate(row.original.id);
                                                     } else if (!isSelected && onSelectCandidate) {
                                                         onSelectCandidate(row.original.id, cand);
-                                                        // Agregar 'manual' al filtro de status
-                                                        if (onAddStatusFilter) {
-                                                            onAddStatusFilter('manual');
-                                                        }
                                                     }
                                                 }}
                                             >

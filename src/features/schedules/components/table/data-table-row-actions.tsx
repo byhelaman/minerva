@@ -59,7 +59,7 @@ export function DataTableRowActions({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                     align="end"
-                    className="w-[200px]"
+                    className="w-[160px]"
                     onCloseAutoFocus={(e) => e.preventDefault()}
                 >
                     <DropdownMenuItem onClick={handleViewDetails}>

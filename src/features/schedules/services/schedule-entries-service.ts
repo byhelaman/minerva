@@ -267,5 +267,17 @@ export const scheduleEntriesService = {
             .eq('date', date);
 
         if (error) throw error;
+    },
+
+    /**
+     * Delete a specific schedule entry.
+     */
+    async deleteScheduleEntry(key: { date: string, program: string, start_time: string, instructor: string }) {
+        const { error } = await supabase
+            .from('schedule_entries')
+            .delete()
+            .match(key);
+
+        if (error) throw error;
     }
 };

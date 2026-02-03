@@ -167,7 +167,7 @@ async function handleStatus(req: Request, corsHeaders: Record<string, string>): 
 
     const { data: account, error } = await supabase
         .from('microsoft_account')
-        .select('microsoft_email, microsoft_name, expires_at, connected_at, schedules_folder_id, schedules_folder_name, incidences_file_id, incidences_file_name')
+        .select('microsoft_email, microsoft_name, expires_at, connected_at, schedules_folder_id, schedules_folder_name, incidences_file_id, incidences_file_name, incidences_worksheet_id, incidences_worksheet_name, incidences_table_id, incidences_table_name')
         .single()
 
     if (error || !account) {
@@ -191,6 +191,14 @@ async function handleStatus(req: Request, corsHeaders: Record<string, string>): 
             incidences_file: {
                 id: account.incidences_file_id,
                 name: account.incidences_file_name
+            },
+            incidences_worksheet: {
+                id: account.incidences_worksheet_id,
+                name: account.incidences_worksheet_name
+            },
+            incidences_table: {
+                id: account.incidences_table_id,
+                name: account.incidences_table_name
             }
         }
     }), {
@@ -203,13 +211,17 @@ interface UpdateConfigBody {
     type: 'schedules_folder' | 'incidences_file';
     id: string;
     name: string;
+    worksheet_id?: string;
+    worksheet_name?: string;
+    table_id?: string;
+    table_name?: string;
 }
 
 async function handleUpdateConfig(req: Request, body: UpdateConfigBody, corsHeaders: Record<string, string>): Promise<Response> {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
     await verifyPermission(req, supabase, 'system.manage')
 
-    const { type, id, name } = body
+    const { type, id, name, worksheet_id, worksheet_name, table_id, table_name } = body
 
     if (!type || !id || !name) {
         return new Response(JSON.stringify({ error: 'Missing type, id or name' }), {
@@ -220,7 +232,11 @@ async function handleUpdateConfig(req: Request, body: UpdateConfigBody, corsHead
     const { error } = await supabase.rpc('update_microsoft_config', {
         p_type: type,
         p_id: id,
-        p_name: name
+        p_name: name,
+        p_worksheet_id: worksheet_id || null,
+        p_worksheet_name: worksheet_name || null,
+        p_table_id: table_id || null,
+        p_table_name: table_name || null
     })
 
     if (error) {

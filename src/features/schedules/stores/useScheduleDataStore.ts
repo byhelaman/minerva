@@ -20,6 +20,9 @@ interface ScheduleDataState {
     // DB Actions
     fetchSchedulesForDate: (date: string) => Promise<void>;
     updateIncidence: (incidence: DailyIncidence) => Promise<void>;
+    deleteIncidence: (incidence: DailyIncidence) => Promise<void>;
+    fetchIncidencesForDate: (date: string) => Promise<void>;
+    deleteSchedule: (schedule: Schedule) => Promise<void>;
 
     // Computed (Keep for compatibility if needed, but logic changes)
     getComputedSchedules: () => (Schedule | DailyIncidence)[];
@@ -55,6 +58,119 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
             toast.error("Failed to load schedule data");
         } finally {
             set({ isLoading: false });
+        }
+    },
+
+    fetchIncidencesForDate: async (date: string) => {
+        // Non-destructive fetch: only updates incidences, keeps base schedules (e.g. drafts)
+        set({ isLoading: true });
+        try {
+            const { incidences } = await scheduleEntriesService.getSchedulesByDate(date);
+            set(state => ({
+                incidences,
+                incidencesVersion: state.incidencesVersion + 1
+            }));
+        } catch (error) {
+            console.error("Failed to fetch incidences", error);
+        } finally {
+            set({ isLoading: false });
+        }
+    },
+
+    deleteIncidence: async (incidence: DailyIncidence) => {
+        const previousIncidences = get().incidences;
+
+        // Optimistic update: Remove from local state
+        set(state => ({
+            incidences: state.incidences.filter(i =>
+                !(i.date === incidence.date &&
+                    i.program === incidence.program &&
+                    i.start_time === incidence.start_time &&
+                    i.instructor === incidence.instructor)
+            ),
+            incidencesVersion: state.incidencesVersion + 1
+        }));
+
+        try {
+            // DB Update: Set fields to null
+            const wasUpdated = await scheduleEntriesService.updateIncidence({
+                date: incidence.date,
+                program: incidence.program,
+                start_time: incidence.start_time,
+                instructor: incidence.instructor
+            }, {
+                status: null,
+                type: null,
+                subtype: null,
+                substitute: null,
+                description: null,
+                department: null,
+                feedback: null
+            } as any);
+
+            if (!wasUpdated) {
+                // If row didn't exist in DB, it might be a local-only incidence?
+                // But generally incidences must be attached to a schedule.
+                // If it fails, maybe it wasn't published.
+                throw new Error('SCHEDULE_NOT_PUBLISHED');
+            }
+            toast.success("Incidence removed");
+        } catch (error) {
+            console.error("Failed to delete incidence:", error);
+            // Revert
+            set(state => ({
+                incidences: previousIncidences,
+                incidencesVersion: state.incidencesVersion + 1
+            }));
+
+            if (error instanceof Error && error.message === 'SCHEDULE_NOT_PUBLISHED') {
+                toast.error("Cannot remove incidence: Base schedule not published.");
+            } else {
+                toast.error("Failed to remove incidence");
+            }
+        }
+    },
+
+
+
+    deleteSchedule: async (schedule: Schedule) => {
+        const previousSchedules = get().baseSchedules;
+        const previousIncidences = get().incidences;
+
+        // Optimistic Update: Remove from base schedules AND incidences
+        set(state => ({
+            baseSchedules: state.baseSchedules.filter(s =>
+                !(s.date === schedule.date &&
+                    s.program === schedule.program &&
+                    s.start_time === schedule.start_time &&
+                    s.instructor === schedule.instructor)
+            ),
+            incidences: state.incidences.filter(i =>
+                !(i.date === schedule.date &&
+                    i.program === schedule.program &&
+                    i.start_time === schedule.start_time &&
+                    i.instructor === schedule.instructor)
+            ),
+            incidencesVersion: state.incidencesVersion + 1
+        }));
+
+        try {
+            await scheduleEntriesService.deleteScheduleEntry({
+                date: schedule.date,
+                program: schedule.program,
+                start_time: schedule.start_time,
+                instructor: schedule.instructor
+            });
+            toast.success("Schedule removed");
+        } catch (error) {
+            console.error("Failed to delete schedule:", error);
+            // Revert
+            set(state => ({
+                baseSchedules: previousSchedules,
+                incidences: previousIncidences,
+                incidencesVersion: state.incidencesVersion + 1
+            }));
+            toast.error("Failed to delete schedule");
         }
     },
 

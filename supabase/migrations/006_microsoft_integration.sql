@@ -20,10 +20,14 @@ CREATE TABLE IF NOT EXISTS public.microsoft_account (
     -- New Architecture: Folder for Monthly Schedules + File for Master Incidences
     schedules_folder_id TEXT,
     schedules_folder_name TEXT,
-    
+
     incidences_file_id TEXT,
     incidences_file_name TEXT,
-    
+    incidences_worksheet_id TEXT,
+    incidences_worksheet_name TEXT,
+    incidences_table_id TEXT,
+    incidences_table_name TEXT,
+
     connected_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -134,7 +138,11 @@ GRANT SELECT ON microsoft_credentials_decrypted TO service_role;
 CREATE OR REPLACE FUNCTION update_microsoft_config(
     p_type TEXT, -- 'schedules_folder' OR 'incidences_file'
     p_id TEXT,
-    p_name TEXT
+    p_name TEXT,
+    p_worksheet_id TEXT DEFAULT NULL,
+    p_worksheet_name TEXT DEFAULT NULL,
+    p_table_id TEXT DEFAULT NULL,
+    p_table_name TEXT DEFAULT NULL
 )
 RETURNS VOID
 LANGUAGE plpgsql
@@ -144,20 +152,24 @@ AS $$
 BEGIN
     IF p_type = 'schedules_folder' THEN
         UPDATE public.microsoft_account
-        SET 
+        SET
             schedules_folder_id = p_id,
             schedules_folder_name = p_name,
             updated_at = now()
         WHERE id IS NOT NULL;
-        
+
     ELSIF p_type = 'incidences_file' THEN
         UPDATE public.microsoft_account
-        SET 
+        SET
             incidences_file_id = p_id,
             incidences_file_name = p_name,
+            incidences_worksheet_id = p_worksheet_id,
+            incidences_worksheet_name = p_worksheet_name,
+            incidences_table_id = p_table_id,
+            incidences_table_name = p_table_name,
             updated_at = now()
         WHERE id IS NOT NULL;
-        
+
     ELSE
         RAISE EXCEPTION 'Invalid config type: %', p_type;
     END IF;

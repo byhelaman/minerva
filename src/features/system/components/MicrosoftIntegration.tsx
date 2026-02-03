@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Unplug, Link2, FileSpreadsheet, FolderOpen, Folder, RefreshCw, X } from "lucide-react";
+import { Loader2, Unplug, Link2, X } from "lucide-react";
 import { BaseDirectory, remove, exists } from "@tauri-apps/plugin-fs";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -25,37 +25,14 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import {
-    Breadcrumb,
-    BreadcrumbItem,
-    BreadcrumbLink,
-    BreadcrumbList,
-    BreadcrumbPage,
-    BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn, formatTimestampForDisplay } from "@/lib/utils";
+import { formatTimestampForDisplay } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { STORAGE_FILES } from "@/lib/constants";
-
-interface MicrosoftAccount {
-    email: string;
-    name: string;
-    connected_at: string;
-    schedules_folder?: { id: string; name: string };
-    incidences_file?: { id: string; name: string };
-}
-
-interface FileSystemItem {
-    id: string;
-    name: string;
-    type: 'file' | 'folder';
-    date: string;
-    parentId: string | null;
-}
+import { MicrosoftAccount, FileSystemItem } from "../types";
+import { FileTreeNode } from "./MicrosoftFileTree";
 
 interface MicrosoftIntegrationProps {
     onConfigChange?: () => void;
@@ -71,85 +48,64 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
     const [configMode, setConfigMode] = useState<'schedules_folder' | 'incidences_file' | null>(null);
     const [isFileDialogOpen, setIsFileDialogOpen] = useState(false);
 
-    // Restoring File Navigation State and Logic
-    const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-    const [breadcrumbs, setBreadcrumbs] = useState<{ id: string | null, name: string }[]>([{ id: null, name: "Home" }]);
-    const [files, setFiles] = useState<FileSystemItem[]>([]);
-    const [isLoadingFiles, setIsLoadingFiles] = useState(false);
-    const [fileCache, setFileCache] = useState<Record<string, FileSystemItem[]>>({});
-    const currentFolderRef = useRef(currentFolderId);
+    // Cache for loaded data (no need to track expansion state with Collapsible)
+    const [fileWorksheets, setFileWorksheets] = useState<Map<string, { id: string; name: string }[]>>(new Map());
+    const [worksheetTables, setWorksheetTables] = useState<Map<string, { id: string; name: string }[]>>(new Map());
+    const [loadingFiles, setLoadingFiles] = useState<Set<string>>(new Set());
+    const [loadingWorksheets, setLoadingWorksheets] = useState<Set<string>>(new Set());
+    const [isSavingConfig, setIsSavingConfig] = useState(false);
+
+    // File tree state - single cache for all levels
+    const [folderChildren, setFolderChildren] = useState<Map<string, FileSystemItem[]>>(new Map());
+    const [loadingFolders, setLoadingFolders] = useState<Set<string>>(new Set());
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    // Keep ref in sync
-    useEffect(() => {
-        currentFolderRef.current = currentFolderId;
-    }, [currentFolderId]);
+    // Load children for a folder (called when Collapsible opens)
+    const loadFolderChildren = async (folderId: string | null) => {
+        const folderKey = folderId || 'root';
 
-    // Load files when folder changes
-    const fetchFiles = async (forceRefresh = false) => {
-        if (!isFileDialogOpen || !account) return;
+        // Skip if already loaded
+        if (folderChildren.has(folderKey)) return;
 
-        const targetFolder = currentFolderId || 'root';
-
-        // Check Cache first
-        if (!forceRefresh && fileCache[targetFolder]) {
-            setFiles(fileCache[targetFolder]);
-            setIsLoadingFiles(false);
-            return;
-        }
+        setLoadingFolders(prev => new Set(prev).add(folderKey));
         try {
-            setIsLoadingFiles(true);
             const { data, error } = await supabase.functions.invoke('microsoft-graph', {
                 body: {
                     action: 'list-children',
-                    folderId: currentFolderId
+                    folderId
                 },
                 method: 'POST'
             });
 
             if (error) throw error;
 
-            // Race Condition Check
-            const currentActiveFolder = currentFolderRef.current || 'root';
-            if (targetFolder !== currentActiveFolder) {
-                return;
-            }
-
-            // Transform Graph API data to our format
             const items: FileSystemItem[] = data.value.map((item: any) => ({
                 id: item.id,
                 name: item.name,
                 type: item.folder ? 'folder' : 'file',
                 date: formatTimestampForDisplay(item.lastModifiedDateTime),
-                parentId: currentFolderId
+                parentId: folderId
             }));
 
-            setFiles(items);
-            setFileCache(prev => ({ ...prev, [targetFolder]: items }));
+            setFolderChildren(prev => new Map(prev).set(folderKey, items));
         } catch (error) {
-            console.error("Failed to load files", error);
-            toast.error("Failed to load OneDrive files");
+            console.error("Failed to load folder contents", error);
+            toast.error("Failed to load folder");
         } finally {
-            const currentActiveFolder = currentFolderRef.current || 'root';
-            if (targetFolder === currentActiveFolder) {
-                setIsLoadingFiles(false);
-            }
+            setLoadingFolders(prev => {
+                const next = new Set(prev);
+                next.delete(folderKey);
+                return next;
+            });
         }
     };
 
+    // Load root on dialog open
     useEffect(() => {
-        if (isFileDialogOpen) {
-            fetchFiles();
-        } else {
-            // Reset nav when closed
-            setCurrentFolderId(null);
-            setBreadcrumbs([{ id: null, name: "Home" }]);
+        if (isFileDialogOpen && !folderChildren.has('root')) {
+            loadFolderChildren(null);
         }
-    }, [currentFolderId, isFileDialogOpen, account]);
-
-    const handleRefresh = () => {
-        fetchFiles(true);
-    };
+    }, [isFileDialogOpen]);
 
     // Initial Status Check
     const fetchStatus = async () => {
@@ -192,8 +148,8 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
             if (error) throw error;
 
             setAccount(null);
-            setCurrentFolderId(null);
-            setBreadcrumbs([{ id: null, name: "Home" }]);
+            // setCurrentFolderId(null);
+            // setBreadcrumbs([{ id: null, name: "Home" }]);
 
             // Clear Cache
             try {
@@ -211,44 +167,155 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
         }
     };
 
-    const handleSelectLink = async (item: { id: string; name: string }) => {
-        if (!configMode) return;
+    // Load worksheets for a file (called when Collapsible opens)
+    const loadWorksheets = async (fileId: string) => {
+        // Skip if already loaded
+        if (fileWorksheets.has(fileId)) return;
 
+        setLoadingFiles(prev => new Set(prev).add(fileId));
         try {
-            // Persist to backend
-            const { error } = await supabase.functions.invoke('microsoft-auth', {
+            const { data, error } = await supabase.functions.invoke('microsoft-graph', {
                 body: {
-                    action: 'update-config',
-                    type: configMode,
-                    id: item.id,
-                    name: item.name
+                    action: 'list-worksheets',
+                    fileId
                 },
                 method: 'POST'
             });
 
             if (error) throw error;
 
-            // Update local state
+            const sheets = data.value.filter((item: any) => item.type === 'sheet');
+            setFileWorksheets(prev => new Map(prev).set(fileId, sheets));
+        } catch (error) {
+            console.error("Failed to load worksheets", error);
+            toast.error("Failed to load worksheets");
+        } finally {
+            setLoadingFiles(prev => {
+                const next = new Set(prev);
+                next.delete(fileId);
+                return next;
+            });
+        }
+    };
+
+    // Load tables for a worksheet (called when Collapsible opens)
+    const loadTables = async (fileId: string, worksheetId: string) => {
+        // Skip if already loaded
+        if (worksheetTables.has(worksheetId)) return;
+
+        setLoadingWorksheets(prev => new Set(prev).add(worksheetId));
+        try {
+            const { data, error } = await supabase.functions.invoke('microsoft-graph', {
+                body: {
+                    action: 'list-tables',
+                    fileId,
+                    sheetId: worksheetId
+                },
+                method: 'POST'
+            });
+
+            if (error) throw error;
+
+            setWorksheetTables(prev => new Map(prev).set(worksheetId, data.value || []));
+        } catch (error) {
+            console.error("Failed to load tables", error);
+            toast.error("Failed to load tables");
+        } finally {
+            setLoadingWorksheets(prev => {
+                const next = new Set(prev);
+                next.delete(worksheetId);
+                return next;
+            });
+        }
+    };
+
+    // Handle table selection
+    const handleSelectTable = async (fileItem: { id: string; name: string }, worksheet: { id: string; name: string }, table: { id: string; name: string }) => {
+        setIsSavingConfig(true);
+        try {
+            const { error } = await supabase.functions.invoke('microsoft-auth', {
+                body: {
+                    action: 'update-config',
+                    type: 'incidences_file',
+                    id: fileItem.id,
+                    name: fileItem.name,
+                    worksheet_id: worksheet.id,
+                    worksheet_name: worksheet.name,
+                    table_id: table.id,
+                    table_name: table.name
+                },
+                method: 'POST'
+            });
+
+            if (error) throw error;
+
             setAccount(prev => prev ? ({
                 ...prev,
-                [configMode]: { id: item.id, name: item.name }
+                incidences_file: { id: fileItem.id, name: fileItem.name },
+                incidences_worksheet: { id: worksheet.id, name: worksheet.name },
+                incidences_table: { id: table.id, name: table.name }
             }) : null);
 
             setIsFileDialogOpen(false);
             setConfigMode(null);
+            setFolderChildren(new Map());
+            setFileWorksheets(new Map());
+            setWorksheetTables(new Map());
 
-            // Clear Cache on Config Change to prevent showing stale data from previous file
             try {
                 if (await exists(STORAGE_FILES.EXCEL_DATA_MIRROR, { baseDir: BaseDirectory.AppLocalData })) {
                     await remove(STORAGE_FILES.EXCEL_DATA_MIRROR, { baseDir: BaseDirectory.AppLocalData });
                 }
             } catch (ignore) { console.error("Failed to clear cache", ignore); }
 
-            toast.success(`Linked ${configMode === 'schedules_folder' ? 'Folder' : 'File'}: ${item.name}`);
+            toast.success(`Linked: ${fileItem.name} > ${worksheet.name} > ${table.name}`);
             if (onConfigChange) onConfigChange();
         } catch (error) {
-            console.error("Failed to link", error);
-            toast.error("Failed to save selection");
+            console.error("Failed to save config", error);
+            toast.error("Failed to save configuration");
+        } finally {
+            setIsSavingConfig(false);
+        }
+    };
+
+    const handleSelectLink = async (item: { id: string; name: string }) => {
+        if (!configMode) return;
+
+        // schedules_folder: simple selection (as before)
+        if (configMode === 'schedules_folder') {
+            try {
+                const { error } = await supabase.functions.invoke('microsoft-auth', {
+                    body: {
+                        action: 'update-config',
+                        type: configMode,
+                        id: item.id,
+                        name: item.name
+                    },
+                    method: 'POST'
+                });
+
+                if (error) throw error;
+
+                setAccount(prev => prev ? ({
+                    ...prev,
+                    schedules_folder: { id: item.id, name: item.name }
+                }) : null);
+
+                setIsFileDialogOpen(false);
+                setConfigMode(null);
+
+                try {
+                    if (await exists(STORAGE_FILES.EXCEL_DATA_MIRROR, { baseDir: BaseDirectory.AppLocalData })) {
+                        await remove(STORAGE_FILES.EXCEL_DATA_MIRROR, { baseDir: BaseDirectory.AppLocalData });
+                    }
+                } catch (ignore) { console.error("Failed to clear cache", ignore); }
+
+                toast.success(`Linked Folder: ${item.name}`);
+                if (onConfigChange) onConfigChange();
+            } catch (error) {
+                console.error("Failed to link", error);
+                toast.error("Failed to save selection");
+            }
         }
     };
 
@@ -298,16 +365,6 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
         }
     };
 
-    const handleNavigate = (folderId: string | null, folderName: string) => {
-        setCurrentFolderId(folderId);
-        setBreadcrumbs(prev => [...prev, { id: folderId, name: folderName }]);
-    };
-
-    const handleBreadcrumbClick = (index: number) => {
-        const newBreadcrumbs = breadcrumbs.slice(0, index + 1);
-        setBreadcrumbs(newBreadcrumbs);
-        setCurrentFolderId(newBreadcrumbs[newBreadcrumbs.length - 1].id);
-    };
 
     const handleCancelConnect = () => {
         if (timerRef.current) clearInterval(timerRef.current);
@@ -318,6 +375,9 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
     // Helper to open dialog for specific mode
     const openSelectionDialog = (mode: 'schedules_folder' | 'incidences_file') => {
         setConfigMode(mode);
+        setFolderChildren(new Map());
+        setFileWorksheets(new Map());
+        setWorksheetTables(new Map());
         setIsFileDialogOpen(true);
     };
 
@@ -385,6 +445,23 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
             </Card>
         );
     }
+
+    // Common props for FileTreeNode
+    const fileTreeProps = {
+        configMode,
+        account,
+        folderChildren,
+        fileWorksheets,
+        worksheetTables,
+        loadingFolders,
+        loadingFiles,
+        loadingWorksheets,
+        onLoadFolderChildren: loadFolderChildren,
+        onLoadWorksheets: loadWorksheets,
+        onLoadTables: loadTables,
+        onSelectLink: handleSelectLink,
+        onSelectTable: handleSelectTable
+    };
 
     return (
         <Card className="shadow-none">
@@ -460,155 +537,90 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
                             account.schedules_folder,
                             'schedules_folder',
                         )}
-                        {renderConfigRow(
-                            "Incidences Log File",
-                            "Single Excel file for tracking all history.",
-                            account.incidences_file,
-                            'incidences_file',
-                        )}
+                        <div className="space-y-3">
+                            {renderConfigRow(
+                                "Incidences Log File",
+                                "Excel file for tracking incidences history.",
+                                account.incidences_file,
+                                'incidences_file',
+                            )}
+                            {account.incidences_file && (
+                                <div className="pl-6 space-y-2 text-sm">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-muted-foreground">Worksheet:</span>
+                                        {account.incidences_worksheet?.name ? (
+                                            <Badge variant="outline">{account.incidences_worksheet.name}</Badge>
+                                        ) : (
+                                            <span className="text-muted-foreground italic">Not configured</span>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-muted-foreground">Table:</span>
+                                        {account.incidences_table?.name ? (
+                                            <Badge variant="outline">{account.incidences_table.name}</Badge>
+                                        ) : (
+                                            <span className="text-muted-foreground italic">Not configured</span>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
 
                 {/* File Browser Dialog */}
-                <Dialog open={isFileDialogOpen} onOpenChange={(open) => { setIsFileDialogOpen(open); if (!open) setConfigMode(null); }}>
-                    <DialogContent>
+                <Dialog open={isFileDialogOpen} onOpenChange={(open) => {
+                    setIsFileDialogOpen(open);
+                    if (!open) {
+                        setConfigMode(null);
+                        setFolderChildren(new Map());
+                        setFileWorksheets(new Map());
+                        setWorksheetTables(new Map());
+                    }
+                }}>
+                    <DialogContent className="max-h-[85vh] flex flex-col">
                         <DialogHeader>
                             <DialogTitle>
-                                Select {configMode === 'schedules_folder' ? 'Folder' : 'File'}
+                                {configMode === 'schedules_folder' ? 'Select Folder' : 'Configure Incidences File'}
                             </DialogTitle>
                             <DialogDescription>
                                 {configMode === 'schedules_folder'
                                     ? "Select the root folder for schedules."
-                                    : "Select the Excel file for incidences."}
+                                    : "Navigate to the Excel file, expand it, then select a table."}
                             </DialogDescription>
                         </DialogHeader>
 
-                        {/* Breadcrumbs */}
-                        <div className="flex items-center justify-between px-1 my-1">
-                            <Breadcrumb>
-                                <BreadcrumbList>
-                                    {breadcrumbs.map((crumb, index) => {
-                                        const isLast = index === breadcrumbs.length - 1;
-                                        return (
-                                            <div key={crumb.id || 'root'} className="contents">
-                                                <BreadcrumbItem>
-                                                    {isLast ? (
-                                                        <BreadcrumbPage>{crumb.name}</BreadcrumbPage>
-                                                    ) : (
-                                                        <BreadcrumbLink
-                                                            className="cursor-pointer"
-                                                            onClick={() => handleBreadcrumbClick(index)}
-                                                        >
-                                                            {crumb.name}
-                                                        </BreadcrumbLink>
-                                                    )}
-                                                </BreadcrumbItem>
-                                                {!isLast && <BreadcrumbSeparator />}
-                                            </div>
-                                        );
-                                    })}
-                                </BreadcrumbList>
-                            </Breadcrumb>
-                            <Button variant="secondary" size="icon-sm" onClick={handleRefresh} disabled={isLoadingFiles}>
-                                <RefreshCw className={isLoadingFiles ? "animate-spin" : ""} />
-                            </Button>
-                        </div>
-
-                        {/* Browser */}
-                        <ScrollArea className="h-[300px] border rounded-md">
-                            <div className="p-2 space-y-1">
-                                {isLoadingFiles ? (
+                        {/* File Tree */}
+                        <ScrollArea className="border rounded-md flex-1 overflow-hidden">
+                            <div className="h-[300px] max-w-[460px] p-2 w-full">
+                                {loadingFolders.has('root') && !folderChildren.has('root') ? (
                                     <div className="flex justify-center p-8 text-muted-foreground">
                                         <Loader2 className="animate-spin h-6 w-6" />
                                     </div>
-                                ) : files.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center p-8 text-muted-foreground gap-1">
-                                        <FolderOpen className="h-6 w-6 opacity-50" />
-                                        <p className="text-sm">Empty folder</p>
-                                    </div>
                                 ) : (
-                                    files.map((item) => {
-                                        const isFolder = item.type === 'folder';
-                                        const isExcel = item.name.toLowerCase().endsWith('.xlsx');
-
-                                        // Logic for disabling the ROW (interactions)
-                                        // If mode is 'incidences_file', only folders and xlsx are active (folders to nav).
-                                        // If mode is 'schedules_folder', only folders are active.
-                                        const isRowDisabled = configMode === 'incidences_file'
-                                            ? (!isFolder && !isExcel)
-                                            : (!isFolder);
-
-                                        // Logic for disabling the CHECKBOX (selection)
-                                        // 1. If row is disabled, checkbox is disabled.
-                                        // 2. If mode is incidences_file, folders cannot be selected (only nav).
-                                        // 3. If mode is schedules_folder, only folders can be selected.
-                                        const isCheckboxDisabled = isRowDisabled ||
-                                            (configMode === 'incidences_file' && isFolder);
-
-                                        // Is this item the currently selected one?
-                                        const isSelected =
-                                            (configMode === 'schedules_folder' && account?.schedules_folder?.id === item.id) ||
-                                            (configMode === 'incidences_file' && account?.incidences_file?.id === item.id);
-
-                                        return (
-                                            <div
+                                    <div className="space-y-1 pb-2">
+                                        {folderChildren.get('root')?.map(item => (
+                                            <FileTreeNode
                                                 key={item.id}
-                                                className={cn(
-                                                    "flex items-center gap-6 justify-between p-2 rounded-md transition-colors group",
-                                                    isRowDisabled ? "opacity-40" : "hover:bg-accent/50 cursor-pointer",
-                                                    isSelected && "bg-accent/50 border border-primary/20"
-                                                )}
-                                                onClick={() => {
-                                                    if (isRowDisabled) return;
-                                                    // Navigate if folder (always navigation via main click)
-                                                    if (isFolder) handleNavigate(item.id, item.name);
-                                                    // Add separate Select button for folder selection mode
-                                                    // For files, click selects immediately? Or confirm? 
-                                                    // Previous logic was immediate.
-                                                    if (!isFolder && configMode === 'incidences_file') handleSelectLink(item);
-                                                }}
-                                            >
-
-
-                                                <div className="flex items-center gap-3 px-1">
-                                                    {isFolder ? <Folder className="h-4 w-4" /> : <FileSpreadsheet className="h-4 w-4" />}
-                                                    <div className="flex flex-col">
-                                                        <span className="text-sm font-medium">{item.name}</span>
-                                                        <span className="text-xs text-muted-foreground">{item.date}</span>
-                                                    </div>
-                                                </div>
-                                                {/* Actions */}
-                                                <div className="flex items-center gap-2 px-1">
-                                                    {!isCheckboxDisabled && (
-                                                        <Checkbox
-                                                            checked={isSelected}
-                                                            onCheckedChange={(checked) => {
-                                                                if (checked) {
-                                                                    handleSelectLink(item);
-                                                                }
-                                                            }}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className={cn(
-                                                                // Enabled items: invisible unless hovered or selected
-                                                                !isSelected && "opacity-0 group-hover:opacity-100"
-                                                            )}
-                                                        />
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    })
+                                                item={item}
+                                                depth={0}
+                                                {...fileTreeProps}
+                                            />
+                                        ))}
+                                    </div>
                                 )}
                             </div>
                         </ScrollArea>
 
-                        <DialogFooter className="flex justify-between sm:justify-between w-full">
-                            <div className="text-xs text-muted-foreground self-center">
+                        <DialogFooter>
+                            {/* <div className="text-xs text-muted-foreground self-center">
                                 {configMode === 'schedules_folder'
-                                    ? "Navigate to folder and click Select."
-                                    : "Click on an Excel file to select it."}
-                            </div>
-                            <Button variant="outline" onClick={() => setIsFileDialogOpen(false)}>Cancel</Button>
+                                    ? "Navigate to folder and check to select."
+                                    : "Expand Excel file → Expand worksheet → Select table"}
+                            </div> */}
+                            <Button variant="outline" onClick={() => setIsFileDialogOpen(false)} disabled={isSavingConfig}>
+                                {isSavingConfig ? "Saving..." : "Cancel"}
+                            </Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
