@@ -97,7 +97,7 @@ export const getCreateLinkColumns = (
             id: "select",
             size: 36,
             header: ({ table }) => (
-                <div className="flex justify-center items-center mb-1">
+                <div className="flex justify-center items-center mb-1 w-[36px]">
                     <Checkbox
                         checked={table.getIsAllPageRowsSelected()}
                         onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
@@ -107,7 +107,7 @@ export const getCreateLinkColumns = (
                 </div>
             ),
             cell: ({ row }) => (
-                <div className="flex justify-center">
+                <div className="flex justify-center w-[36px]">
                     <Checkbox
                         checked={row.getIsSelected()}
                         disabled={!row.getCanSelect()}
@@ -301,12 +301,12 @@ export const getCreateLinkColumns = (
         },
         {
             accessorKey: "inputName",
-            size: 400,
+            size: 320,
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Program" />
             ),
             cell: ({ row }) => (
-                <div className="truncate max-w-[380px]">{row.getValue("inputName")}</div>
+                <div className="truncate max-w-[300px]">{row.getValue("inputName")}</div>
             ),
         },
         {
@@ -334,11 +334,11 @@ export const getCreateLinkColumns = (
         },
         // Date & Time column - only visible when dailyOnly is true
         ...(dailyOnly ? [{
-            id: "date_time",
+            id: "meeting_details",
             size: 170,
             header: () => (
                 <div className="flex items-center justify-center gap-1 font-medium text-muted-foreground">
-                    Date & Time
+                    Meeting Details
                 </div>
             ),
             cell: ({ row }: { row: any }) => {
@@ -390,6 +390,7 @@ export const getCreateLinkColumns = (
                                                 onClick={() => {
                                                     onTimeChange?.(result.id, '');
                                                     onDateChange?.(result.id, '');
+                                                    onHostChange?.(result.id, '', '', '');
                                                 }}
                                                 className="h-6 w-6"
                                             >
@@ -432,39 +433,19 @@ export const getCreateLinkColumns = (
                                 }}
                                 className="[--cell-size:--spacing(7)]"
                             />
-
+                            <div className="border-t p-3 bg-muted/20">
+                                <Field className="gap-2">
+                                    <FieldLabel>Host</FieldLabel>
+                                    <InstructorSelector
+                                        value={result.selected_host || ''}
+                                        onChange={(host, email, id) => onHostChange?.(result.id, host, email, id)}
+                                        instructors={hostsList || []}
+                                        className="max-w-[200px]"
+                                    />
+                                </Field>
+                            </div>
                         </PopoverContent>
                     </Popover>
-                );
-            },
-        } as ColumnDef<ValidationResult>] : []),
-        // Host column - only visible when dailyOnly is true
-        ...(dailyOnly ? [{
-            id: "selected_host",
-            size: 180,
-            header: () => (
-                <div className="flex items-center gap-1 font-medium text-muted-foreground justify-center">
-                    Host
-                </div>
-            ),
-            cell: ({ row }: { row: any }) => {
-                const result = row.original as ValidationResult;
-                const status = result.status;
-
-                // Only show selector for 'to_create' status
-                if (status !== 'to_create') {
-                    return <div className="text-center text-muted-foreground">—</div>;
-                }
-
-                return (
-                    <div className="w-full">
-                        <InstructorSelector
-                            value={result.selected_host || ''}
-                            onChange={(host, email, id) => onHostChange?.(result.id, host, email, id)}
-                            instructors={hostsList || []}
-                            className="max-w-[200px]"
-                        />
-                    </div>
                 );
             },
         } as ColumnDef<ValidationResult>] : []),

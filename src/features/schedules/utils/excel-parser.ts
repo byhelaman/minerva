@@ -190,7 +190,7 @@ export async function parseExcelFile(file: File, options?: { strictValidation?: 
                     program: safeString(item.program),
                     instructor: safeString(item.instructor),
                     code: safeString(item.code),
-                    minutes: safeString(item.minutes),
+                    minutes: safeString(item.minutes) || '0',
                     units: safeString(item.units) || '0',
                     shift: safeString(item.shift) || determineShift(safeString(item.start_time)),
                     branch: safeString(item.branch),

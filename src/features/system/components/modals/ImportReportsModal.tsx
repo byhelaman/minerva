@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ScheduleDataTable } from "@/features/schedules/components/table/ScheduleDataTable";
 import { getDataSourceColumns } from "../data-source-columns";
 import { Schedule } from "@/features/schedules/utils/excel-parser";
@@ -11,6 +11,10 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { scheduleEntriesService } from "@/features/schedules/services/schedule-entries-service";
 
 interface ImportReportsModalProps {
     open: boolean;
@@ -22,11 +26,48 @@ interface ImportReportsModalProps {
 export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: ImportReportsModalProps) {
     // Initial columns
     const columns = useMemo(() => getDataSourceColumns(), []);
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Filter out columns that are not relevant for preview/import
+    const initialVisibility = {
+        shift: false,
+        end_time: false,
+        code: false,
+        minutes: false,
+        units: false,
+        substitute: false,
+        type: false,
+        subtype: false,
+        description: false,
+        department: false,
+        feedback: false,
+    };
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        const toastId = toast.loading("Saving data...");
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error("Not authenticated");
+
+            // Persist to Supabase
+            await scheduleEntriesService.publishSchedules(data, user.id);
+
+            toast.success("Data imported successfully", { id: toastId });
+            onConfirm(); // Trigger parent refresh
+            onOpenChange(false);
+        } catch (error) {
+            console.error("Import failed:", error);
+            toast.error("Failed to save data", { id: toastId });
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     if (!data) return null;
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog open={open} onOpenChange={(val) => !isSaving && onOpenChange(val)}>
             <DialogContent className="max-w-7xl! max-h-[85vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Preview Data</DialogTitle>
@@ -44,19 +85,7 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
                         hideUpload
                         hideOverlaps
                         initialPageSize={100}
-                        initialColumnVisibility={{
-                            shift: false,
-                            end_time: false,
-                            code: false,
-                            minutes: false,
-                            units: false,
-                            substitute: false,
-                            type: false,
-                            subtype: false,
-                            description: false,
-                            department: false,
-                            feedback: false,
-                        }}
+                        initialColumnVisibility={initialVisibility}
                     />
                 </div>
 
@@ -66,14 +95,18 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
                             Total rows: <strong className="text-foreground font-medium">{data.length}</strong>
                         </span>
                         <div className="flex gap-2">
-                            <Button variant="outline" onClick={() => onOpenChange(false)}>
+                            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
                                 Cancel
                             </Button>
-                            <Button onClick={() => {
-                                onConfirm();
-                                onOpenChange(false);
-                            }}>
-                                Import Data
+                            <Button onClick={handleSave} disabled={isSaving}>
+                                {isSaving ? (
+                                    <>
+                                        <Loader2 className="animate-spin" />
+                                        Saving...
+                                    </>
+                                ) : (
+                                    "Save Data"
+                                )}
                             </Button>
                         </div>
                     </div>

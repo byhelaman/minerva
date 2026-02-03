@@ -8,7 +8,7 @@ import { IncidenceModal } from "@/features/schedules/components/modals/Incidence
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Loader2, Upload, Download } from "lucide-react";
+import { CalendarIcon, Loader2, Upload, CloudUpload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -184,8 +184,8 @@ export function ReportsPage() {
                         size="sm"
                         onClick={() => setUploadModalOpen(true)}
                     >
-                        <Download />
-                        Import Data
+                        <CloudUpload />
+                        Upload Data
                     </Button>
 
                     {/* Sync to Excel */}
@@ -285,9 +285,7 @@ export function ReportsPage() {
                 open={importModalOpen}
                 onOpenChange={setImportModalOpen}
                 data={importedData}
-                onConfirm={() => {
-                    toast.success("Data imported successfully (UI only)");
-                }}
+                onConfirm={fetchData}
             />
         </div>
     );

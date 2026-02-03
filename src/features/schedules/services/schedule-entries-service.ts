@@ -93,22 +93,44 @@ export const scheduleEntriesService = {
         if (schedules.length === 0) return;
 
         // Prepare rows directly from Schedule objects
-        const rows = schedules.map(s => ({
-            date: s.date,
-            program: s.program,
-            start_time: s.start_time,
-            instructor: s.instructor,
+        // Prepare rows directly from Schedule objects
+        const uniqueKeys = new Set<string>();
+        const rows: any[] = [];
 
-            shift: s.shift,
-            branch: s.branch,
-            end_time: s.end_time,
-            code: s.code,
-            minutes: s.minutes,
-            units: s.units,
+        for (const s of schedules) {
+            // Create composite key to detect duplicates in the INPUT array
+            // Supabase upsert fails if the BATCH contains duplicate keys for the conflict constraint
+            const key = `${s.date}|${s.program}|${s.start_time}|${s.instructor}`;
 
-            published_by: publishedBy,
-            synced_at: null // Reset sync status on update? Maybe, if fields changed.
-        }));
+            if (!uniqueKeys.has(key)) {
+                uniqueKeys.add(key);
+                rows.push({
+                    date: s.date,
+                    program: s.program,
+                    start_time: s.start_time,
+                    instructor: s.instructor,
+
+                    shift: s.shift,
+                    branch: s.branch,
+                    end_time: s.end_time,
+                    code: s.code,
+                    minutes: s.minutes,
+                    units: s.units,
+
+                    // Incidence fields
+                    status: s.status || null,
+                    substitute: s.substitute || null,
+                    type: s.type || null,
+                    subtype: s.subtype || null,
+                    description: s.description || null,
+                    department: s.department || null,
+                    feedback: s.feedback || null,
+
+                    published_by: publishedBy,
+                    synced_at: null
+                });
+            }
+        }
 
         const { error } = await supabase
             .from('schedule_entries')

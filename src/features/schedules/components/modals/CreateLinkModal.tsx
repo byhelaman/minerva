@@ -344,7 +344,7 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className={cn(
                 "flex flex-col max-h-[85vh]",
-                step === 'input' ? "sm:max-w-lg" : "max-w-5xl!"
+                step === 'input' ? "sm:max-w-lg" : "max-w-4xl!"
             )}>
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
