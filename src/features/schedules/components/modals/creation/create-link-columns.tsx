@@ -13,8 +13,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { formatTimestampForDisplay, cn } from "@/lib/utils";
-import { InstructorSelector } from "../modals/InstructorSelector";
-import type { Instructor } from "../../hooks/useInstructors";
+import { InstructorSelector } from "../InstructorSelector";
+import type { Instructor } from "@schedules/hooks/useInstructors";
 
 // Tipos para el resultado de validación
 export type ValidationStatus = 'to_create' | 'exists' | 'ambiguous' | 'manual';

@@ -39,6 +39,16 @@ interface ScheduleDataTableProps<TData, TValue> {
     enableRowSelection?: boolean | ((row: TData) => boolean);
     controlledSelection?: Record<string, boolean>;
     onControlledSelectionChange?: (selection: Record<string, boolean>) => void;
+
+    // Configuración unificada de filtros
+    filterConfig?: {
+        showStatus?: boolean;
+        showIncidenceType?: boolean;
+        showTime?: boolean;
+        showBranch?: boolean; // Futuro
+    };
+
+    // Deprecated props (mantener temporalmente para migración gradual si se desea, o eliminar si vamos "all in")
     hideFilters?: boolean;
     hideUpload?: boolean;
     hideActions?: boolean;
@@ -51,14 +61,17 @@ interface ScheduleDataTableProps<TData, TValue> {
     showLiveMode?: boolean;
     setShowLiveMode?: (show: boolean) => void;
     isLiveLoading?: boolean;
-    liveTimeFilter?: string; // Hora en formato "HH" para filtrar cuando Live está activo
-    liveDateFilter?: string; // Fecha en formato "YYYY-MM-DD" para filtrar cuando Live está activo
+    liveTimeFilter?: string;
+    liveDateFilter?: string;
     onPublish?: () => void;
     isPublishing?: boolean;
     canPublish?: boolean;
     initialColumnVisibility?: VisibilityState;
+
+    // Legacy support
     showTypeFilter?: boolean;
     hideStatusFilter?: boolean;
+
     customActionItems?: React.ReactNode;
     hideDefaultActions?: boolean;
 }
@@ -274,8 +287,10 @@ export function ScheduleDataTable<TData, TValue>({
                 onPublish={onPublish}
                 isPublishing={isPublishing}
                 canPublish={canPublish}
-                showTypeFilter={props.showTypeFilter}
-                hideStatusFilter={props.hideStatusFilter}
+                showTypeFilter={props.filterConfig?.showIncidenceType ?? props.showTypeFilter}
+                hideStatusFilter={props.filterConfig?.showStatus !== undefined ? !props.filterConfig.showStatus : props.hideStatusFilter}
+                showBranch={props.filterConfig?.showBranch}
+                showTime={props.filterConfig?.showTime}
                 customActionItems={props.customActionItems}
                 hideDefaultActions={props.hideDefaultActions}
             />

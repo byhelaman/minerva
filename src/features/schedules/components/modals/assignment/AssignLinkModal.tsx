@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ScheduleDataTable } from "@schedules/components/table/ScheduleDataTable";
-import { getAssignmentColumns, AssignmentRow } from "@schedules/components/table/assignment-columns";
+import { getAssignmentColumns, AssignmentRow } from "./assignment-columns";
 import { Schedule } from "@schedules/utils/excel-parser";
 import { useZoomStore } from "@/features/matching/stores/useZoomStore";
 import { useInstructors } from "@/features/schedules/hooks/useInstructors";
@@ -242,12 +242,8 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
             // - Si no, mantener el del Excel
             const resolvedInstructor = r.found_instructor?.display_name || r.schedule.instructor;
 
-            // Destructure to remove 'type' so the table doesn't think it's incidence data
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { type, ...scheduleWithoutType } = r.schedule;
-
             return {
-                ...scheduleWithoutType,
+                ...r.schedule,
                 id: getRowId(r.schedule),
                 meetingId: r.meeting_id || "-",
                 time: `${r.schedule.start_time} - ${r.schedule.end_time}`,
@@ -382,13 +378,15 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
                                     !!row.found_instructor;
                                 return baseEligible || assignedEligible;
                             }}
-                            hideFilters={true}
-                            hideUpload={true}
-                            hideActions={true}
-                            hideOverlaps={true}
+                            filterConfig={{
+                                showStatus: true,
+                                showIncidenceType: false,
+                            }}
+                            hideUpload
+                            hideActions
+                            hideOverlaps
                             disableRefresh={isExecuting}
                             initialPageSize={100}
-                            hideStatusFilter={false}
                         />
                     )}
                 </div>

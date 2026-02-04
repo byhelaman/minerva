@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { format } from "date-fns";
 import { ScheduleDataTable } from "@/features/schedules/components/table/ScheduleDataTable";
 import { getDataSourceColumns } from "./data-source-columns";
@@ -8,7 +8,7 @@ import { IncidenceModal } from "@/features/schedules/components/modals/Incidence
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Loader2, CloudUpload, RefreshCcw, DatabaseBackup, CalendarDays, ChevronDown } from "lucide-react";
+import { Loader2, CloudUpload, RefreshCcw, DatabaseBackup, CalendarDays, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -24,7 +24,6 @@ import {
 import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { RequirePermission } from "@/components/RequirePermission";
 
-import { scheduleEntriesService } from "@/features/schedules/services/schedule-entries-service";
 import { useScheduleSyncStore } from "@/features/schedules/stores/useScheduleSyncStore";
 import { useScheduleDataStore } from "@/features/schedules/stores/useScheduleDataStore";
 import type { Schedule, DailyIncidence } from "@/features/schedules/types";
@@ -33,16 +32,26 @@ import { ImportReportsModal } from "./modals/ImportReportsModal";
 import { UploadModal } from "@/features/schedules/components/modals/UploadModal";
 
 export function ReportsPage() {
-    // Date state — default to today
+    // State — default to today
+
+    // State
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
     const [calendarOpen, setCalendarOpen] = useState(false);
     const [importModalOpen, setImportModalOpen] = useState(false);
     const [uploadModalOpen, setUploadModalOpen] = useState(false);
     const [importedData, setImportedData] = useState<Schedule[]>([]);
 
-    // Data state
-    const [tableData, setTableData] = useState<(Schedule | DailyIncidence)[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
+    // Store state
+    const {
+        baseSchedules,
+        incidences,
+        isLoading: isStoreLoading,
+        fetchSchedulesForDate: fetchStoreSchedules
+    } = useScheduleDataStore();
+
+    // Local loading state for initial fetch or manual refresh
+    const [isLocalLoading, setIsLocalLoading] = useState(false);
+    const isLoading = isStoreLoading || isLocalLoading;
 
     // Incidence modal state
     const [modalOpen, setModalOpen] = useState(false);
@@ -50,11 +59,7 @@ export function ReportsPage() {
 
     // Sync store
     const { isSyncing, syncToExcel, msConfig, refreshMsConfig } = useScheduleSyncStore();
-
     const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
-
-    // Keep data store in sync for IncidenceModal
-    const { setBaseSchedules } = useScheduleDataStore();
 
     // Load MS config on mount
     useEffect(() => {
@@ -64,42 +69,28 @@ export function ReportsPage() {
     // Format date to YYYY-MM-DD for Supabase queries
     const dateString = format(selectedDate, "yyyy-MM-dd");
 
+    // Compute table data from store state (Reactive & Optimistic)
+    const tableData = useMemo(() =>
+        mergeSchedulesWithIncidences(baseSchedules, incidences),
+        [baseSchedules, incidences]);
+
     // Fetch data when date changes
     const fetchData = useCallback(async () => {
-        setIsLoading(true);
+        setIsLocalLoading(true);
         try {
-            const { schedules, incidences: inc } = await scheduleEntriesService.getSchedulesByDate(dateString);
-
-            // Merge incidences on top of base schedules for display
-            const merged = mergeSchedulesWithIncidences(schedules, inc);
-
-            setTableData(merged);
-
-            // Keep data store in sync so IncidenceModal can read existing incidences
-            setBaseSchedules(schedules);
-            useScheduleDataStore.setState({ incidences: inc });
+            await fetchStoreSchedules(dateString);
         } catch (error) {
             console.error("Failed to fetch report data:", error);
             toast.error("Failed to load report data");
-            setTableData([]);
         } finally {
-            setIsLoading(false);
+            setIsLocalLoading(false);
         }
-    }, [dateString, setBaseSchedules]);
+    }, [dateString, fetchStoreSchedules]);
 
+    // Initial fetch on date change
     useEffect(() => {
         fetchData();
     }, [fetchData]);
-
-    // Refetch after incidence changes (when modal closes and incidences mutate)
-    const incidencesVersion = useScheduleDataStore(s => s.incidencesVersion);
-    useEffect(() => {
-        // Skip initial render (version 0) — only refetch when incidences actually change after mount
-        if (incidencesVersion > 0) {
-            fetchData();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [incidencesVersion]);
 
     // State for delete confirmation
     const [scheduleToDelete, setScheduleToDelete] = useState<Schedule | null>(null);
@@ -280,8 +271,10 @@ export function ReportsPage() {
                                 feedback: false,
                             }}
                             initialPageSize={100}
-                            showTypeFilter={true}
-                            hideStatusFilter={true}
+                            filterConfig={{
+                                showStatus: false,
+                                showIncidenceType: true,
+                            }}
                         />
                     </div>
                 )}

@@ -157,7 +157,7 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDe
     },
     {
         accessorKey: "type",
-        size: 150,
+        size: 120,
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="type" />
         ),
@@ -168,11 +168,11 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDe
     },
     {
         accessorKey: "subtype",
-        size: 100,
+        size: 200,
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="subtype" />
         ),
-        cell: ({ row }) => <div className="text-center">{row.getValue("subtype")}</div>,
+        cell: ({ row }) => <div className="truncate max-w-[200px]">{row.getValue("subtype")}</div>,
     },
     {
         accessorKey: "description",

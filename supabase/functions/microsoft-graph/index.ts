@@ -7,7 +7,6 @@ import { verifyPermission } from '../_shared/auth-utils.ts'
 
 const MS_CLIENT_ID = Deno.env.get('MS_CLIENT_ID')!
 const MS_CLIENT_SECRET = Deno.env.get('MS_CLIENT_SECRET')!
-const MS_REDIRECT_URI = Deno.env.get('MS_REDIRECT_URI')!
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
@@ -59,15 +58,19 @@ async function getAccessToken(supabase: any) {
         const tokens = await tokenResponse.json()
 
         // Update credentials
-        await supabase.rpc('store_microsoft_credentials', {
+        const { error: updateError } = await supabase.rpc('store_microsoft_credentials', {
             p_user_id: creds.microsoft_user_id,
             p_email: creds.microsoft_email,
-            p_name: null, // Don't update name on refresh to avoid graph call
+            p_name: creds.microsoft_name,
             p_access_token: tokens.access_token,
-            p_refresh_token: tokens.refresh_token || creds.refresh_token, // Sometimes refresh token doesn't rotate
+            p_refresh_token: tokens.refresh_token || creds.refresh_token,
             p_scope: tokens.scope,
             p_expires_in: tokens.expires_in
-        })
+        });
+
+        if (updateError) {
+            console.error('Failed to persist refreshed token:', updateError);
+        }
 
         return tokens.access_token
     }
@@ -164,41 +167,6 @@ serve(async (req: Request) => {
             if (!response.ok) {
                 const err = await response.json()
                 throw new Error(err.error?.message || 'Failed to list tables')
-            }
-
-            const data = await response.json()
-            return new Response(JSON.stringify(data), {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-            })
-        }
-
-        if (action === 'get-range') {
-            if (!fileId) throw new Error('File ID is required')
-            if (!sheetId && !tableId) throw new Error('Sheet ID or Table ID is required')
-
-            const token = await getAccessToken(supabase)
-            let graphUrl = ''
-
-            if (tableId) {
-                graphUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/tables/${tableId}/range`
-            } else {
-                graphUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/worksheets/${sheetId}/`
-                if (range) {
-                    graphUrl += `range(address='${range}')`
-                } else {
-                    graphUrl += `usedRange`
-                }
-            }
-
-            graphUrl += `?$select=address,columnCount,rowCount,text`
-
-            const response = await fetch(graphUrl, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-
-            if (!response.ok) {
-                const err = await response.json()
-                throw new Error(err.error?.message || 'Graph API Error')
             }
 
             const data = await response.json()
@@ -321,43 +289,6 @@ serve(async (req: Request) => {
             if (!response.ok) {
                 const err = await response.json()
                 throw new Error(err.error?.message || 'Failed to update range')
-            }
-
-            const data = await response.json()
-            return new Response(JSON.stringify(data), {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-            })
-        }
-
-        if (action === 'append-row') {
-            if (!fileId || (!tableId && !sheetId) || !values) throw new Error('File ID, Table/Sheet ID and Values are required')
-            const token = await getAccessToken(supabase)
-
-            let graphUrl = ''
-            // Prefer Table Append if tableId is given (structured)
-            if (tableId) {
-                graphUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/tables/${tableId}/rows`
-            } else {
-                // If only sheetId, we can't easily "append" without knowing the last row.
-                // But for pure tables, usually we use table endpoints.
-                // If it's just a raw sheet, we might need to find the last used row first.
-                // For Incidences, we strongly recommend using a Pivot Table or ListObject (Table).
-                // Let's assume Table for now as it's cleaner.
-                throw new Error('Append Row currently requires a Table ID')
-            }
-
-            const response = await fetch(graphUrl, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ values }) // Array of arrays
-            })
-
-            if (!response.ok) {
-                const err = await response.json()
-                throw new Error(err.error?.message || 'Failed to append row')
             }
 
             const data = await response.json()
@@ -672,52 +603,21 @@ serve(async (req: Request) => {
             // 2. Build map of existing rows by key
             const existingRowMap = new Map<string, { index: number, values: any[] }>();
 
-            console.log('📊 Upsert Debug Info (NEW IMPLEMENTATION):');
-            console.log('  Key Columns:', keyColumns);
-            console.log('  Headers from Input:', headerRow);
-
-            // Show first existing row to understand structure
-            if (existingRows.length > 0) {
-                console.log('\n📄 First Existing Row Structure:');
-                console.log('  row.index:', existingRows[0].index);
-                console.log('  row.values:', existingRows[0].values);
-                console.log('  row.values[0]:', existingRows[0].values[0]);
-            }
-
             existingRows.forEach((row: any) => {
                 const rowValues = row.values[0]; // Graph API returns values as [[...]]
                 const key = getKey(rowValues, headerRow);
                 existingRowMap.set(key, { index: row.index, values: rowValues });
             });
 
-            console.log('\n🔑 Key Matching:');
-            console.log('  Existing Rows in Table:', existingRows.length);
-            console.log('  New Rows to Upsert:', inputRows.length);
-            console.log('  Existing Keys (first 3):');
-            Array.from(existingRowMap.keys()).slice(0, 3).forEach((key, i) => {
-                console.log(`    [${i}] ${key}`);
-            });
             // 3. Process each input row: UPDATE or INSERT
             let updateCount = 0;
             let insertCount = 0;
             const errors: string[] = [];
 
-            console.log('\n🔄 Processing Rows:');
-
             for (let i = 0; i < inputRows.length; i++) {
                 const inputRow = inputRows[i];
                 const key = getKey(inputRow, headerRow);
                 const existing = existingRowMap.get(key);
-
-                // Log first 3 rows for debugging
-                if (i < 3) {
-                    console.log(`\n  Row ${i}:`);
-                    console.log(`    Key: ${key}`);
-                    console.log(`    Match: ${existing ? '✅ FOUND at index ' + existing.index : '❌ NOT FOUND'}`);
-                    if (i === 0) {
-                        console.log(`    Values:`, inputRow.slice(0, 4)); // Show first 4 columns
-                    }
-                }
 
                 if (existing) {
                     // UPDATE: PATCH existing row using itemAt(index=N)
@@ -764,15 +664,8 @@ serve(async (req: Request) => {
                 }
             }
 
-            console.log(`\n✅ Upsert Complete:`);
-            console.log(`  Updates: ${updateCount}`);
-            console.log(`  Inserts: ${insertCount}`);
             if (errors.length > 0) {
-                console.log(`  ⚠️ Errors: ${errors.length}`);
-                errors.forEach(e => console.log(`    - ${e}`));
-            }
-
-            if (errors.length > 0) {
+                console.error(`Upsert completed with errors. Updated: ${updateCount}, Inserted: ${insertCount}, Errors: ${errors.length}`);
                 return new Response(JSON.stringify({
                     success: false,
                     updated: updateCount,

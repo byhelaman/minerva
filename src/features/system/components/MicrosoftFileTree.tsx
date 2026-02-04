@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Loader2, FileSpreadsheet, ChevronRightIcon, FolderIcon, File, Sheet, Table } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -75,10 +75,12 @@ export function FileTreeNode({
                 <Collapsible key={item.id} onOpenChange={(open) => open && onLoadFolderChildren(item.id)}>
                     <div className="flex items-center gap-1 group">
                         <CollapsibleTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="group hover:bg-accent hover:text-accent-foreground flex-1 justify-start transition-none w-full"
+                            <div
+                                role="button"
+                                className={cn(
+                                    buttonVariants({ variant: "ghost", size: "sm" }),
+                                    "group hover:bg-accent hover:text-accent-foreground flex-1 justify-start transition-none w-full cursor-pointer"
+                                )}
                             >
                                 <ChevronRightIcon className="transition-transform group-data-[state=open]:rotate-90" />
                                 <FolderIcon />
@@ -92,10 +94,11 @@ export function FileTreeNode({
                                                 if (checked) onSelectLink(item);
                                             }}
                                             className={cn(!isSelected && "opacity-0 group-hover:opacity-100")}
+                                            onClick={(e) => e.stopPropagation()}
                                         />
                                     }
                                 </div>
-                            </Button>
+                            </div>
                         </CollapsibleTrigger>
                     </div>
                     <CollapsibleContent className="style-lyra:ml-4 pt-1 pl-5 w-full">
@@ -199,21 +202,23 @@ export function FileTreeNode({
 
                                             return (
                                                 <div key={table.id} className="flex items-center gap-1 group ml-0.5">
-                                                    <Button
-                                                        variant={isTableSelected ? "secondary" : "ghost"}
-                                                        size="sm"
-                                                        className="group hover:bg-accent hover:text-accent-foreground flex-1 justify-start transition-none w-full"
+                                                    <div
+                                                        role="button"
+                                                        className={cn(
+                                                            buttonVariants({ variant: isTableSelected ? "secondary" : "ghost", size: "sm" }),
+                                                            "group hover:bg-accent hover:text-accent-foreground flex-1 justify-start transition-none w-full cursor-pointer"
+                                                        )}
+                                                        onClick={() => onSelectTable(item, worksheet, table)}
                                                     >
                                                         <Table />
                                                         <div className="flex items-center justify-between w-full gap-2">
                                                             <span className="text-sm">{table.name}</span>
                                                             <Checkbox
                                                                 checked={isTableSelected}
-                                                                onCheckedChange={() => onSelectTable(item, worksheet, table)}
                                                                 className={cn(!isTableSelected && "opacity-0 group-hover:opacity-100")}
                                                             />
                                                         </div>
-                                                    </Button>
+                                                    </div>
                                                 </div>
                                             );
                                         })}

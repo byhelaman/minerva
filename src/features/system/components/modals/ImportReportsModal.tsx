@@ -31,13 +31,15 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
     // Filter out columns that are not relevant for preview/import
     const initialVisibility = {
         shift: false,
+        branch: false,
+        start_time: false,
         end_time: false,
         code: false,
         minutes: false,
         units: false,
+        status: false,
         substitute: false,
-        type: false,
-        subtype: false,
+        // subtype: false,
         description: false,
         department: false,
         feedback: false,
@@ -80,8 +82,13 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
                     <ScheduleDataTable
                         columns={columns}
                         data={data}
+                        filterConfig={{
+                            showStatus: false,
+                            showIncidenceType: true,
+                            showBranch: false,
+                            showTime: false,
+                        }}
                         hideActions
-                        hideFilters
                         hideUpload
                         hideOverlaps
                         initialPageSize={100}

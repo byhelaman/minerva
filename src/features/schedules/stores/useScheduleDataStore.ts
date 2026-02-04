@@ -221,18 +221,21 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
 
     getComputedSchedules: () => {
         const { baseSchedules, incidences } = get();
-        // Merge incidence status on top of base schedule
+
+        // Optimization: Build lookup map first O(M)
+        const incidenceMap = new Map<string, DailyIncidence>();
+        for (const inc of incidences) {
+            const key = `${inc.date}|${inc.program}|${inc.start_time}|${inc.instructor}`;
+            incidenceMap.set(key, inc);
+        }
+
+        // Merge incidence status on top of base schedule O(N)
         return baseSchedules.map(sch => {
-            const match = incidences.find(inc =>
-                inc.date === sch.date &&
-                inc.program === sch.program &&
-                inc.start_time === sch.start_time &&
-                inc.instructor === sch.instructor
-            );
+            const key = `${sch.date}|${sch.program}|${sch.start_time}|${sch.instructor}`;
+            const match = incidenceMap.get(key);
+
             // If match exists, it essentially IS the schedule with extra props.
-            // We just return it as it satisfies Schedule + extra fields (DailyIncidence interface extends fields typically)
             if (match) {
-                // Return merged object to ensure all base props + incidence props
                 return { ...sch, ...match };
             }
             return sch;

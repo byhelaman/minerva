@@ -545,7 +545,7 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
                                 'incidences_file',
                             )}
                             {account.incidences_file && (
-                                <div className="pl-6 space-y-2 text-sm">
+                                <div className="text-xs flex gap-2 items-center ">
                                     <div className="flex items-center gap-2">
                                         <span className="text-muted-foreground">Worksheet:</span>
                                         {account.incidences_worksheet?.name ? (

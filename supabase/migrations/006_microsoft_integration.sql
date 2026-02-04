@@ -72,6 +72,10 @@ DECLARE
     v_schedules_folder_name TEXT;
     v_incidences_file_id TEXT;
     v_incidences_file_name TEXT;
+    v_incidences_worksheet_id TEXT;
+    v_incidences_worksheet_name TEXT;
+    v_incidences_table_id TEXT;
+    v_incidences_table_name TEXT;
 BEGIN
     v_expires_at := now() + (p_expires_in || ' seconds')::INTERVAL;
     v_access_name := 'microsoft_access_token_' || p_user_id;
@@ -85,10 +89,14 @@ BEGIN
     -- Get existing config if preserving for same user
     SELECT 
         schedules_folder_id, schedules_folder_name,
-        incidences_file_id, incidences_file_name
+        incidences_file_id, incidences_file_name,
+        incidences_worksheet_id, incidences_worksheet_name,
+        incidences_table_id, incidences_table_name
     INTO 
         v_schedules_folder_id, v_schedules_folder_name,
-        v_incidences_file_id, v_incidences_file_name
+        v_incidences_file_id, v_incidences_file_name,
+        v_incidences_worksheet_id, v_incidences_worksheet_name,
+        v_incidences_table_id, v_incidences_table_name
     FROM public.microsoft_account 
     WHERE microsoft_user_id = p_user_id
     LIMIT 1;
@@ -102,13 +110,17 @@ BEGIN
         access_token_id, refresh_token_id,
         scope, expires_at,
         schedules_folder_id, schedules_folder_name,
-        incidences_file_id, incidences_file_name
+        incidences_file_id, incidences_file_name,
+        incidences_worksheet_id, incidences_worksheet_name,
+        incidences_table_id, incidences_table_name
     ) VALUES (
         p_user_id, p_email, p_name,
         v_access_id, v_refresh_id,
         p_scope, v_expires_at,
         v_schedules_folder_id, v_schedules_folder_name,
-        v_incidences_file_id, v_incidences_file_name
+        v_incidences_file_id, v_incidences_file_name,
+        v_incidences_worksheet_id, v_incidences_worksheet_name,
+        v_incidences_table_id, v_incidences_table_name
     );
 END;
 $$;

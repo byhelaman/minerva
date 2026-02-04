@@ -12,7 +12,7 @@ import { ArrowLeft, Loader2, HelpCircle, RefreshCw, Hand, PlusCircle } from "luc
 import { cn } from "@/lib/utils";
 import { useHostMap } from "@schedules/hooks/useHostMap";
 import { useInstructors } from "@schedules/hooks/useInstructors";
-import { getCreateLinkColumns, type ValidationResult, type ValidationStatus } from "@schedules/components/table/create-link-columns";
+import { getCreateLinkColumns, type ValidationResult, type ValidationStatus } from "./create-link-columns";
 
 interface CreateLinkModalProps {
     open: boolean;
@@ -428,7 +428,11 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
                                 <ScheduleDataTable
                                     columns={columns}
                                     data={validationResults}
-                                    hideFilters
+                                    hideFilters={false}
+                                    filterConfig={{
+                                        showStatus: true,
+                                        showIncidenceType: false,
+                                    }}
                                     hideUpload
                                     hideActions
                                     hideOverlaps

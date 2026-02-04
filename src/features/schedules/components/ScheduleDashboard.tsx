@@ -12,9 +12,9 @@ import { RequirePermission } from "@/components/RequirePermission";
 import { AUTOSAVE_DEBOUNCE_MS, STORAGE_FILES } from "@/lib/constants";
 import { formatDateToISO, formatDateForDisplay } from "@/lib/utils";
 import { Bot, CalendarPlus, CalendarSearch } from "lucide-react";
-import { SearchLinkModal } from "./modals/SearchLinkModal";
-import { CreateLinkModal } from "./modals/CreateLinkModal";
-import { AssignLinkModal } from "./modals/AssignLinkModal";
+import { SearchLinkModal } from "./modals/search/SearchLinkModal";
+import { CreateLinkModal } from "./modals/creation/CreateLinkModal";
+import { AssignLinkModal } from "./modals/assignment/AssignLinkModal";
 import { useZoomStore } from "@/features/matching/stores/useZoomStore";
 import { MatchingService } from "@/features/matching/services/matcher";
 // Atomic Stores

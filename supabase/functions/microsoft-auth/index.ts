@@ -254,7 +254,11 @@ async function handleUpdateConfig(req: Request, body: UpdateConfigBody, corsHead
 async function handleDisconnect(req: Request, corsHeaders: Record<string, string>): Promise<Response> {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
     await verifyPermission(req, supabase, 'system.manage')
+
+    // System operates as a Singleton (One Admin Account).
+    // Wipe everything to disconnect.
     await supabase.from('microsoft_account').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+
     return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })

@@ -237,7 +237,7 @@ export async function publishScheduleToExcel(
                         tableId: table.id,
                         sheetId: worksheetId,
                         values: values,
-                        range: 'B2'
+                                                range: 'B4'
                     }
                 });
                 if (replaceError) throw replaceError;

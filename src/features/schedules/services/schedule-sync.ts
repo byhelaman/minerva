@@ -26,13 +26,19 @@ export const scheduleSyncService = {
         // We match the format expected by 'microsoft-publisher' logic, but this time
         // we source it effectively from the DB status.
 
+        // Create lookup map for O(1) access
+        const incidenceMap = new Map<string, typeof incidences[0]>();
+        for (const inc of incidences) {
+            // const key = `${inc.program}|${inc.start_time}|${inc.instructor}`;
+            const key = `${inc.date}|${inc.program}|${inc.start_time}|${inc.instructor}`;
+            incidenceMap.set(key, inc);
+        }
+
         const excelRows = schedules.map(sch => {
-            // Find incidence for this row
-            const inc = incidences.find(i =>
-                i.program === sch.program &&
-                i.start_time === sch.start_time &&
-                i.instructor === sch.instructor
-            );
+            // Find incidence for this row (O(1))
+            // const key = `${sch.program}|${sch.start_time}|${sch.instructor}`;
+            const key = `${sch.date}|${sch.program}|${sch.start_time}|${sch.instructor}`;
+            const inc = incidenceMap.get(key);
 
             // Construct row object matching Excel table headers (implied)
             // Based on previous logic in microsoft-publisher.ts (which we will consult/replace)

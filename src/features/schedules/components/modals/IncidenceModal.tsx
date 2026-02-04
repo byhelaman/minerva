@@ -26,7 +26,7 @@ import { INCIDENCE_PRESETS } from "../../constants/incidence-presets";
 import { InstructorSelector } from "./InstructorSelector";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
-import { BrushCleaning, Loader2, Trash2 } from "lucide-react";
+import { BrushCleaning, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 // Zod validation schema
@@ -501,7 +501,6 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                                     size="icon"
                                     onClick={handleDelete}
                                     disabled={isDeleting}
-                                    className="border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
                                 >
                                     {isDeleting ? <Loader2 className="animate-spin" /> : <BrushCleaning />}
                                     <span className="sr-only">Delete</span>
