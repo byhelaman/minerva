@@ -33,7 +33,7 @@ interface ScheduleSyncState {
     checkIfScheduleExists: (date: string) => Promise<boolean>;
     dismissUpdate: (id: string) => void;
     // Download legacy logic removed or adapted? Adapted to just load date
-    loadPublishedSchedule: (schedule: PublishedSchedule) => void;
+    loadPublishedSchedule: (schedule: PublishedSchedule) => Promise<void>;
     resetCurrentVersion: () => Promise<void>;
     resetSyncState: () => void;
     getLatestCloudVersion: (date?: string | null) => Promise<{ exists: boolean; data?: PublishedSchedule; error?: string }>;
@@ -216,25 +216,44 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
         }
     },
 
-    loadPublishedSchedule: (schedule: PublishedSchedule) => {
-        const { fetchSchedulesForDate } = useScheduleDataStore.getState();
+    loadPublishedSchedule: async (schedule: PublishedSchedule) => {
+        const { setLoadedData } = useScheduleDataStore.getState();
         const { setActiveDate } = useScheduleUIStore.getState();
 
-        // Update version tracking
-        const versionData = { id: schedule.id, updated_at: schedule.updated_at };
-        localStorage.setItem('current_schedule_version', JSON.stringify(versionData));
+        const toastId = toast.loading("Verifying schedule content...");
 
-        set({
-            latestPublished: null,
-            currentVersionId: schedule.id,
-            currentVersionUpdatedAt: schedule.updated_at
-        });
+        try {
+            // 1. Verify that there are actual entries to load (and fetch data)
+            const { schedules, incidences } = await scheduleEntriesService.getSchedulesByDate(schedule.schedule_date);
 
-        // Set date and fetch data
-        setActiveDate(schedule.schedule_date);
-        fetchSchedulesForDate(schedule.schedule_date);
+            if (schedules.length === 0) {
+                toast.warning("The published schedule is empty.", {
+                    description: "Aborting load to protect your current view.",
+                    id: toastId
+                });
+                return;
+            }
 
-        toast.success(`Loaded schedule for ${formatDateForDisplay(schedule.schedule_date)}`);
+            // 2. Update version tracking
+            const versionData = { id: schedule.id, updated_at: schedule.updated_at };
+            localStorage.setItem('current_schedule_version', JSON.stringify(versionData));
+
+            set({
+                latestPublished: null,
+                currentVersionId: schedule.id,
+                currentVersionUpdatedAt: schedule.updated_at
+            });
+
+            // 3. Set date and inject pre-fetched data (Optimization: no double fetch)
+            setActiveDate(schedule.schedule_date);
+            setLoadedData(schedules, incidences);
+
+            toast.success(`Loaded schedule for ${formatDateForDisplay(schedule.schedule_date)}`, { id: toastId });
+
+        } catch (e: any) {
+            console.error("Failed to load schedule", e);
+            toast.error("Failed to load schedule", { id: toastId });
+        }
     },
 
     checkForUpdates: async () => {

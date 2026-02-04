@@ -5,7 +5,7 @@ export const STORAGE_FILES = {
     APP_SETTINGS: "minerva_app_settings.json",
     EXCEL_DATA_MIRROR: "minerva_excel_data_mirror.json",
     SCHEDULES_DRAFT: "minerva_schedules_draft.json",
-    INCIDENCES_LOG: "minerva_incidences_log.json",
+    // INCIDENCES_LOG: "minerva_incidences_log.json",
 };
 
 // Claves de LocalStorage

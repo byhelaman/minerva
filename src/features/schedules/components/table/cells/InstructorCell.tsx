@@ -1,4 +1,4 @@
-import { AssignmentRow } from "../assignment-columns";
+import { AssignmentRow } from "../../modals/assignment/assignment-columns";
 import { Row } from "@tanstack/react-table";
 import { InstructorSelector } from "../../modals/InstructorSelector";
 import type { Instructor } from "../../../hooks/useInstructors";

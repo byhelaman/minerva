@@ -72,7 +72,7 @@ export function FileTreeNode({
         if (isFolder) {
             const isSelected = account?.schedules_folder?.id === item.id;
             return (
-                <Collapsible key={item.id} onOpenChange={(open) => open && onLoadFolderChildren(item.id)}>
+                <Collapsible key={item.id} onOpenChange={(open: boolean) => open && onLoadFolderChildren(item.id)}>
                     <div className="flex items-center gap-1 group">
                         <CollapsibleTrigger asChild>
                             <div
@@ -130,7 +130,7 @@ export function FileTreeNode({
     if (isFolder) {
         return (
             <>
-                <Collapsible key={item.id} onOpenChange={(open) => open && onLoadFolderChildren(item.id)}>
+                <Collapsible key={item.id} onOpenChange={(open: boolean) => open && onLoadFolderChildren(item.id)}>
                     <CollapsibleTrigger asChild>
                         <Button
                             variant="ghost"
@@ -159,7 +159,7 @@ export function FileTreeNode({
 
     if (isExcel) {
         return (
-            <Collapsible key={item.id} onOpenChange={(open) => open && onLoadWorksheets(item.id)}>
+            <Collapsible key={item.id} onOpenChange={(open: boolean) => open && onLoadWorksheets(item.id)}>
                 <CollapsibleTrigger asChild>
                     <Button
                         variant="ghost"
@@ -177,7 +177,7 @@ export function FileTreeNode({
                 <CollapsibleContent className="style-lyra:ml-4 pt-1 pl-5 w-full">
                     <div className="flex flex-col gap-1">
                         {fileWorksheets.get(item.id)?.map(worksheet => (
-                            <Collapsible key={worksheet.id} onOpenChange={(open) => open && onLoadTables(item.id, worksheet.id)}>
+                            <Collapsible key={worksheet.id} onOpenChange={(open: boolean) => open && onLoadTables(item.id, worksheet.id)}>
                                 <CollapsibleTrigger asChild>
                                     <Button
                                         variant="ghost"

@@ -49,16 +49,27 @@ COMMENT ON TABLE public.schedule_entries IS 'Horarios desglosados y gestión de 
 -- =============================================
 ALTER TABLE public.schedule_entries ENABLE ROW LEVEL SECURITY;
 
--- Admins/Managers pueden hacer todo
-CREATE POLICY "admins_manage_entries" ON public.schedule_entries
-    FOR ALL TO authenticated
-    USING (((SELECT auth.jwt() -> 'permissions')::jsonb ? 'schedules.manage'))
-    WITH CHECK (((SELECT auth.jwt() -> 'permissions')::jsonb ? 'schedules.manage'));
-
--- Lectura para usuarios con permiso básico
-CREATE POLICY "users_read_entries" ON public.schedule_entries
+-- SELECT: Combined check
+CREATE POLICY "schedule_entries_select" ON public.schedule_entries
     FOR SELECT TO authenticated
-    USING (((SELECT auth.jwt() -> 'permissions')::jsonb ? 'schedules.read'));
+    USING (
+        ((select auth.jwt()) -> 'permissions')::jsonb ? 'schedules.read'
+        OR
+        ((select auth.jwt()) -> 'permissions')::jsonb ? 'schedules.manage'
+    );
+
+-- WRITE: Explicit policies for admins
+CREATE POLICY "schedule_entries_insert" ON public.schedule_entries
+    FOR INSERT TO authenticated
+    WITH CHECK (((select auth.jwt()) -> 'permissions')::jsonb ? 'schedules.manage');
+
+CREATE POLICY "schedule_entries_update" ON public.schedule_entries
+    FOR UPDATE TO authenticated
+    USING (((select auth.jwt()) -> 'permissions')::jsonb ? 'schedules.manage');
+
+CREATE POLICY "schedule_entries_delete" ON public.schedule_entries
+    FOR DELETE TO authenticated
+    USING (((select auth.jwt()) -> 'permissions')::jsonb ? 'schedules.manage');
 
 -- =============================================
 -- REALTIME
@@ -82,7 +93,7 @@ BEGIN
     NEW.updated_at = now();
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = '';
 
 CREATE TRIGGER update_schedule_entries_modtime
     BEFORE UPDATE ON public.schedule_entries

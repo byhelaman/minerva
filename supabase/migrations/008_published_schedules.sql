@@ -22,22 +22,27 @@ COMMENT ON TABLE public.published_schedules IS 'Horarios publicados por admins p
 -- =============================================
 ALTER TABLE public.published_schedules ENABLE ROW LEVEL SECURITY;
 
--- Admins con schedules.manage pueden publicar y actualizar
-CREATE POLICY "admins_can_manage" ON public.published_schedules
-    FOR ALL TO authenticated
-    USING (
-        ((SELECT auth.jwt()) -> 'permissions')::jsonb ? 'schedules.manage'
-    )
-    WITH CHECK (
-        ((SELECT auth.jwt()) -> 'permissions')::jsonb ? 'schedules.manage'
-    );
-
--- Usuarios con schedules.read pueden leer
-CREATE POLICY "users_can_read" ON public.published_schedules
+-- SELECT: Combined check for Read OR Manage permissions
+CREATE POLICY "published_schedules_select" ON public.published_schedules
     FOR SELECT TO authenticated
     USING (
-        ((SELECT auth.jwt()) -> 'permissions')::jsonb ? 'schedules.read'
+        ((select auth.jwt()) -> 'permissions')::jsonb ? 'schedules.read'
+        OR
+        ((select auth.jwt()) -> 'permissions')::jsonb ? 'schedules.manage'
     );
+
+-- WRITE: Explicit policies for admins (manage permission)
+CREATE POLICY "published_schedules_insert" ON public.published_schedules
+    FOR INSERT TO authenticated
+    WITH CHECK (((select auth.jwt()) -> 'permissions')::jsonb ? 'schedules.manage');
+
+CREATE POLICY "published_schedules_update" ON public.published_schedules
+    FOR UPDATE TO authenticated
+    USING (((select auth.jwt()) -> 'permissions')::jsonb ? 'schedules.manage');
+
+CREATE POLICY "published_schedules_delete" ON public.published_schedules
+    FOR DELETE TO authenticated
+    USING (((select auth.jwt()) -> 'permissions')::jsonb ? 'schedules.manage');
 
 -- =============================================
 -- REALTIME

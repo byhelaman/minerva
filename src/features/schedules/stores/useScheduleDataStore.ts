@@ -16,6 +16,7 @@ interface ScheduleDataState {
 
     // Actions
     setBaseSchedules: (schedules: Schedule[]) => void;
+    setLoadedData: (schedules: Schedule[], incidences: DailyIncidence[]) => void;
 
     // DB Actions
     fetchSchedulesForDate: (date: string) => Promise<void>;
@@ -36,6 +37,12 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
     isLoading: false,
 
     setBaseSchedules: (schedules) => set({ baseSchedules: schedules }),
+
+    setLoadedData: (schedules, incidences) => set(state => ({
+        baseSchedules: schedules,
+        incidences,
+        incidencesVersion: state.incidencesVersion + 1
+    })),
 
     fetchSchedulesForDate: async (date: string) => {
         set({ isLoading: true });
