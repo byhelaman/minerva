@@ -19,6 +19,7 @@ interface ScheduleDataState {
 
     // DB Actions
     fetchSchedulesForDate: (date: string) => Promise<void>;
+    fetchSchedulesForRange: (startDate: string, endDate: string) => Promise<void>;
     updateIncidence: (incidence: DailyIncidence) => Promise<void>;
     deleteIncidence: (incidence: DailyIncidence) => Promise<void>;
     fetchIncidencesForDate: (date: string) => Promise<void>;
@@ -40,14 +41,23 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
         set({ isLoading: true });
         try {
             const { schedules, incidences } = await scheduleEntriesService.getSchedulesByDate(date);
-            // If we are in "Published View", we overwrite baseSchedules.
-            // But wait! The user might have local drafts.
-            // Clarification: The prompt says "Lee de Supabase por fecha".
-            // Implementation: When we select a date, if we want to see the PUBLISHED version, we load from DB.
-            // If we are editing a DRAFT, we use local state.
-            // "ScheduleDashboard (Cargar desde Supabase por fecha)".
+            set(state => ({
+                baseSchedules: schedules,
+                incidences,
+                incidencesVersion: state.incidencesVersion + 1
+            }));
+        } catch (error) {
+            console.error("Failed to fetch schedules", error);
+            toast.error("Failed to load schedule data");
+        } finally {
+            set({ isLoading: false });
+        }
+    },
 
-            // Let's assume for now valid schedules from DB replace local state when explicitly fetching.
+    fetchSchedulesForRange: async (startDate: string, endDate: string) => {
+        set({ isLoading: true });
+        try {
+            const { schedules, incidences } = await scheduleEntriesService.getSchedulesByDateRange(startDate, endDate);
             set(state => ({
                 baseSchedules: schedules,
                 incidences,

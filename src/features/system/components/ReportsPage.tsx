@@ -8,7 +8,7 @@ import { IncidenceModal } from "@/features/schedules/components/modals/Incidence
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Loader2, CloudUpload, RefreshCcw, DatabaseBackup, CalendarDays, ChevronDown } from "lucide-react";
+import { Loader2, CloudUpload, RefreshCcw, DatabaseBackup, ChevronDown, CalendarIcon, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -31,12 +31,19 @@ import { mergeSchedulesWithIncidences } from "@/features/schedules/utils/merge-u
 import { ImportReportsModal } from "./modals/ImportReportsModal";
 import { UploadModal } from "@/features/schedules/components/modals/UploadModal";
 
+import { type DateRange } from "react-day-picker";
+
 export function ReportsPage() {
     // State — default to today
-
-    // State
-    const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+    const [dateRange, setDateRange] = useState<DateRange | undefined>({
+        from: new Date(),
+        to: new Date(),
+    });
     const [calendarOpen, setCalendarOpen] = useState(false);
+
+    // Filter state
+    const [showOnlyIncidences, setShowOnlyIncidences] = useState(false);
+
     const [importModalOpen, setImportModalOpen] = useState(false);
     const [uploadModalOpen, setUploadModalOpen] = useState(false);
     const [importedData, setImportedData] = useState<Schedule[]>([]);
@@ -46,7 +53,7 @@ export function ReportsPage() {
         baseSchedules,
         incidences,
         isLoading: isStoreLoading,
-        fetchSchedulesForDate: fetchStoreSchedules
+        fetchSchedulesForRange
     } = useScheduleDataStore();
 
     // Local loading state for initial fetch or manual refresh
@@ -67,25 +74,33 @@ export function ReportsPage() {
     }, [refreshMsConfig]);
 
     // Format date to YYYY-MM-DD for Supabase queries
-    const dateString = format(selectedDate, "yyyy-MM-dd");
 
     // Compute table data from store state (Reactive & Optimistic)
-    const tableData = useMemo(() =>
-        mergeSchedulesWithIncidences(baseSchedules, incidences),
-        [baseSchedules, incidences]);
+    const tableData = useMemo(() => {
+        const merged = mergeSchedulesWithIncidences(baseSchedules, incidences);
+        if (showOnlyIncidences) {
+            return merged.filter(row => !!row.type);
+        }
+        return merged;
+    }, [baseSchedules, incidences, showOnlyIncidences]);
 
-    // Fetch data when date changes
+    // Fetch data when date range changes
     const fetchData = useCallback(async () => {
+        if (!dateRange?.from) return;
+
         setIsLocalLoading(true);
         try {
-            await fetchStoreSchedules(dateString);
+            const fromStr = format(dateRange.from, "yyyy-MM-dd");
+            const toStr = dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : fromStr;
+
+            await fetchSchedulesForRange(fromStr, toStr);
         } catch (error) {
             console.error("Failed to fetch report data:", error);
             toast.error("Failed to load report data");
         } finally {
             setIsLocalLoading(false);
         }
-    }, [dateString, fetchStoreSchedules]);
+    }, [dateRange, fetchSchedulesForRange]);
 
     // Initial fetch on date change
     useEffect(() => {
@@ -125,21 +140,20 @@ export function ReportsPage() {
         };
     });
 
-    // Handle date selection
-    const handleDateSelect = (date: Date | undefined) => {
-        if (date) {
-            setSelectedDate(date);
-            setCalendarOpen(false);
-        }
-    };
-
-    // Handle sync
+    // Handle sync (Single date only)
     const handleSync = async () => {
+        if (!dateRange?.from) return;
+        const dateString = format(dateRange.from, "yyyy-MM-dd");
         await syncToExcel(dateString);
     };
 
     const hasData = tableData.length > 0;
-    const canSync = msConfig.isConnected && msConfig.schedulesFolderId;
+
+    // Only allow sync if single day selected
+    const isSingleDay = dateRange?.from && dateRange?.to &&
+        format(dateRange.from, "yyyy-MM-dd") === format(dateRange.to, "yyyy-MM-dd");
+
+    const canSync = msConfig.isConnected && msConfig.schedulesFolderId && (isSingleDay || (!dateRange?.to && dateRange?.from));
 
     return (
         <div className="flex flex-col h-full">
@@ -150,7 +164,9 @@ export function ReportsPage() {
                     <p className="text-muted-foreground">View and edit daily reports</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    {/* Date Picker */}
+
+
+                    {/* Date Picker Range */}
                     <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                         <PopoverTrigger asChild>
                             <Button
@@ -158,19 +174,32 @@ export function ReportsPage() {
                                 size="sm"
                                 className={cn(
                                     "justify-start text-left font-normal gap-2",
-                                    !selectedDate && "text-muted-foreground",
+                                    !dateRange && "text-muted-foreground",
                                 )}
                             >
-                                <CalendarDays className="opacity-50" />
-                                {format(selectedDate, "dd/MM/yyyy")}
+                                <CalendarIcon className="opacity-50" />
+                                {dateRange?.from ? (
+                                    dateRange.to ? (
+                                        <>
+                                            {format(dateRange.from, "PP")} -{" "}
+                                            {format(dateRange.to, "PP")}
+                                        </>
+                                    ) : (
+                                        format(dateRange.from, "PP")
+                                    )
+                                ) : (
+                                    <span>Pick a date</span>
+                                )}
                                 <ChevronDown className="opacity-50" />
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="end">
                             <Calendar
-                                mode="single"
-                                selected={selectedDate}
-                                onSelect={handleDateSelect}
+                                mode="range"
+                                defaultMonth={dateRange?.from}
+                                selected={dateRange}
+                                onSelect={setDateRange}
+                                numberOfMonths={2}
                                 className="[--cell-size:--spacing(7)]"
                             />
                         </PopoverContent>
@@ -213,7 +242,7 @@ export function ReportsPage() {
                         <div className="text-center space-y-2">
                             <p className="text-sm font-medium">Loading report data...</p>
                             <p className="text-xs text-muted-foreground">
-                                Fetching schedules for {format(selectedDate, "PPP")}
+                                Fetching schedules...
                             </p>
                         </div>
                     </div>
@@ -226,6 +255,21 @@ export function ReportsPage() {
                             hideUpload={true}
                             hideOverlaps={true}
                             hideDefaultActions={true}
+                            customFilterItems={
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setShowOnlyIncidences(!showOnlyIncidences)}
+                                    className={cn(
+                                        "h-8 border-dashed gap-2",
+                                        showOnlyIncidences &&
+                                        "border-amber-500/50 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 hover:text-amber-600 hover:border-amber-500/50 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20 dark:hover:text-amber-400"
+                                    )}
+                                >
+                                    <AlertCircle className="h-4 w-4" />
+                                    Incidences
+                                </Button>
+                            }
                             customActionItems={
                                 <>
                                     <RequirePermission permission="schedules.manage">

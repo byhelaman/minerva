@@ -34,6 +34,7 @@ interface DataTableToolbarProps<TData> {
     hideDefaultActions?: boolean;
     showBranch?: boolean;
     showTime?: boolean;
+    customFilterItems?: React.ReactNode;
 }
 
 export function DataTableToolbar<TData>({
@@ -63,6 +64,7 @@ export function DataTableToolbar<TData>({
     hideDefaultActions = false,
     showBranch,
     showTime,
+    customFilterItems,
 }: DataTableToolbarProps<TData>) {
 
     return (
@@ -85,6 +87,7 @@ export function DataTableToolbar<TData>({
                     setShowLiveMode={setShowLiveMode}
                     showBranch={showBranch}
                     showTime={showTime}
+                    customFilterItems={customFilterItems}
                 />
 
                 <div className="flex items-center gap-2">

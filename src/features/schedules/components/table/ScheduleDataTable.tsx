@@ -73,6 +73,7 @@ interface ScheduleDataTableProps<TData, TValue> {
     hideStatusFilter?: boolean;
 
     customActionItems?: React.ReactNode;
+    customFilterItems?: React.ReactNode;
     hideDefaultActions?: boolean;
 }
 
@@ -292,6 +293,7 @@ export function ScheduleDataTable<TData, TValue>({
                 showBranch={props.filterConfig?.showBranch}
                 showTime={props.filterConfig?.showTime}
                 customActionItems={props.customActionItems}
+                customFilterItems={props.customFilterItems}
                 hideDefaultActions={props.hideDefaultActions}
             />
 

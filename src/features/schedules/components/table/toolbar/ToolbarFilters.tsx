@@ -75,6 +75,7 @@ interface ToolbarFiltersProps<TData> {
     setShowLiveMode?: (show: boolean) => void;
     showBranch?: boolean;
     showTime?: boolean;
+    customFilterItems?: React.ReactNode;
 }
 
 export function ToolbarFilters<TData>({
@@ -92,6 +93,7 @@ export function ToolbarFilters<TData>({
     setShowLiveMode,
     showBranch,
     showTime,
+    customFilterItems,
 }: ToolbarFiltersProps<TData>) {
     const isFiltered =
         table.getState().columnFilters.length > 0 ||
@@ -192,6 +194,9 @@ export function ToolbarFilters<TData>({
                     />
                 ) : null;
             })()}
+
+            {/* Custom Filter Items (e.g. Incidences Toggle) */}
+            {customFilterItems}
 
             {(showBranch ?? !hideFilters) && table.getColumn("branch") && (
                 <DataTableFacetedFilter

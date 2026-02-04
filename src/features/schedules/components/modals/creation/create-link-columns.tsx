@@ -431,6 +431,7 @@ export const getCreateLinkColumns = (
                                         onDateChange?.(result.id, `${y}-${m}-${d}`);
                                     }
                                 }}
+                                disabled={{ before: new Date() }}
                                 className="[--cell-size:--spacing(7)]"
                             />
                             <div className="border-t p-3 bg-muted/20">

@@ -49,9 +49,10 @@ const mapEntryToSchedule = (row: any): Schedule => ({
     units: row.units
 });
 
-// Helper to map DB row to DailyIncidence type (if status exists)
+// Helper to map DB row to DailyIncidence type (if type exists)
 const mapEntryToIncidence = (row: any): DailyIncidence | null => {
-    if (!row.status) return null;
+    // We rely on 'type' being present to consider it an active incidence
+    if (!row.type) return null;
     return {
         // Base Schedule fields (required since DailyIncidence extends Schedule)
         date: row.date,
@@ -87,6 +88,35 @@ export const scheduleEntriesService = {
             .from('schedule_entries')
             .select('*')
             .eq('date', date);
+
+        if (error) throw error;
+
+        const schedules: Schedule[] = [];
+        const incidences: DailyIncidence[] = [];
+
+        data?.forEach(row => {
+            schedules.push(mapEntryToSchedule(row));
+            const incidence = mapEntryToIncidence(row);
+            if (incidence) {
+                incidences.push(incidence);
+            }
+        });
+
+        return { schedules, incidences };
+    },
+
+    /**
+     * Fetch all schedules for a date range.
+     * Returns both the base schedules and any recorded incidences.
+     */
+    async getSchedulesByDateRange(startDate: string, endDate: string) {
+        const { data, error } = await supabase
+            .from('schedule_entries')
+            .select('*')
+            .gte('date', startDate)
+            .lte('date', endDate)
+            .order('date', { ascending: true })
+            .order('start_time', { ascending: true });
 
         if (error) throw error;
 
