@@ -19,6 +19,38 @@ function toExcelColumnWidths(
     return result;
 }
 
+/** Ensures time is in HH:MM string format */
+function ensureTimeFormat(time: any): string {
+    if (!time && time !== 0) return '';
+
+    // If already string in HH:MM format, return as-is
+    if (typeof time === 'string') {
+        const trimmed = time.trim();
+        if (/^\d{1,2}:\d{2}/.test(trimmed)) {
+            // Pad hour if needed (8:00 -> 08:00)
+            const parts = trimmed.split(':');
+            return `${parts[0].padStart(2, '0')}:${parts[1].substring(0, 2)}`;
+        }
+        // Try to parse if it's a decimal string
+        const num = parseFloat(trimmed);
+        if (!isNaN(num)) {
+            time = num;
+        } else {
+            return trimmed; // Return original if can't parse
+        }
+    }
+
+    // If it's a number (decimal fraction of day), convert to HH:MM
+    if (typeof time === 'number') {
+        const totalMinutes = Math.round(time * 24 * 60);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    }
+
+    return String(time);
+}
+
 /**
  * Publishes daily changes to Excel via Microsoft Graph.
  * @param config Microsoft connection configuration
@@ -237,6 +269,12 @@ export async function publishIncidencesToExcel(
     if (!config.incidencesFileId) {
         throw new Error('Incidences file not configured');
     }
+    if (!config.incidencesWorksheetId) {
+        throw new Error('Incidences worksheet not configured');
+    }
+    if (!config.incidencesTableId) {
+        throw new Error('Incidences table not configured');
+    }
 
     notify('Fetching all incidences...');
     const allIncidences = await scheduleEntriesService.getAllIncidences();
@@ -249,17 +287,40 @@ export async function publishIncidencesToExcel(
     ];
 
     const dataRows = allIncidences.map(inc => [
-        inc.date, inc.shift, inc.branch, inc.start_time, inc.end_time,
-        inc.code, inc.instructor, inc.program, inc.minutes, inc.units,
-        inc.status || '', inc.substitute || '', inc.type || '',
-        inc.subtype || '', inc.description || '', inc.department || '',
+        inc.date,
+        inc.shift,
+        inc.branch,
+        ensureTimeFormat(inc.start_time),  // Convert to HH:MM
+        ensureTimeFormat(inc.end_time),    // Convert to HH:MM
+        inc.code,
+        inc.instructor,
+        inc.program,
+        String(inc.minutes || ''),         // Ensure string
+        String(inc.units || ''),           // Ensure string
+        inc.status || '',
+        inc.substitute || '',
+        inc.type || '',
+        inc.subtype || '',
+        inc.description || '',
+        inc.department || '',
         inc.feedback || ''
     ]);
 
     const values = [headers, ...dataRows];
+
+    // DEBUG: Log first row to verify format
+    if (dataRows.length > 0) {
+        console.log('🔍 DEBUG - First row being sent to Excel:');
+        console.log('  Date:', dataRows[0][0], '(type:', typeof dataRows[0][0], ')');
+        console.log('  Program:', dataRows[0][7], '(type:', typeof dataRows[0][7], ')');
+        console.log('  Start Time:', dataRows[0][3], '(type:', typeof dataRows[0][3], ')');
+        console.log('  Instructor:', dataRows[0][6], '(type:', typeof dataRows[0][6], ')');
+    }
+
     // Prioritize Table ID from config, then File ID
     const fileId = config.incidencesFileId;
     const targetTableId = config.incidencesTableId;
+    const worksheetId = config.incidencesWorksheetId;
 
     notify('Checking incidences file...');
 
@@ -281,35 +342,40 @@ export async function publishIncidencesToExcel(
     }
 
     if (activeTable) {
-        // Smart Sync: Upsert rows based on keys to preserve history
-        notify(`Smart Syncing to table '${activeTable.name}'...`);
+        // Upsert: Add new incidences or update existing ones (preserves history)
+        notify(`Syncing ${dataRows.length} incidences to table '${activeTable.name}'...`);
 
-        // Key columns to identify unique rows: Date + Program + StartTime + Instructor
-        const keyColumns = ["date", "program", "start_time", "instructor"];
+        // Key columns to identify unique rows: Only date + program (immutable fields)
+        // start_time and instructor can change, so they shouldn't be part of the key
+        const keyColumns = ["date", "program"];
 
         const { error: upsertError } = await supabase.functions.invoke('microsoft-graph', {
             body: {
                 action: 'upsert-rows-by-key',
                 fileId,
                 tableId: activeTable.id,
+                sheetId: worksheetId, // Required for writing to worksheet
                 values: values, // Includes headers
                 keyColumns: keyColumns,
-                range: 'B2' // Explicitly match the table start
+                range: 'B4' // Table starts at B4
             }
         });
 
         if (upsertError) throw upsertError;
-        notify('Smart Sync complete.');
+        notify('Sync complete - Incidences updated.');
     } else {
         // No table exists — write data and create a table
         notify('Creating incidences table...');
 
-        // Use the first sheet or configured worksheet (if we added that logic, here we just find first sheet)
-        const sheet = items.find(i => i.type === 'sheet');
+        // Use configured worksheet if available, otherwise find first sheet
+        let sheet = worksheetId ? items.find(i => i.id === worksheetId && i.type === 'sheet') : null;
+        if (!sheet) {
+            sheet = items.find(i => i.type === 'sheet');
+        }
         if (!sheet) throw new Error('No worksheet found in incidences file');
 
         const { data: updateData, error: writeError } = await supabase.functions.invoke('microsoft-graph', {
-            body: { action: 'update-range', fileId, sheetId: sheet.id, values, range: 'B2' }
+            body: { action: 'update-range', fileId, sheetId: sheet.id, values, range: 'B4' }
         });
         if (writeError) throw writeError;
 

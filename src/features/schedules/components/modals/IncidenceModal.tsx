@@ -498,6 +498,7 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                             {canEdit && existingIncidence ? (
                                 <Button
                                     variant="secondary"
+                                    size="icon"
                                     onClick={handleDelete}
                                     disabled={isDeleting}
                                     className="border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"

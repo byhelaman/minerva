@@ -577,181 +577,220 @@ serve(async (req: Request) => {
         }
 
         if (action === 'upsert-rows-by-key') {
-            if (!fileId || (!tableId && !sheetId) || !values || !keyColumns) throw new Error('File ID, Table/Sheet ID, Values, and Key Columns are required')
+            if (!fileId || !tableId || !values || !keyColumns) throw new Error('File ID, Table ID, Values, and Key Columns are required')
             const token = await getAccessToken(supabase)
-
-            // 1. Get existing data
-            let rangeUrl = '';
-            if (tableId) {
-                rangeUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/tables/${tableId}/range?$select=values`
-            } else {
-                rangeUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/worksheets/${sheetId}/usedRange?$select=values`
-            }
-
-            const rangeRes = await fetch(rangeUrl, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-
-            let existingValues: any[] = [];
-            if (rangeRes.ok) {
-                const rangeData = await rangeRes.json();
-                existingValues = rangeData.values || [];
-            } else {
-                // If 404 ItemNotFound, it means table or range empty/doesn't exist. 
-                // We treat it as empty and proceed to create/fill.
-                // If other error, we log but maybe still try? No, likely fatal if permission etc.
-                const err = await rangeRes.json().catch(() => ({}));
-                if (err.error?.code !== 'ItemNotFound') {
-                    // Only throw if NOT ItemNotFound
-                    throw new Error(err.error?.message || 'Failed to read existing data for upsert');
-                }
-            }
-
-            // If empty, just write everything (or if only headers)
-            if (existingValues.length <= 1) {
-                // If truly empty, we can just write the data.
-            }
 
             const headerRow = values[0] as string[]; // New headers
             const inputRows = values.slice(1);
 
-            const existingHeaders = existingValues[0] as string[];
-            const existingRows = existingValues.slice(1);
+            // 1. Get table headers to know column order
+            const tableUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/tables/${tableId}`;
+            const tableRes = await fetch(tableUrl, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
 
-            // Map hash key -> row index
-            // We assume headers match or we rely on column Index. 
-            // Better to rely on valid mapping. For now assume same schema.
+            if (!tableRes.ok) {
+                const err = await tableRes.json().catch(() => ({}));
+                throw new Error(err.error?.message || 'Failed to read table info');
+            }
 
-            const getKey = (row: any[]) => {
+            const tableData = await tableRes.json();
+            const tableHeaders = tableData.columns?.map((col: any) => col.name) || headerRow;
+
+            // 2. Get existing rows from table (with indices)
+            const rowsUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/tables/${tableId}/rows`;
+            const rowsRes = await fetch(rowsUrl, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            let existingRows: any[] = [];
+            if (rowsRes.ok) {
+                const rowsData = await rowsRes.json();
+                existingRows = rowsData.value || [];
+            } else {
+                const err = await rowsRes.json().catch(() => ({}));
+                if (err.error?.code !== 'ItemNotFound') {
+                    throw new Error(err.error?.message || 'Failed to read existing rows');
+                }
+            }
+
+            // Helper functions for normalization
+            const normalizeDate = (value: any): string => {
+                if (!value) return '';
+                const str = String(value).trim();
+                if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.substring(0, 10);
+                const ddmmyyyyMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+                if (ddmmyyyyMatch) {
+                    const [, day, month, year] = ddmmyyyyMatch;
+                    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                }
+                const num = Number(value);
+                if (!isNaN(num) && num > 25000 && num < 60000) {
+                    const excelEpoch = new Date(1900, 0, 1);
+                    const date = new Date(excelEpoch.getTime() + (num - 2) * 86400000);
+                    return date.toISOString().substring(0, 10);
+                }
+                return str;
+            };
+
+            const normalizeTime = (value: any): string => {
+                if (!value && value !== 0) return '';
+
+                // Handle Excel decimal time format (0.333333 = 8:00 AM)
+                const num = Number(value);
+                if (!isNaN(num) && num >= 0 && num < 1) {
+                    const totalMinutes = Math.round(num * 24 * 60);
+                    const hours = Math.floor(totalMinutes / 60);
+                    const minutes = totalMinutes % 60;
+                    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+                }
+
+                // Handle string time formats
+                const str = String(value).trim();
+                if (/^\d{2}:\d{2}$/.test(str)) return str;
+                if (/^\d{2}:\d{2}:\d{2}/.test(str)) return str.substring(0, 5);
+                if (/^\d{1}:\d{2}/.test(str)) return '0' + str.substring(0, 4);
+                return str;
+            };
+
+            const normalizeText = (value: any): string => {
+                if (!value) return '';
+                return String(value).trim().replace(/\s+/g, ' ').replace(/[\u200B-\u200D\uFEFF]/g, '');
+            };
+
+            const getKey = (row: any[], headers: string[]) => {
                 return keyColumns.map((col: string) => {
-                    const idx = headerRow.indexOf(col);
-                    return idx !== -1 ? String(row[idx]) : '';
+                    const idx = headers.indexOf(col);
+                    let value = idx !== -1 ? row[idx] : '';
+                    if (col === 'date') value = normalizeDate(value);
+                    else if (col === 'start_time' || col === 'end_time') value = normalizeTime(value);
+                    else value = normalizeText(value);
+                    return value;
                 }).join('|');
             };
 
-            const existingMap = new Map<string, any[]>();
-            existingRows.forEach((row: any[]) => {
-                const key = getKey(row);
-                if (key) existingMap.set(key, row);
+            // 2. Build map of existing rows by key
+            const existingRowMap = new Map<string, { index: number, values: any[] }>();
+
+            console.log('📊 Upsert Debug Info (NEW IMPLEMENTATION):');
+            console.log('  Key Columns:', keyColumns);
+            console.log('  Headers from Input:', headerRow);
+
+            // Show first existing row to understand structure
+            if (existingRows.length > 0) {
+                console.log('\n📄 First Existing Row Structure:');
+                console.log('  row.index:', existingRows[0].index);
+                console.log('  row.values:', existingRows[0].values);
+                console.log('  row.values[0]:', existingRows[0].values[0]);
+            }
+
+            existingRows.forEach((row: any) => {
+                const rowValues = row.values[0]; // Graph API returns values as [[...]]
+                const key = getKey(rowValues, headerRow);
+                existingRowMap.set(key, { index: row.index, values: rowValues });
             });
 
-            // Upsert Logic
-            inputRows.forEach((newRow: any[]) => {
-                const key = getKey(newRow);
-                // Always overwrite/update with new data if key matches, or add if not
-                existingMap.set(key, newRow);
+            console.log('\n🔑 Key Matching:');
+            console.log('  Existing Rows in Table:', existingRows.length);
+            console.log('  New Rows to Upsert:', inputRows.length);
+            console.log('  Existing Keys (first 3):');
+            Array.from(existingRowMap.keys()).slice(0, 3).forEach((key, i) => {
+                console.log(`    [${i}] ${key}`);
             });
+            // 3. Process each input row: UPDATE or INSERT
+            let updateCount = 0;
+            let insertCount = 0;
+            const errors: string[] = [];
 
-            // Reconstruct Table Data
-            // We want to preserve order? Or just dump map?
-            // If we want to preserve order of existing non-touched items, we might need a better structure.
-            // But Map preserves insertion order in JS mostly.
-            // Requirement: "Upsert" usually implies updating in place or appending.
-            // Simple approach: Convert Map values back to array. 
-            // Note: This effectively "moves" updated rows to their new position if we just iterate map, 
-            // or we can iterate original existingRows to keep order and update, then append new.
+            console.log('\n🔄 Processing Rows:');
 
-            const mergedRows: any[] = [];
-            const processedKeys = new Set<string>();
+            for (let i = 0; i < inputRows.length; i++) {
+                const inputRow = inputRows[i];
+                const key = getKey(inputRow, headerRow);
+                const existing = existingRowMap.get(key);
 
-            // 1. Update existing in-place (preserve order)
-            existingRows.forEach((row: any[]) => {
-                const key = getKey(row);
-                if (existingMap.has(key)) {
-                    mergedRows.push(existingMap.get(key));
-                    processedKeys.add(key);
+                // Log first 3 rows for debugging
+                if (i < 3) {
+                    console.log(`\n  Row ${i}:`);
+                    console.log(`    Key: ${key}`);
+                    console.log(`    Match: ${existing ? '✅ FOUND at index ' + existing.index : '❌ NOT FOUND'}`);
+                    if (i === 0) {
+                        console.log(`    Values:`, inputRow.slice(0, 4)); // Show first 4 columns
+                    }
+                }
+
+                if (existing) {
+                    // UPDATE: PATCH existing row using itemAt(index=N)
+                    try {
+                        const updateUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/tables/${tableId}/rows/itemAt(index=${existing.index})`;
+                        const updateRes = await fetch(updateUrl, {
+                            method: 'PATCH',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ values: [inputRow] })
+                        });
+
+                        if (!updateRes.ok) {
+                            const err = await updateRes.json().catch(() => ({}));
+                            throw new Error(err.error?.message || 'Update failed');
+                        }
+                        updateCount++;
+                    } catch (err: any) {
+                        errors.push(`Update row at index ${existing.index}: ${err.message}`);
+                    }
                 } else {
-                    // Should not happen as we checked has(key) from map built from existing
-                    mergedRows.push(row);
+                    // INSERT: POST new row to /rows/add
+                    try {
+                        const addUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/tables/${tableId}/rows/add`;
+                        const addRes = await fetch(addUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ values: [inputRow] })
+                        });
+
+                        if (!addRes.ok) {
+                            const err = await addRes.json().catch(() => ({}));
+                            throw new Error(err.error?.message || 'Insert failed');
+                        }
+                        insertCount++;
+                    } catch (err: any) {
+                        errors.push(`Insert new row: ${err.message}`);
+                    }
                 }
-            });
-
-            // 2. Append new items
-            inputRows.forEach((row: any[]) => {
-                const key = getKey(row);
-                if (!processedKeys.has(key)) {
-                    mergedRows.push(row);
-                }
-            });
-
-            const finalValues = [headerRow, ...mergedRows];
-
-            // Write back entire range
-            // We reuse update-range logic basically but calculated here
-            // Need to calculate range dimensions
-            const numRows = finalValues.length;
-            const numCols = finalValues[0].length;
-
-            // Helper for Column Letter
-            const getColumnLetter = (index: number) => {
-                let letter = "";
-                while (index >= 0) {
-                    letter = String.fromCharCode((index % 26) + 65) + letter;
-                    index = Math.floor(index / 26) - 1;
-                }
-                return letter;
-            };
-
-            // Assuming Start Cell B2 (Hardcoded for this specific logic or passed param?)
-            // Ideally passthrough. Let's assume passed in 'range' param (start cell)
-            const startCell = range || 'A1';
-
-            // ... (Same parsing logic as update-range) ... 
-            const parseCell = (cell: string) => {
-                const match = cell.match(/^([A-Z]+)([0-9]+)$/i);
-                if (!match) return { col: 0, row: 1 };
-                const colStr = match[1].toUpperCase();
-                const row = parseInt(match[2], 10);
-                let col = 0;
-                for (let i = 0; i < colStr.length; i++) col = col * 26 + (colStr.charCodeAt(i) - 64);
-                return { col: col - 1, row };
-            };
-            const { col: startCol, row: startRow } = parseCell(startCell);
-            const endColLetter = getColumnLetter(startCol + numCols - 1);
-            const endRow = startRow + numRows - 1;
-            const calculatedRange = `${startCell}:${endColLetter}${endRow}`;
-
-            const updateUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/worksheets/${sheetId}/range(address='${calculatedRange}')`
-
-            const updateRes = await fetch(updateUrl, {
-                method: 'PATCH',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ values: finalValues })
-            })
-
-            if (!updateRes.ok) {
-                // If 404, maybe table deleted?
-                const err = await updateRes.json().catch(() => ({}))
-
-                if (updateRes.status === 404 || err.error?.code === 'ItemNotFound') {
-                    throw new Error(`Sync Error: Table not found during write. Please try again.`)
-                }
-
-                throw new Error(err.error?.message || 'Failed to write upserted data')
             }
 
-            // 3. Resize Table (Crucial for adding new rows)
-            if (tableId) {
-                // If we wrote to a sheet range, the Table Object might not auto-resize.
-                // We must explicitly tell the table to embrace the new range.
-                const resizeUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/tables/${tableId}/resize`
-                await fetch(resizeUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`, // Use fresh token if needed, usually same token ok
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ targetRange: calculatedRange })
-                })
-                // We ignore resize errors (e.g. if range overlaps another table) as the data is at least written.
+            console.log(`\n✅ Upsert Complete:`);
+            console.log(`  Updates: ${updateCount}`);
+            console.log(`  Inserts: ${insertCount}`);
+            if (errors.length > 0) {
+                console.log(`  ⚠️ Errors: ${errors.length}`);
+                errors.forEach(e => console.log(`    - ${e}`));
             }
 
-            return new Response(JSON.stringify({ success: true, count: finalValues.length }), {
+            if (errors.length > 0) {
+                return new Response(JSON.stringify({
+                    success: false,
+                    updated: updateCount,
+                    inserted: insertCount,
+                    errors: errors
+                }), {
+                    status: 207, // Multi-Status
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+
+            return new Response(JSON.stringify({
+                success: true,
+                updated: updateCount,
+                inserted: insertCount
+            }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-            })
+            });
         }
 
         if (action === 'format-columns') {

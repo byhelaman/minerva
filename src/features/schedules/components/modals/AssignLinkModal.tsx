@@ -242,8 +242,12 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
             // - Si no, mantener el del Excel
             const resolvedInstructor = r.found_instructor?.display_name || r.schedule.instructor;
 
+            // Destructure to remove 'type' so the table doesn't think it's incidence data
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { type, ...scheduleWithoutType } = r.schedule;
+
             return {
-                ...r.schedule,
+                ...scheduleWithoutType,
                 id: getRowId(r.schedule),
                 meetingId: r.meeting_id || "-",
                 time: `${r.schedule.start_time} - ${r.schedule.end_time}`,

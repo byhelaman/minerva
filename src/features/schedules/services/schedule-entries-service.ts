@@ -6,15 +6,44 @@ import { Schedule, DailyIncidence } from "../types";
  * Replaces the JSONB storage model.
  */
 
+// Helper to convert time from any format to HH:MM string
+const ensureTimeFormat = (time: any): string => {
+    if (!time && time !== 0) return '';
+
+    // If already string, check format
+    if (typeof time === 'string') {
+        const trimmed = time.trim();
+        // If already HH:MM, return as-is
+        if (/^\d{1,2}:\d{2}/.test(trimmed)) {
+            const parts = trimmed.split(':');
+            return `${parts[0].padStart(2, '0')}:${parts[1].substring(0, 2)}`;
+        }
+        // Try parse as decimal
+        const num = parseFloat(trimmed);
+        if (!isNaN(num)) time = num;
+        else return trimmed;
+    }
+
+    // If decimal (fraction of day), convert to HH:MM
+    if (typeof time === 'number') {
+        const totalMinutes = Math.round(time * 24 * 60);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    }
+
+    return String(time);
+};
+
 // Helper to map DB row to Schedule type
 const mapEntryToSchedule = (row: any): Schedule => ({
     date: row.date,
     program: row.program,
-    start_time: row.start_time,
+    start_time: ensureTimeFormat(row.start_time),
     instructor: row.instructor,
     shift: row.shift,
     branch: row.branch,
-    end_time: row.end_time,
+    end_time: ensureTimeFormat(row.end_time),
     code: row.code,
     minutes: row.minutes,
     units: row.units
@@ -224,12 +253,13 @@ export const scheduleEntriesService = {
     /**
      * Fetch all entries that have incidence data (status IS NOT NULL).
      * Used for the consolidated incidences Excel export.
+     * Only returns actual incidences, not all schedules.
      */
     async getAllIncidences(): Promise<DailyIncidence[]> {
         const { data, error } = await supabase
             .from('schedule_entries')
             .select('*')
-            .not('status', 'is', null)
+            .not('status', 'is', null) // Only real incidences
             .order('date', { ascending: true })
             .order('start_time', { ascending: true });
 
@@ -238,15 +268,16 @@ export const scheduleEntriesService = {
         return (data || []).map(row => ({
             date: row.date,
             program: row.program,
-            start_time: row.start_time,
+            start_time: ensureTimeFormat(row.start_time),
             instructor: row.instructor,
             shift: row.shift,
             branch: row.branch,
-            end_time: row.end_time,
+            end_time: ensureTimeFormat(row.end_time),
             code: row.code,
             minutes: row.minutes,
             units: row.units,
-            status: row.status,
+            // Include all fields even if null (for Excel sync)
+            status: row.status || undefined,
             substitute: row.substitute || undefined,
             type: row.type || undefined,
             subtype: row.subtype || undefined,
