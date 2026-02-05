@@ -285,13 +285,21 @@ export const scheduleEntriesService = {
      * Used for the consolidated incidences Excel export.
      * Only returns actual incidences, not all schedules.
      */
-    async getAllIncidences(): Promise<DailyIncidence[]> {
-        const { data, error } = await supabase
+    async getAllIncidences(startDate?: string, endDate?: string): Promise<DailyIncidence[]> {
+        let query = supabase
             .from('schedule_entries')
             .select('*')
             .not('status', 'is', null) // Only real incidences
             .order('date', { ascending: true })
             .order('start_time', { ascending: true });
+
+        if (startDate && endDate) {
+            query = query.gte('date', startDate).lte('date', endDate);
+        } else if (startDate) {
+            query = query.eq('date', startDate);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 
@@ -338,6 +346,38 @@ export const scheduleEntriesService = {
             .from('schedule_entries')
             .delete()
             .match(key);
+
+        if (error) throw error;
+    },
+
+    /**
+     * Insert a single schedule entry.
+     * Used for manually adding entries from Reports page.
+     */
+    async addScheduleEntry(schedule: Schedule, publishedBy: string) {
+        const { error } = await supabase
+            .from('schedule_entries')
+            .insert({
+                date: schedule.date,
+                program: schedule.program,
+                start_time: schedule.start_time,
+                instructor: schedule.instructor,
+                shift: schedule.shift,
+                branch: schedule.branch,
+                end_time: schedule.end_time,
+                code: schedule.code,
+                minutes: schedule.minutes,
+                units: schedule.units,
+                published_by: publishedBy,
+
+                // Incidence fields
+                status: schedule.status || null,
+                type: schedule.type || null,
+                subtype: schedule.subtype || null,
+                substitute: schedule.substitute || null,
+                description: schedule.description || null,
+                department: schedule.department || null,
+            });
 
         if (error) throw error;
     }

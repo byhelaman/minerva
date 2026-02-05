@@ -24,6 +24,7 @@ import { useScheduleSyncStore } from "@/features/schedules/stores/useScheduleSyn
 
 import { ScheduleUpdateBanner } from "./ScheduleUpdateBanner";
 import { PublishToDbModal } from "./modals/PublishToDbModal";
+import { AddScheduleModal } from "./modals/AddScheduleModal";
 
 export function ScheduleDashboard() {
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -31,11 +32,12 @@ export function ScheduleDashboard() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
     const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
     // Store Access
     const { baseSchedules, setBaseSchedules, incidences, getComputedSchedules } = useScheduleDataStore();
     const { activeDate, setActiveDate } = useScheduleUIStore();
-    const { refreshMsConfig, isPublishing, msConfig } = useScheduleSyncStore();
+    const { refreshMsConfig, isPublishing } = useScheduleSyncStore();
 
     // Computed Schedules (Merged with Incidences)
     // Memoize to prevent infinite loops in downstream components (AssignLinkModal) that depend on this array
@@ -236,6 +238,17 @@ export function ScheduleDashboard() {
         });
     };
 
+    const handleAddSchedule = (newSchedule: Schedule) => {
+        // If it's the first schedule, set the active date
+        if (baseSchedules.length === 0) {
+            setActiveDate(newSchedule.date);
+        }
+
+        // Add to local state (Draft)
+        setBaseSchedules([...baseSchedules, newSchedule]);
+        toast.success("Schedule added");
+    };
+
 
 
     const handleClearSchedule = async () => {
@@ -326,7 +339,8 @@ export function ScheduleDashboard() {
                 initialPageSize={100}
                 onPublish={() => setIsPublishModalOpen(true)}
                 isPublishing={isPublishing}
-                canPublish={msConfig.isConnected && schedules.length > 0}
+                canPublish={schedules.length > 0}
+                onAddRow={() => setIsAddModalOpen(true)}
             />
 
             {/* Upload Modal */}
@@ -339,6 +353,14 @@ export function ScheduleDashboard() {
             <PublishToDbModal
                 open={isPublishModalOpen}
                 onOpenChange={setIsPublishModalOpen}
+            />
+
+            <AddScheduleModal
+                open={isAddModalOpen}
+                onOpenChange={setIsAddModalOpen}
+                onSubmit={handleAddSchedule}
+                activeDate={activeDate}
+                existingSchedules={baseSchedules}
             />
 
             {/* Feature Modals */}

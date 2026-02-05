@@ -87,6 +87,8 @@ export function UserNav() {
                             System
                         </Link>
                     </DropdownMenuItem>
+                </RequirePermission>
+                <RequirePermission permission="reports.view">
                     <DropdownMenuItem asChild>
                         <Link to="/reports">
                             Reports

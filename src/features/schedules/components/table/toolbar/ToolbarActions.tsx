@@ -250,8 +250,6 @@ export function ToolbarActions<TData>({
                                     {isPublishing ? <Loader2 className="animate-spin" /> : <CloudUpload />}
                                     {isPublishing ? "Publishing..." : "Publish Schedule"}
                                 </DropdownMenuItem>
-                            </RequirePermission>
-                            <RequirePermission permission="schedules.manage">
                                 <DropdownMenuItem onClick={handleCheckCloud} disabled={isCheckingCloud}>
                                     {isCheckingCloud ? <Loader2 className="animate-spin" /> : <CloudDownload />}
                                     {isCheckingCloud ? "Checking..." : "Check the Cloud"}

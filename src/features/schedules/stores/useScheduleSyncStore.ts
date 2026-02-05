@@ -198,9 +198,25 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
 
             // 3. Publish consolidated incidences file
             if (msConfig.incidencesFileId) {
+                // Calculate date range from loaded schedules to support multi-day sync
+                const { baseSchedules } = useScheduleDataStore.getState();
+                let startDate = targetDate;
+                let endDate: string | undefined = undefined;
+
+                if (baseSchedules.length > 0) {
+                    const dates = baseSchedules.map(s => s.date).sort();
+                    startDate = dates[0]; // Earliest
+                    const last = dates[dates.length - 1];
+                    if (last !== startDate) {
+                        endDate = last; // Latest
+                    }
+                }
+
                 await publishIncidencesToExcel(
                     msConfig,
-                    (msg) => toast.loading(msg, { id: toastId })
+                    startDate,
+                    endDate,
+                    (msg: string) => toast.loading(msg, { id: toastId })
                 );
             }
 

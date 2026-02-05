@@ -257,6 +257,8 @@ export async function publishScheduleToExcel(
  */
 export async function publishIncidencesToExcel(
     config: SchedulesConfig,
+    activeDate: string,
+    endDate: string | undefined,
     onStatusUpdate?: (msg: string) => void
 ): Promise<void> {
     const notify = (msg: string) => {
@@ -276,8 +278,9 @@ export async function publishIncidencesToExcel(
         throw new Error('Incidences table not configured');
     }
 
-    notify('Fetching all incidences...');
-    const allIncidences = await scheduleEntriesService.getAllIncidences();
+    const rangeLabel = endDate ? `${activeDate} to ${endDate}` : activeDate;
+    notify(`Fetching incidences for ${rangeLabel}...`);
+    const allIncidences = await scheduleEntriesService.getAllIncidences(activeDate, endDate);
 
     const headers = [
         "date", "shift", "branch", "start_time", "end_time",

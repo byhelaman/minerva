@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { RequirePermission } from "@/components/RequirePermission";
+import { useAuth } from "@/components/auth-provider";
 
 import { useScheduleSyncStore } from "@/features/schedules/stores/useScheduleSyncStore";
 import { useScheduleDataStore } from "@/features/schedules/stores/useScheduleDataStore";
@@ -30,6 +31,8 @@ import type { Schedule, DailyIncidence } from "@/features/schedules/types";
 import { mergeSchedulesWithIncidences } from "@/features/schedules/utils/merge-utils";
 import { ImportReportsModal } from "./modals/ImportReportsModal";
 import { UploadModal } from "@/features/schedules/components/modals/UploadModal";
+import { AddScheduleModal } from "@/features/schedules/components/modals/AddScheduleModal";
+import { scheduleEntriesService } from "@/features/schedules/services/schedule-entries-service";
 
 import { type DateRange } from "react-day-picker";
 
@@ -62,6 +65,7 @@ export function ReportsPage() {
 
     // Incidence modal state
     const [modalOpen, setModalOpen] = useState(false);
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
 
     // Sync store
@@ -145,6 +149,20 @@ export function ReportsPage() {
         if (!dateRange?.from) return;
         const dateString = format(dateRange.from, "yyyy-MM-dd");
         await syncToExcel(dateString);
+    };
+
+    const { user } = useAuth();
+
+    const handleAddSchedule = async (newSchedule: Schedule) => {
+        try {
+            await scheduleEntriesService.addScheduleEntry(newSchedule, user?.id || "");
+            toast.success("Schedule added");
+            // Refresh data
+            fetchData();
+        } catch (error) {
+            console.error("Failed to add schedule:", error);
+            toast.error("Failed to add schedule");
+        }
     };
 
     const hasData = tableData.length > 0;
@@ -261,12 +279,12 @@ export function ReportsPage() {
                                     size="sm"
                                     onClick={() => setShowOnlyIncidences(!showOnlyIncidences)}
                                     className={cn(
-                                        "h-8 border-dashed gap-2",
+                                        "border-dashed",
                                         showOnlyIncidences &&
                                         "border-amber-500/50 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 hover:text-amber-600 hover:border-amber-500/50 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20 dark:hover:text-amber-400"
                                     )}
                                 >
-                                    <AlertCircle className="h-4 w-4" />
+                                    <AlertCircle />
                                     Incidences
                                 </Button>
                             }
@@ -319,6 +337,7 @@ export function ReportsPage() {
                                 showStatus: false,
                                 showIncidenceType: true,
                             }}
+                            onAddRow={() => setIsAddModalOpen(true)}
                         />
                     </div>
                 )}
@@ -382,6 +401,14 @@ export function ReportsPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Add Schedule Modal */}
+            <AddScheduleModal
+                open={isAddModalOpen}
+                onOpenChange={setIsAddModalOpen}
+                onSubmit={handleAddSchedule}
+                allowAnyDate={true}
+            />
         </div>
     );
 }

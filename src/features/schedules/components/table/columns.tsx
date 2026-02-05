@@ -4,6 +4,8 @@ import { type Schedule } from "@schedules/utils/excel-parser";
 import { DataTableColumnHeader } from "./data-table-column-header";
 import { DataTableRowActions } from "./data-table-row-actions";
 import { formatDateForDisplay } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { AlertCircle } from "lucide-react";
 
 export const getScheduleColumns = (
     onDelete?: (s: Schedule) => void
@@ -103,8 +105,14 @@ export const getScheduleColumns = (
                 <DataTableColumnHeader column={column} title="Program" />
             ),
             cell: ({ row }) => (
-                <div>
-                    {row.getValue("program")}
+                <div className="flex items-center gap-2">
+                    {row.original.type && (
+                        <Badge variant="outline" className="border-orange-500/50 text-orange-600 bg-orange-500/10 dark:text-orange-400 hover:bg-orange-500/20">
+                            <AlertCircle />
+                            {row.original.type}
+                        </Badge>
+                    )}
+                    <span>{row.getValue("program")}</span>
                 </div>
             ),
         },

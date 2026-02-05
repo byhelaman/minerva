@@ -75,6 +75,7 @@ interface ScheduleDataTableProps<TData, TValue> {
     customActionItems?: React.ReactNode;
     customFilterItems?: React.ReactNode;
     hideDefaultActions?: boolean;
+    onAddRow?: () => void;
 }
 
 export function ScheduleDataTable<TData, TValue>({
@@ -295,6 +296,7 @@ export function ScheduleDataTable<TData, TValue>({
                 customActionItems={props.customActionItems}
                 customFilterItems={props.customFilterItems}
                 hideDefaultActions={props.hideDefaultActions}
+                onAddRow={props.onAddRow}
             />
 
             {/* Table */}

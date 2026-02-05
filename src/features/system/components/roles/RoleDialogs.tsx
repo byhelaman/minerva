@@ -48,7 +48,7 @@ export function CreateRoleDialog({ open, onOpenChange, isCreating, onSubmit }: C
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-md" onCloseAutoFocus={(e) => e.preventDefault()}>
                 <DialogHeader>
                     <DialogTitle>Create New Role</DialogTitle>
                     <DialogDescription>
@@ -131,7 +131,7 @@ export function EditRoleDialog({ open, onOpenChange, role, isEditing, onSubmit }
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-md" onCloseAutoFocus={(e) => e.preventDefault()}>
                 <DialogHeader>
                     <DialogTitle>Edit Role <span className="font-mono">[{role?.name}]</span></DialogTitle>
                     <DialogDescription>

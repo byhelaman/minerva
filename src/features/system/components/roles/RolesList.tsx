@@ -3,6 +3,7 @@
  * Resalta los roles del sistema con un ícono de escudo.
  */
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
 import { Shield } from "lucide-react";
 import { Role, isSystemRole } from "./types";
 import { cn } from "@/lib/utils";
@@ -15,32 +16,31 @@ interface RolesListProps {
 
 export function RolesList({ roles, selectedRole, onSelectRole }: RolesListProps) {
     return (
-        <div className="w-[200px] shrink-0">
-            <ScrollArea className="h-[380px] pr-3">
-                <div className="space-y-1 p-1">
+        <div className="w-50">
+            <ScrollArea className="h-[400px]">
+                <div className="space-y-1.5 p-1">
                     {roles.map((role) => (
-                        <button
+                        <Button
                             key={role.name}
+                            variant={selectedRole === role.name ? "secondary" : "ghost"}
                             onClick={() => onSelectRole(role.name)}
                             className={cn(
-                                "w-full text-left px-3 py-2 rounded-md transition-colors flex items-center justify-between gap-2",
-                                selectedRole === role.name
-                                    ? "bg-accent text-accent-foreground"
-                                    : "hover:bg-muted"
+                                "w-full justify-start h-auto",
+                                selectedRole === role.name && "bg-accent text-accent-foreground"
                             )}
                         >
-                            <div className="flex items-center gap-2 min-w-0">
+                            <div className="flex items-center gap-2 min-w-0 w-full">
                                 {isSystemRole(role.name) ? (
-                                    <Shield className="size-4 text-muted-foreground shrink-0" />
+                                    <Shield className="size-4 text-muted-foreground" />
                                 ) : (
                                     <div className="size-4" />
                                 )}
-                                <div className="min-w-0">
-                                    <p className="font-medium text-sm truncate">{role.name}</p>
-                                    <p className="text-xs text-muted-foreground">Level {role.hierarchy_level}</p>
+                                <div className="min-w-0 flex flex-col items-start gap-0.5">
+                                    <span className="font-medium text-sm truncate">{role.name}</span>
+                                    <span className="text-xs text-muted-foreground font-normal">Level {role.hierarchy_level}</span>
                                 </div>
                             </div>
-                        </button>
+                        </Button>
                     ))}
                 </div>
             </ScrollArea>

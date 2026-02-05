@@ -1,5 +1,5 @@
 import { type Table } from "@tanstack/react-table";
-import { Loader2, Radio, RefreshCw } from "lucide-react";
+import { Loader2, Plus, Radio, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTableViewOptions } from "./data-table-view-options";
 import { cn } from "@/lib/utils";
@@ -35,6 +35,7 @@ interface DataTableToolbarProps<TData> {
     showBranch?: boolean;
     showTime?: boolean;
     customFilterItems?: React.ReactNode;
+    onAddRow?: () => void;
 }
 
 export function DataTableToolbar<TData>({
@@ -65,6 +66,7 @@ export function DataTableToolbar<TData>({
     showBranch,
     showTime,
     customFilterItems,
+    onAddRow,
 }: DataTableToolbarProps<TData>) {
 
     return (
@@ -111,6 +113,20 @@ export function DataTableToolbar<TData>({
                                     <Radio className={cn("h-4 w-4", showLiveMode && "animate-pulse")} />
                                 )}
                                 {showLiveMode && activeMeetingsCount > 0 ? `Live (${activeMeetingsCount})` : "Live"}
+                            </Button>
+                        </RequirePermission>
+                    )}
+
+                    {/* Add Row Button */}
+                    {onAddRow && (
+                        <RequirePermission permission="schedules.manage">
+                            <Button
+                                variant="outline"
+                                size="icon-sm"
+                                onClick={onAddRow}
+                                title="Add new row"
+                            >
+                                <Plus />
                             </Button>
                         </RequirePermission>
                     )}

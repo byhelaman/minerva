@@ -100,7 +100,7 @@ export function ManageRolesModal({ open, onOpenChange }: ManageRolesModalProps) 
 
             toast.success('Role created successfully');
             setIsCreateOpen(false);
-            refetch();
+            refetch(false);
         } catch (err: any) {
             console.error('Error creating role:', err);
             toast.error(err.message || 'Failed to create role');
@@ -123,7 +123,7 @@ export function ManageRolesModal({ open, onOpenChange }: ManageRolesModalProps) 
 
             toast.success('Role updated successfully');
             setIsEditOpen(false);
-            refetch();
+            refetch(false);
         } catch (err: any) {
             console.error('Error updating role:', err);
             toast.error(err.message || 'Failed to update role');
@@ -148,7 +148,7 @@ export function ManageRolesModal({ open, onOpenChange }: ManageRolesModalProps) 
             if (selectedRole === deleteRoleName) {
                 setSelectedRole(null);
             }
-            refetch();
+            refetch(false);
         } catch (err: any) {
             console.error('Error deleting role:', err);
             toast.error(err.message || 'Failed to delete role');
@@ -182,7 +182,7 @@ export function ManageRolesModal({ open, onOpenChange }: ManageRolesModalProps) 
                     </DialogHeader>
 
                     {isLoading && (
-                        <div className="flex items-center justify-center py-8">
+                        <div className="flex items-center justify-center py-8 h-[300px]">
                             <Loader2 className="size-6 animate-spin text-muted-foreground" />
                         </div>
                     )}
@@ -254,7 +254,7 @@ export function ManageRolesModal({ open, onOpenChange }: ManageRolesModalProps) 
 
             {/* Delete Confirmation */}
             <AlertDialog open={!!deleteRoleName} onOpenChange={(open) => !open && setDeleteRoleName(null)}>
-                <AlertDialogContent>
+                <AlertDialogContent onCloseAutoFocus={(e) => e.preventDefault()}>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Delete Role</AlertDialogTitle>
                         <AlertDialogDescription>

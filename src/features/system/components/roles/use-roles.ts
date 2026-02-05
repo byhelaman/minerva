@@ -11,7 +11,7 @@ interface UseRolesDataReturn {
     permissions: Permission[];
     isLoading: boolean;
     error: string | null;
-    refetch: () => Promise<void>;
+    refetch: (showLoading?: boolean) => Promise<void>;
 }
 
 /**
@@ -24,8 +24,8 @@ export function useRolesData(open: boolean): UseRolesDataReturn {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchData = async () => {
-        setIsLoading(true);
+    const fetchData = async (showLoading = true) => {
+        if (showLoading) setIsLoading(true);
         setError(null);
 
         try {
@@ -49,7 +49,7 @@ export function useRolesData(open: boolean): UseRolesDataReturn {
             console.error('Error fetching data:', err);
             setError(err.message || 'Failed to load roles');
         } finally {
-            setIsLoading(false);
+            if (showLoading) setIsLoading(false);
         }
     };
 

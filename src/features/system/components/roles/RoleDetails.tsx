@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Lock, FilePenLine, Trash2, Shield } from "lucide-react";
 import { Role, Permission, isSystemRole } from "./types";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface RoleDetailsProps {
     role: Role;
@@ -58,61 +59,66 @@ export function RoleDetails({
                     PERMISSIONS ({rolePermissions.length})
                 </p>
                 {isLoadingPerms ? (
-                    <div className="flex items-center justify-center py-4">
+                    <div className="flex items-center justify-center py-4 h-[300px]">
                         <Loader2 className="size-4 animate-spin text-muted-foreground" />
                     </div>
                 ) : canEditPermissions ? (
-                    <div className="grid grid-cols-2 gap-1">
-                        {permissions.map((perm) => {
-                            const hasPerm = rolePermissions.includes(perm.name);
-                            const isSaving = isSavingPerm === perm.name;
-                            return (
-                                <div
-                                    key={perm.name}
-                                    className="flex items-start gap-3 text-sm cursor-pointer hover:bg-muted/50 p-2 rounded-md"
-                                    onClick={() => !isSaving && onTogglePermission(perm.name, hasPerm)}
-                                >
-                                    <Checkbox
-                                        checked={hasPerm}
-                                        disabled={isSaving}
-                                        className="mt-0.5"
-                                    />
-                                    <div className="flex-1 min-w-0">
-                                        <span className="font-mono text-sm">{perm.name}</span>
-                                        <p className="text-muted-foreground text-xs">
-                                            {perm.description}
-                                        </p>
+                    <ScrollArea>
+                        <div className="grid grid-cols-2 gap-1 h-[300px]">
+                            {permissions.map((perm) => {
+                                const hasPerm = rolePermissions.includes(perm.name);
+                                const isSaving = isSavingPerm === perm.name;
+                                return (
+                                    <div
+                                        key={perm.name}
+                                        className="flex items-start gap-3 text-sm cursor-pointer hover:bg-muted/50 p-2 rounded-md"
+                                        onClick={() => !isSaving && onTogglePermission(perm.name, hasPerm)}
+                                    >
+                                        <Checkbox
+                                            checked={hasPerm}
+                                            disabled={isSaving}
+                                            className="mt-0.5"
+                                        />
+                                        <div className="flex-1 min-w-0">
+                                            <span className="font-mono text-sm">{perm.name}</span>
+                                            <p className="text-muted-foreground text-xs">
+                                                {perm.description}
+                                            </p>
+                                        </div>
+                                        {isSaving && (
+                                            <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                                        )}
                                     </div>
-                                    {isSaving && (
-                                        <Loader2 className="size-3 animate-spin text-muted-foreground" />
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
+                                );
+                            })}
+                        </div>
+                    </ScrollArea>
                 ) : (
-                    <div className="space-y-2">
-                        {rolePermissions.map((permName) => {
-                            const perm = permissions.find(p => p.name === permName);
-                            return (
-                                <div key={permName} className="flex items-start gap-2 text-sm">
-                                    <Badge variant="outline" className="text-xs shrink-0 font-mono">
-                                        {permName}
-                                    </Badge>
-                                    {perm && (
-                                        <span className="text-muted-foreground text-xs pt-0.5">
-                                            {perm.description}
-                                        </span>
-                                    )}
-                                </div>
-                            );
-                        })}
-                        {rolePermissions.length === 0 && (
-                            <p className="text-muted-foreground text-xs italic">
-                                No permissions assigned
-                            </p>
-                        )}
-                    </div>
+                    <ScrollArea>
+                        <div className="space-y-2 h-[300px]">
+                            {rolePermissions.map((permName) => {
+                                const perm = permissions.find(p => p.name === permName);
+                                return (
+                                    <div key={permName} className="flex items-start gap-2 text-sm">
+                                        <Badge variant="outline" className="text-xs shrink-0 font-mono">
+                                            {permName}
+                                        </Badge>
+                                        {perm && (
+                                            <span className="text-muted-foreground text-xs pt-0.5">
+                                                {perm.description}
+                                            </span>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                            {rolePermissions.length === 0 && (
+                                <p className="text-muted-foreground text-xs italic">
+                                    No permissions assigned
+                                </p>
+                            )}
+                        </div>
+                    </ScrollArea>
+
                 )}
             </CardContent>
             {canModify && (

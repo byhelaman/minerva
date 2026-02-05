@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, ComponentPropsWithoutRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import type { Instructor } from "../../hooks/useInstructors";
 
-interface InstructorSelectorProps {
+interface InstructorSelectorProps extends Omit<ComponentPropsWithoutRef<typeof Button>, "onChange" | "value"> {
     value?: string;
     onChange: (value: string, email: string, id: string) => void;
     instructors: Instructor[];
@@ -14,7 +14,14 @@ interface InstructorSelectorProps {
     className?: string;
 }
 
-export function InstructorSelector({ value, onChange, instructors, disabled, className }: InstructorSelectorProps) {
+export function InstructorSelector({
+    value,
+    onChange,
+    instructors,
+    disabled,
+    className,
+    ...props
+}: InstructorSelectorProps) {
     const [open, setOpen] = useState(false);
 
     return (
@@ -25,9 +32,10 @@ export function InstructorSelector({ value, onChange, instructors, disabled, cla
                     role="combobox"
                     aria-expanded={open}
                     disabled={disabled}
-                    className="w-full justify-between gap-2 px-3 rounded-lg"
+                    className={"w-full justify-between gap-2 px-3 rounded-lg"}
+                    {...props}
                 >
-                    <span className="truncate font-normal">
+                    <span className={cn("truncate font-normal", !value && "text-muted-foreground")}>
                         {value || "Select instructor"}
                     </span>
                     <ChevronsUpDown className="w-4 h-4 text-muted-foreground opacity-50" />

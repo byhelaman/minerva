@@ -23,10 +23,9 @@ export function GlobalSyncManager() {
         if (isAuthLoading) return;
 
         if (!hasSynced.current) {
-            const isAdmin = (profile?.hierarchy_level ?? 0) >= 80;
-
-            if (isAdmin) {
-                fetchZoomData(); // Load Zoom Data from DB
+            // Load Zoom Data for Moderators (60) and above
+            if ((profile?.hierarchy_level ?? 0) >= 60) {
+                fetchZoomData();
             }
 
             hasSynced.current = true;
