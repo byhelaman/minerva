@@ -6,6 +6,7 @@ import { STORAGE_FILES } from "@/lib/constants";
 interface AppSettings {
     actionsRespectFilters: boolean;
     autoSave: boolean;
+    autoSaveInterval: number; // in milliseconds
     theme: "light" | "dark" | "system";
     openAfterExport: boolean;
     clearScheduleOnLoad: boolean;
@@ -20,6 +21,7 @@ interface SettingsContextType {
 const defaultSettings: AppSettings = {
     actionsRespectFilters: false,
     autoSave: true,
+    autoSaveInterval: 3000, // 3 seconds default
     theme: "system",
     openAfterExport: true,
     clearScheduleOnLoad: false,

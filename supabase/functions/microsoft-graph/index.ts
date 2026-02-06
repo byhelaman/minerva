@@ -2,7 +2,7 @@
 // Interactúa con Microsoft Graph API (OneDrive)
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'npm:@supabase/supabase-js@2.94.1'
 import { verifyPermission } from '../_shared/auth-utils.ts'
 
 const MS_CLIENT_ID = Deno.env.get('MS_CLIENT_ID')!
@@ -86,7 +86,7 @@ serve(async (req: Request) => {
         const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
         await verifyPermission(req, supabase, 'system.manage')
 
-        const { action, folderId, fileId, sheetId, tableId, range, name, values, keyColumns, columns, style, font } = await req.json()
+        const { action, folderId, fileId, sheetId, tableId, range, name, values, keyColumns, columns, style, font, dateFilter } = await req.json()
 
         // === READ ACTIONS ===
 
@@ -505,6 +505,117 @@ serve(async (req: Request) => {
             return new Response(JSON.stringify({ success: true, count: numRows }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             })
+        }
+
+        if (action === 'read-table-rows') {
+            if (!fileId || !tableId) throw new Error('File ID and Table ID are required')
+            const token = await getAccessToken(supabase)
+
+            // Helper functions for normalization (reused from upsert-rows-by-key)
+            const normalizeDate = (value: any): string => {
+                if (!value) return '';
+                const str = String(value).trim();
+                if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.substring(0, 10);
+                const ddmmyyyyMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+                if (ddmmyyyyMatch) {
+                    const [, day, month, year] = ddmmyyyyMatch;
+                    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                }
+                const num = Number(value);
+                if (!isNaN(num) && num > 25000 && num < 60000) {
+                    const excelEpoch = new Date(1900, 0, 1);
+                    const date = new Date(excelEpoch.getTime() + (num - 2) * 86400000);
+                    return date.toISOString().substring(0, 10);
+                }
+                return str;
+            };
+
+            const normalizeTime = (value: any): string => {
+                if (!value && value !== 0) return '';
+                const num = Number(value);
+                if (!isNaN(num) && num >= 0 && num < 1) {
+                    const totalMinutes = Math.round(num * 24 * 60);
+                    const hours = Math.floor(totalMinutes / 60);
+                    const minutes = totalMinutes % 60;
+                    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+                }
+                const str = String(value).trim();
+                if (/^\d{2}:\d{2}$/.test(str)) return str;
+                if (/^\d{2}:\d{2}:\d{2}/.test(str)) return str.substring(0, 5);
+                if (/^\d{1}:\d{2}/.test(str)) return '0' + str.substring(0, 4);
+                return str;
+            };
+
+            const normalizeText = (value: any): string => {
+                if (!value) return '';
+                return String(value).trim().replace(/\s+/g, ' ').replace(/[\u200B-\u200D\uFEFF]/g, '');
+            };
+
+            // 1. Get table rows
+            const rowsUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/tables/${tableId}/rows`;
+            const rowsRes = await fetch(rowsUrl, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!rowsRes.ok) {
+                const err = await rowsRes.json().catch(() => ({}));
+                throw new Error(err.error?.message || 'Failed to read table rows');
+            }
+
+            const rowsData = await rowsRes.json();
+            const rawRows = rowsData.value || [];
+
+            // 2. Get table headers
+            const headersUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/tables/${tableId}/headerRowRange`;
+            const headersRes = await fetch(headersUrl, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            let headers: string[] = [];
+            if (headersRes.ok) {
+                const headersData = await headersRes.json();
+                headers = (headersData.values?.[0] || []).map((h: any) => normalizeText(h).toLowerCase());
+            }
+
+            // 3. Normalize rows and apply date filter
+            const dateColIndex = headers.indexOf('date');
+            const normalizedRows: any[][] = [];
+
+            for (const row of rawRows) {
+                const rowValues = row.values?.[0] || [];
+                const normalizedRow: any[] = [];
+
+                for (let i = 0; i < rowValues.length; i++) {
+                    const header = headers[i] || '';
+                    let value = rowValues[i];
+
+                    if (header === 'date') {
+                        value = normalizeDate(value);
+                    } else if (header === 'start_time' || header === 'end_time') {
+                        value = normalizeTime(value);
+                    } else {
+                        value = normalizeText(value);
+                    }
+
+                    normalizedRow.push(value);
+                }
+
+                // Apply date filter if specified
+                if (dateFilter && dateColIndex !== -1) {
+                    const rowDate = normalizedRow[dateColIndex];
+                    if (rowDate !== dateFilter) continue;
+                }
+
+                normalizedRows.push(normalizedRow);
+            }
+
+            return new Response(JSON.stringify({
+                headers,
+                rows: normalizedRows,
+                rowCount: normalizedRows.length
+            }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
         }
 
         if (action === 'upsert-rows-by-key') {

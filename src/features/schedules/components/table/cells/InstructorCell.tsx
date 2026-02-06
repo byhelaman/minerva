@@ -26,7 +26,7 @@ export function InstructorCell({ row, instructorsList, onInstructorChange }: Ins
                 onChange={handleInstructorChange}
                 instructors={instructorsList}
                 disabled={!isManualMode}
-                className="max-w-[200px]"
+                popoverClassName="max-w-[220px]"
             />
         </div>
     );

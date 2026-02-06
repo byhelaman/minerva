@@ -432,7 +432,7 @@ export const getCreateLinkColumns = (
                                     }
                                 }}
                                 disabled={{ before: new Date() }}
-                                className="[--cell-size:--spacing(7)]"
+                                className="[--cell-size:--spacing(7.5)]"
                             />
                             <div className="border-t p-3 bg-muted/20">
                                 <Field className="gap-2">
@@ -441,7 +441,7 @@ export const getCreateLinkColumns = (
                                         value={result.selected_host || ''}
                                         onChange={(host, email, id) => onHostChange?.(result.id, host, email, id)}
                                         instructors={hostsList || []}
-                                        className="max-w-[200px]"
+                                        popoverClassName="max-w-[200px]"
                                     />
                                 </Field>
                             </div>

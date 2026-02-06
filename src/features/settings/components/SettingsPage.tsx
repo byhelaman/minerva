@@ -203,6 +203,31 @@ export function SettingsPage() {
                                 />
                             </div>
                             <div className="flex items-center justify-between space-x-2">
+                                <Label htmlFor="auto-save-interval" className="flex flex-col items-start">
+                                    <span>{t("settings.automation.auto_save_interval")}</span>
+                                    <span className="font-normal text-xs text-muted-foreground">
+                                        {t("settings.automation.auto_save_interval_desc")}
+                                    </span>
+                                </Label>
+                                <Select
+                                    value={String(settings.autoSaveInterval)}
+                                    onValueChange={(value) => updateSetting("autoSaveInterval", Number(value))}
+                                    disabled={!settings.autoSave}
+                                >
+                                    <SelectTrigger className="w-[120px]">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="1000">{t("settings.automation.interval_1s")}</SelectItem>
+                                        <SelectItem value="3000">{t("settings.automation.interval_3s")}</SelectItem>
+                                        <SelectItem value="5000">{t("settings.automation.interval_5s")}</SelectItem>
+                                        <SelectItem value="10000">{t("settings.automation.interval_10s")}</SelectItem>
+                                        <SelectItem value="30000">{t("settings.automation.interval_30s")}</SelectItem>
+                                        <SelectItem value="60000">{t("settings.automation.interval_1m")}</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex items-center justify-between space-x-2">
                                 <Label htmlFor="clear-schedule-on-load" className="flex flex-col items-start">
                                     <span>{t("settings.automation.clear_schedule_on_load")}</span>
                                     <span className="font-normal text-xs text-muted-foreground">

@@ -8,7 +8,7 @@ import { IncidenceModal } from "@/features/schedules/components/modals/Incidence
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Loader2, CloudUpload, RefreshCcw, DatabaseBackup, ChevronDown, CalendarIcon, AlertCircle } from "lucide-react";
+import { Loader2, CloudUpload, RefreshCcw, ChevronDown, CalendarIcon, AlertCircle, CloudDownload, Download, Cloud, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -21,7 +21,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from "@/components/ui/dropdown-menu";
 import { RequirePermission } from "@/components/RequirePermission";
 import { useAuth } from "@/components/auth-provider";
 
@@ -32,7 +32,12 @@ import { mergeSchedulesWithIncidences } from "@/features/schedules/utils/merge-u
 import { ImportReportsModal } from "./modals/ImportReportsModal";
 import { UploadModal } from "@/features/schedules/components/modals/UploadModal";
 import { AddScheduleModal } from "@/features/schedules/components/modals/AddScheduleModal";
+import { SyncFromExcelModal } from "@/features/schedules/components/modals/SyncFromExcelModal";
 import { scheduleEntriesService } from "@/features/schedules/services/schedule-entries-service";
+import { secureSaveFile } from "@/lib/secure-export";
+import { utils, write } from "xlsx";
+import { formatTimeTo12Hour } from "@/features/schedules/utils/time-utils";
+import { useSettings } from "@/components/settings-provider";
 
 import { type DateRange } from "react-day-picker";
 
@@ -49,6 +54,7 @@ export function ReportsPage() {
 
     const [importModalOpen, setImportModalOpen] = useState(false);
     const [uploadModalOpen, setUploadModalOpen] = useState(false);
+    const [syncFromExcelModalOpen, setSyncFromExcelModalOpen] = useState(false);
     const [importedData, setImportedData] = useState<Schedule[]>([]);
 
     // Store state
@@ -69,7 +75,7 @@ export function ReportsPage() {
     const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
 
     // Sync store
-    const { isSyncing, syncToExcel, msConfig, refreshMsConfig } = useScheduleSyncStore();
+    const { syncToExcel, msConfig, refreshMsConfig } = useScheduleSyncStore();
     const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
 
     // Load MS config on mount
@@ -117,14 +123,15 @@ export function ReportsPage() {
     // Build columns with row click handler
     const columns: ColumnDef<Schedule | DailyIncidence>[] = getDataSourceColumns(
         // Pass delete handler
-        (schedule) => setScheduleToDelete(schedule)
+        (schedule) => setScheduleToDelete(schedule),
+        true // Enable HTML Copy
     ).map(col => {
         // Skip select and actions columns — they don't need click handlers
         if (col.id === "select" || col.id === "actions") return col;
 
         // Wrap cell renderer to add click-to-edit
         const originalCell = col.cell;
-        // ... (rest is same)
+
         return {
             ...col,
             cell: (props: any) => {
@@ -166,6 +173,61 @@ export function ReportsPage() {
     };
 
     const hasData = tableData.length > 0;
+    const hasSchedules = hasData;
+    const { settings } = useSettings();
+
+    const onExportExcel = async () => {
+        try {
+            // Helper to prevent CSV Injection
+            const sanitize = (val: unknown): unknown => {
+                if (typeof val === 'string' && /^[=+\-@]/.test(val)) {
+                    return `'${val}`;
+                }
+                return val;
+            };
+
+            const dataToExport = tableData.map((item) => {
+                return {
+                    ...item,
+                    instructor: sanitize(item.instructor) as string,
+                    program: sanitize(item.program) as string,
+                    branch: sanitize(item.branch) as string,
+                    start_time: formatTimeTo12Hour(item.start_time),
+                    end_time: formatTimeTo12Hour(item.end_time),
+                };
+            });
+
+            const ws = utils.json_to_sheet(dataToExport, {
+                header: [
+                    "date", "shift", "branch", "start_time", "end_time", "code",
+                    "instructor", "program", "minutes", "units", "status", "substitute", "type", "subtype", "description", "department", "feedback"
+                ]
+            });
+
+            const wb = utils.book_new();
+            utils.book_append_sheet(wb, ws, "Schedule");
+
+            const now = new Date();
+            const dateStr = now.toISOString().replace(/[-:]/g, "").replace("T", "-").slice(0, 15);
+            const defaultName = `schedule-report-${dateStr}.xlsx`;
+
+            const excelBuffer = write(wb, { bookType: "xlsx", type: "array" });
+
+            const saved = await secureSaveFile({
+                title: "Save Report",
+                defaultName: defaultName,
+                content: new Uint8Array(excelBuffer),
+                openAfterExport: settings.openAfterExport
+            });
+
+            if (saved) {
+                toast.success("Report exported to Excel successfully");
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to export Excel");
+        }
+    };
 
     // Only allow sync if single day selected
     const isSingleDay = dateRange?.from && dateRange?.to &&
@@ -218,7 +280,7 @@ export function ReportsPage() {
                                 selected={dateRange}
                                 onSelect={setDateRange}
                                 numberOfMonths={2}
-                                className="[--cell-size:--spacing(7)]"
+                                className="[--cell-size:--spacing(7.5)]"
                             />
                         </PopoverContent>
                     </Popover>
@@ -292,25 +354,40 @@ export function ReportsPage() {
                                 <>
                                     <RequirePermission permission="schedules.manage">
                                         <DropdownMenuItem onClick={() => setUploadModalOpen(true)}>
-                                            <CloudUpload />
-                                            Upload Data
+                                            <Upload />
+                                            Import Data
                                         </DropdownMenuItem>
                                     </RequirePermission>
-
-                                    <DropdownMenuItem
-                                        disabled={isSyncing || !canSync || !hasData}
-                                        onClick={() => {
-                                            setConfirmSyncOpen(true);
-                                        }}
-                                    >
-                                        {isSyncing ? (
-                                            <Loader2 className="animate-spin" />
-                                        ) : (
-                                            <DatabaseBackup />
-                                        )}
-                                        {isSyncing ? "Syncing..." : "Sync to Excel"}
+                                    <DropdownMenuItem onClick={onExportExcel} disabled={!hasSchedules}>
+                                        <Download />
+                                        Export Data
                                     </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
+                                    <RequirePermission permission="schedules.manage">
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuSub>
+                                            <DropdownMenuSubTrigger>
+                                                <Cloud />
+                                                OneDrive
+                                            </DropdownMenuSubTrigger>
+                                            <DropdownMenuSubContent>
+                                                <DropdownMenuItem
+                                                    disabled={!canSync}
+                                                    onClick={() => setConfirmSyncOpen(true)}
+                                                >
+                                                    <CloudUpload />
+                                                    <span>Push to Excel</span>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    disabled={!msConfig?.isConnected}
+                                                    onClick={() => setSyncFromExcelModalOpen(true)}
+                                                >
+                                                    <CloudDownload />
+                                                    <span>Pull from Excel</span>
+                                                </DropdownMenuItem>
+                                            </DropdownMenuSubContent>
+                                        </DropdownMenuSub>
+                                        <DropdownMenuSeparator />
+                                    </RequirePermission>
 
                                     <RequirePermission permission="schedules.manage">
                                         <DropdownMenuItem onClick={() => fetchData()} disabled={isLoading}>
@@ -408,6 +485,13 @@ export function ReportsPage() {
                 onOpenChange={setIsAddModalOpen}
                 onSubmit={handleAddSchedule}
                 allowAnyDate={true}
+            />
+
+            {/* Sync from Excel Modal */}
+            <SyncFromExcelModal
+                open={syncFromExcelModalOpen}
+                onOpenChange={setSyncFromExcelModalOpen}
+                onImportComplete={fetchData}
             />
         </div>
     );

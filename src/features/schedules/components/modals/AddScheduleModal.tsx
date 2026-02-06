@@ -33,7 +33,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { Loader2, CalendarIcon, Clock2, ArrowRight, ArrowLeft } from "lucide-react";
+import { Loader2, CalendarIcon, Clock2, ArrowRight, ArrowLeft, X } from "lucide-react";
 import { Schedule } from "../../types";
 import { useInstructors } from "../../hooks/useInstructors";
 import { useZoomStore } from "@/features/matching/stores/useZoomStore";
@@ -303,7 +303,7 @@ export function AddScheduleModal({
                                                                 }
                                                             }}
                                                             disabled={allowAnyDate ? undefined : { before: new Date() }}
-                                                            className="[--cell-size:--spacing(7)]"
+                                                            className="[--cell-size:--spacing(7.5)]"
                                                         />
                                                     </PopoverContent>
                                                 </Popover>
@@ -392,14 +392,29 @@ export function AddScheduleModal({
                                         render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel>Instructor</FormLabel>
-                                                <FormControl className="w-full">
-                                                    <InstructorSelector
-                                                        value={field.value}
-                                                        onChange={(value) => field.onChange(value)}
-                                                        instructors={uniqueInstructors}
-                                                        aria-invalid={!!form.formState.errors.instructor}
-                                                        className="max-w-[220px]"
-                                                    />
+                                                <FormControl>
+                                                    <div className="flex gap-1 items-center w-full">
+                                                        <InstructorSelector
+                                                            value={field.value}
+                                                            onChange={(value) => field.onChange(value)}
+                                                            instructors={uniqueInstructors}
+                                                            aria-invalid={!!form.formState.errors.instructor}
+                                                            className="flex-1"
+                                                            popoverClassName="max-w-[220px]"
+                                                        />
+                                                        {field.value && (
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-9 w-9 shrink-0"
+                                                                onClick={() => field.onChange("")}
+                                                                title="Clear instructor"
+                                                            >
+                                                                <X className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+                                                    </div>
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>

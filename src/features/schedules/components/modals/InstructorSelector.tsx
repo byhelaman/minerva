@@ -12,6 +12,7 @@ interface InstructorSelectorProps extends Omit<ComponentPropsWithoutRef<typeof B
     instructors: Instructor[];
     disabled?: boolean;
     className?: string;
+    popoverClassName?: string;
 }
 
 export function InstructorSelector({
@@ -20,6 +21,7 @@ export function InstructorSelector({
     instructors,
     disabled,
     className,
+    popoverClassName,
     ...props
 }: InstructorSelectorProps) {
     const [open, setOpen] = useState(false);
@@ -32,7 +34,10 @@ export function InstructorSelector({
                     role="combobox"
                     aria-expanded={open}
                     disabled={disabled}
-                    className={"w-full justify-between gap-2 px-3 rounded-lg"}
+                    className={cn(
+                        "w-full justify-between gap-2 px-3 rounded-lg",
+                        className
+                    )}
                     {...props}
                 >
                     <span className={cn("truncate font-normal", !value && "text-muted-foreground")}>
@@ -42,7 +47,7 @@ export function InstructorSelector({
                 </Button>
             </PopoverTrigger>
             <PopoverContent
-                className={cn("w-full p-0 z-200 pointer-events-auto", className)}
+                className={cn("w-[--radix-popover-trigger-width] p-0 z-200 pointer-events-auto", popoverClassName)}
                 align="start"
             >
                 <Command>

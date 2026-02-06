@@ -172,7 +172,7 @@ export function ToolbarFilters<TData>({
             </InputGroup>
 
             {/* Status Filter */}
-            {!hideStatusFilter && !hasIncidenceData && (() => {
+            {!hideStatusFilter && (() => {
                 const statusColumn = table.getAllColumns().find(c => c.id === "status");
                 return statusColumn && statusColumn.getCanFilter() ? (
                     <DataTableFacetedFilter

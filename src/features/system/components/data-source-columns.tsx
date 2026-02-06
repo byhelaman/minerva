@@ -5,7 +5,7 @@ import { DataTableColumnHeader } from "@/features/schedules/components/table/dat
 import { DataTableRowActions } from "@/features/schedules/components/table/data-table-row-actions";
 import { formatDateForDisplay } from "@/lib/utils";
 
-export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDef<Schedule>[] => [
+export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, enableHtmlCopy: boolean = false): ColumnDef<Schedule>[] => [
     {
         id: "select",
         size: 36,
@@ -203,6 +203,6 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDe
     {
         id: "actions",
         size: 50,
-        cell: ({ row }) => <DataTableRowActions row={row} onDelete={onDelete} />,
+        cell: ({ row }) => <DataTableRowActions row={row} onDelete={onDelete} enableHtmlCopy={enableHtmlCopy} />,
     },
 ];

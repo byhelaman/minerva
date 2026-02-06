@@ -33,6 +33,3 @@ export const LEGACY_FILES = {
     INCIDENCES: "incidences.json",
     CACHE: "linked_source_cache.json"
 };
-
-// Debounce delay for auto-save (ms)
-export const AUTOSAVE_DEBOUNCE_MS = 3000; // 3 seconds

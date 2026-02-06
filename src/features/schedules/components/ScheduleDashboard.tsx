@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useSettings } from "@/components/settings-provider";
 import { RequirePermission } from "@/components/RequirePermission";
-import { AUTOSAVE_DEBOUNCE_MS, STORAGE_FILES } from "@/lib/constants";
+import { STORAGE_FILES } from "@/lib/constants";
 import { formatDateToISO, formatDateForDisplay } from "@/lib/utils";
 import { Bot, CalendarPlus, CalendarSearch } from "lucide-react";
 import { SearchLinkModal } from "./modals/search/SearchLinkModal";
@@ -116,14 +116,14 @@ export function ScheduleDashboard() {
             } catch (error) {
                 console.error("Auto-save failed:", error);
             }
-        }, AUTOSAVE_DEBOUNCE_MS);
+        }, settings.autoSaveInterval);
 
         return () => {
             if (autoSaveTimeout.current) {
                 clearTimeout(autoSaveTimeout.current);
             }
         };
-    }, [baseSchedules, settings.autoSave]);
+    }, [baseSchedules, settings.autoSave, settings.autoSaveInterval]);
 
 
     // Live Mode Logic 

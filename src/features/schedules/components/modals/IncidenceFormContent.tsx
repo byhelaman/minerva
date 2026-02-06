@@ -12,13 +12,27 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Instructor } from "@/features/schedules/hooks/useInstructors";
 import { InstructorSelector } from "./InstructorSelector";
 import { INCIDENCE_PRESETS } from "../../constants/incidence-presets";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { X } from "lucide-react";
+
+/** Fields used by IncidenceFormContent */
+export interface IncidenceFormValues {
+    status?: string;
+    type?: string;
+    subtype?: string;
+    description?: string;
+    department?: string;
+    substitute?: string;
+}
 
 interface IncidenceFormContentProps {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     form: UseFormReturn<any>;
-    uniqueInstructors: any[];
+    uniqueInstructors: Instructor[];
     canEdit: boolean;
 }
 
@@ -138,13 +152,28 @@ export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: Incid
                             <FormItem>
                                 <FormLabel className="text-xs">Substitute</FormLabel>
                                 <FormControl>
-                                    <InstructorSelector
-                                        disabled={!canEdit}
-                                        value={field.value || ""}
-                                        onChange={(value, _email, _id) => field.onChange(value)}
-                                        instructors={uniqueInstructors}
-                                        className="max-w-[225px]"
-                                    />
+                                    <div className="flex gap-1 items-center w-full">
+                                        <InstructorSelector
+                                            disabled={!canEdit}
+                                            value={field.value || ""}
+                                            onChange={(value, _email, _id) => field.onChange(value)}
+                                            instructors={uniqueInstructors}
+                                            className="flex-1"
+                                            popoverClassName="max-w-[225px]"
+                                        />
+                                        {field.value && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-9 w-9 shrink-0"
+                                                onClick={() => field.onChange("")}
+                                                title="Clear instructor"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </Button>
+                                        )}
+                                    </div>
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>

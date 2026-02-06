@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { formatTimeTo12Hour } from "@schedules/utils/time-utils";
 import { Schedule } from "@schedules/utils/excel-parser";
+import { PublishedSchedule } from "@/features/schedules/types";
 import { useSettings } from "@/components/settings-provider";
 import { RequirePermission } from "@/components/RequirePermission";
 
@@ -66,7 +67,7 @@ export function ToolbarActions<TData>({
 
     // State for Restore Confirmation
     const [showRestoreDialog, setShowRestoreDialog] = useState(false);
-    const [pendingRestoreData, setPendingRestoreData] = useState<any>(null); // PublishedSchedule
+    const [pendingRestoreData, setPendingRestoreData] = useState<PublishedSchedule | null>(null);
     const [isCheckingCloud, setIsCheckingCloud] = useState(false);
 
     const handleCheckCloud = async () => {
@@ -191,7 +192,7 @@ export function ToolbarActions<TData>({
             const excelBuffer = write(wb, { bookType: "xlsx", type: "array" });
 
             const saved = await secureSaveFile({
-                title: "Guardar Como",
+                title: "Save As",
                 defaultName: defaultName,
                 content: new Uint8Array(excelBuffer),
                 openAfterExport: settings.openAfterExport

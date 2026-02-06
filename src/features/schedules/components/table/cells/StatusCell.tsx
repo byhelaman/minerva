@@ -27,7 +27,7 @@ export function StatusCell({
     let badge;
     if (status === 'assigned') {
         badge = (
-            <Badge variant="outline" className="border-green-600 text-green-600 bg-green-50 dark:bg-green-950/20 dark:border-green-500 dark:text-green-400 cursor-pointer hover:bg-green-100 user-select-none">
+            <Badge variant="outline" className="border-green-600 text-green-600 bg-green-50 dark:bg-green-950/20 dark:border-green-500 dark:text-green-400 cursor-pointer hover:bg-green-100 dark:hover:bg-green-500/20 user-select-none">
                 <BadgeCheck />
                 Assigned
             </Badge>
@@ -41,7 +41,7 @@ export function StatusCell({
         );
     } else if (status === 'to_update') {
         badge = (
-            <Badge variant="outline" className="text-muted-foreground cursor-pointer hover:bg-gray-100">
+            <Badge variant="outline" className="text-muted-foreground cursor-pointer hover:bg-gray-100/10">
                 <RefreshCw />
                 To Update
             </Badge>
