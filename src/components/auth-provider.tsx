@@ -328,16 +328,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    // Verificar contraseña actual
+    // Verificar contraseña actual (via RPC — no session side-effects)
     const verifyCurrentPassword = async (password: string) => {
-        if (!profile?.email) {
-            return { error: new Error("No email found") };
-        }
-        const { error } = await supabase.auth.signInWithPassword({
-            email: profile.email,
-            password,
+        const { data, error } = await supabase.rpc('verify_user_password', {
+            p_password: password,
         });
-        return { error: error as Error | null };
+        if (error) return { error: error as Error };
+        if (data !== true) return { error: new Error("Invalid password") };
+        return { error: null };
     };
 
     return (

@@ -100,16 +100,17 @@ export async function verifyAccess(
 
 /**
  * Verifica que el usuario tiene un permiso específico (Granular Permission).
+ * Acepta un string para verificar un permiso exacto, o un array para verificar AL MENOS UNO de ellos.
  * 
  * @param req - Request con header Authorization
  * @param supabase - Cliente Supabase
- * @param requiredPermission - String del permiso requerido (ej: 'meetings.create')
+ * @param requiredPermission - String del permiso requerido (ej: 'meetings.create') o array de permisos
  * @returns Usuario autenticado
  */
 export async function verifyPermission(
     req: Request,
     supabase: SupabaseClient,
-    requiredPermission: string
+    requiredPermission: string | string[]
 ) {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
@@ -135,6 +136,22 @@ export async function verifyPermission(
         }
     )
 
+    // Si es un array, verificar AL MENOS UNO (OR logic)
+    if (Array.isArray(requiredPermission)) {
+        for (const perm of requiredPermission) {
+            const { data: hasPerm, error: rpcError } = await userClient.rpc('has_permission', {
+                required_permission: perm
+            })
+
+            if (!rpcError && hasPerm) {
+                return user // Found at least one matching permission
+            }
+        }
+
+        throw new Error(`Unauthorized: Missing at least one of these permissions: ${requiredPermission.join(', ')}`)
+    }
+
+    // Si es un string, verificar exacto (AND logic - solo ese permiso)
     const { data: hasPerm, error: rpcError } = await userClient.rpc('has_permission', {
         required_permission: requiredPermission
     })

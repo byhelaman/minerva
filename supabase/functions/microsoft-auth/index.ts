@@ -163,7 +163,7 @@ async function handleCallback(url: URL, corsHeaders: Record<string, string>): Pr
 // === STATUS ===
 async function handleStatus(req: Request, corsHeaders: Record<string, string>): Promise<Response> {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-    await verifyPermission(req, supabase, 'system.manage')
+    await verifyPermission(req, supabase, ['reports.manage', 'system.manage'])
 
     const { data: account, error } = await supabase
         .from('microsoft_account')
@@ -255,11 +255,52 @@ async function handleDisconnect(req: Request, corsHeaders: Record<string, string
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
     await verifyPermission(req, supabase, 'system.manage')
 
-    // System operates as a Singleton (One Admin Account).
-    // Wipe everything to disconnect.
-    await supabase.from('microsoft_account').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    try {
+        // 1. Leer IDs de secretos del Vault antes de borrar la cuenta
+        const { data: account, error: fetchError } = await supabase
+            .from('microsoft_account')
+            .select('access_token_id, refresh_token_id')
+            .single()
 
-    return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+        if (fetchError) {
+            console.warn('No Microsoft account found to disconnect')
+            return new Response(JSON.stringify({ success: true, message: 'No account to disconnect' }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            })
+        }
+
+        // 2. Eliminar secretos del Vault si existen
+        if (account?.access_token_id && account?.refresh_token_id) {
+            const secretIds = [account.access_token_id, account.refresh_token_id]
+            const { error: deleteSecretsError } = await supabase.rpc('delete_microsoft_secrets', {
+                p_secret_ids: secretIds
+            })
+
+            if (deleteSecretsError) {
+                console.error('Failed to delete Microsoft Vault secrets:', deleteSecretsError)
+                // Continue anyway — account deletion is more important
+            }
+        }
+
+        // 3. Eliminar la cuenta Microsoft (System Singleton)
+        const { error: deleteAccountError } = await supabase
+            .from('microsoft_account')
+            .delete()
+            .not('id', 'is', null)
+
+        if (deleteAccountError) {
+            throw new Error(`Failed to delete Microsoft account: ${deleteAccountError.message}`)
+        }
+
+        return new Response(JSON.stringify({ success: true, message: 'Microsoft account disconnected' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Failed to disconnect Microsoft'
+        console.error('Disconnect error:', message)
+        return new Response(JSON.stringify({ error: message }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+    }
 }

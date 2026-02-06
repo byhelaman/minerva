@@ -176,14 +176,10 @@ export const scheduleEntriesService = {
                     minutes: s.minutes,
                     units: s.units,
 
-                    // Incidence fields
-                    status: s.status || null,
-                    substitute: s.substitute || null,
-                    type: s.type || null,
-                    subtype: s.subtype || null,
-                    description: s.description || null,
-                    department: s.department || null,
-                    feedback: s.feedback || null,
+                    // NOTE: Incidence fields (status, substitute, type, subtype, description,
+                    // department, feedback) are intentionally EXCLUDED from publish upsert.
+                    // PostgREST upsert only updates columns present in the request body,
+                    // so existing incidence data is preserved on re-publish.
 
                     published_by: publishedBy,
                     synced_at: null
@@ -195,14 +191,7 @@ export const scheduleEntriesService = {
             .from('schedule_entries')
             .upsert(rows, {
                 onConflict: 'date,program,start_time,instructor',
-                ignoreDuplicates: false // We want to update
-                // Supabase (PostgREST) default Upsert updates all columns provided in the body.
-                // Since we are NOT providing 'status', 'description', etc. in the body,
-                // they should be preserved if they exist?
-                // WAIT: PostgREST upsert replaces the row if no columns specified?
-                // Actually: "If the row exists, it updates with the values provided in the request body."
-                // Columns NOT in the request body are left alone? 
-                // YES, standard patches. So incidence data is SAFE.
+                ignoreDuplicates: false
             });
 
         if (error) throw error;

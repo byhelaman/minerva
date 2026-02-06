@@ -75,7 +75,7 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
         try {
             const claims: any = jwtDecode(session.access_token);
             const permissions = claims.permissions || [];
-            if (!permissions.includes('system.view')) return;
+            if (!permissions.includes('reports.manage')) return;
         } catch (e) {
             return;
         }
@@ -184,19 +184,8 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
             // Merge incidences on top of base schedules
             // const computedSchedules = mergeSchedulesWithIncidences(schedules, incidences);
 
-            // 2. Publish daily schedule sheet (monthly file)
-            const { /* publishScheduleToExcel, */ publishIncidencesToExcel } = await import('../services/microsoft-publisher');
-
-            /*
-            await publishScheduleToExcel(
-                msConfig,
-                targetDate,
-                computedSchedules,
-                (msg) => toast.loading(msg, { id: toastId })
-            );
-            */
-
-            // 3. Publish consolidated incidences file
+            // 2. Publish consolidated incidences file
+            const { publishIncidencesToExcel } = await import('../services/microsoft-publisher');
             if (msConfig.incidencesFileId) {
                 // Calculate date range from loaded schedules to support multi-day sync
                 const { baseSchedules } = useScheduleDataStore.getState();
