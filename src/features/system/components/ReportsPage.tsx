@@ -229,11 +229,8 @@ export function ReportsPage() {
         }
     };
 
-    // Only allow sync if single day selected
-    const isSingleDay = dateRange?.from && dateRange?.to &&
-        format(dateRange.from, "yyyy-MM-dd") === format(dateRange.to, "yyyy-MM-dd");
-
-    const canSync = msConfig.isConnected && msConfig.schedulesFolderId && (isSingleDay || (!dateRange?.to && dateRange?.from));
+    // Sync is allowed if MS is connected and a start date is selected
+    const canSync = msConfig.isConnected && !!dateRange?.from;
 
     return (
         <div className="flex flex-col h-full">
@@ -352,7 +349,7 @@ export function ReportsPage() {
                             }
                             customActionItems={
                                 <>
-                                    <RequirePermission permission="schedules.manage">
+                                    <RequirePermission permission="reports.manage">
                                         <DropdownMenuItem onClick={() => setUploadModalOpen(true)}>
                                             <Upload />
                                             Import Data
@@ -362,7 +359,7 @@ export function ReportsPage() {
                                         <Download />
                                         Export Data
                                     </DropdownMenuItem>
-                                    <RequirePermission permission="schedules.manage">
+                                    <RequirePermission permission="reports.manage">
                                         <DropdownMenuSeparator />
                                         <DropdownMenuSub>
                                             <DropdownMenuSubTrigger>
@@ -389,7 +386,7 @@ export function ReportsPage() {
                                         <DropdownMenuSeparator />
                                     </RequirePermission>
 
-                                    <RequirePermission permission="schedules.manage">
+                                    <RequirePermission permission="reports.manage">
                                         <DropdownMenuItem onClick={() => fetchData()} disabled={isLoading}>
                                             <RefreshCcw className={cn(isLoading && "animate-spin")} />
                                             Refresh Table

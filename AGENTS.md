@@ -28,8 +28,8 @@ MSAL initializes first (async), then: `MsalProvider → ThemeProvider → AuthPr
 Flat routes via react-router-dom v7. `src/routes/` is unused.
 - `/login` — public
 - All others wrapped in `<ProtectedRoute>` + `<GlobalSyncManager>`
-- `/system` — admin only (`hierarchy_level >= 80`)
-- `/reports` — requires `reports.view` permission
+- `/system` — admin only (`hierarchy_level >= 80`); integrations (Zoom, Microsoft) require `level={100}` (super_admin)
+- `/reports` — requires `reports.view` permission; management actions require `reports.manage`
 
 ### Feature-based organization (`src/features/`)
 
@@ -69,6 +69,21 @@ Three-tier search: exact normalized → Fuse.js fuzzy → token set fallback. Ru
 - Microsoft MSAL with PKCE for OneDrive access
 - RLS on all tables; role hierarchy: viewer(10) → operator(50) → admin(80) → super_admin(100)
 - Desktop session: PKCE, localStorage (`minerva-auth-token`), manual auto-refresh tied to window visibility
+
+## Permissions & Authorization
+
+Key permissions and their usage patterns:
+- **`schedules.read`** (10+) — View own schedules
+- **`schedules.write`** (50+) — Upload and edit schedules
+- **`schedules.manage`** (80+) — Publish global schedules
+- **`reports.view`** (80+) — Access Reports page
+- **`reports.manage`** (80+) — Import, delete, sync reports
+- **`system.manage`** (100) — Connect integrations (Zoom, OneDrive)
+
+Integration pattern (Zoom, Microsoft):
+- Only **super_admin** (`level={100}`) can connect/disconnect accounts in SystemPage
+- Users with appropriate permissions can use connected integrations
+- Example: super_admin connects OneDrive → admins with `reports.manage` can sync
 
 ## Code Style
 

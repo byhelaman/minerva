@@ -61,7 +61,7 @@ async function getAccessToken(supabase: any) {
         const { error: updateError } = await supabase.rpc('store_microsoft_credentials', {
             p_user_id: creds.microsoft_user_id,
             p_email: creds.microsoft_email,
-            p_name: creds.microsoft_name,
+            p_name: creds.microsoft_name ?? creds.microsoft_email ?? '',
             p_access_token: tokens.access_token,
             p_refresh_token: tokens.refresh_token || creds.refresh_token,
             p_scope: tokens.scope,
@@ -84,9 +84,24 @@ serve(async (req: Request) => {
 
     try {
         const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-        await verifyPermission(req, supabase, 'system.manage')
-
         const { action, folderId, fileId, sheetId, tableId, range, name, values, keyColumns, columns, style, font, dateFilter } = await req.json()
+
+        // Determine required permission based on action
+        const readActions = ['list-children', 'list-worksheets', 'list-content', 'list-tables', 'read-table-rows'];
+        const syncActions = ['upsert-rows-by-key', 'replace-table-data', 'append-rows'];
+        const writeActions = ['create-worksheet', 'update-range', 'upload-file', 'create-table', 'resize-table', 'format-columns', 'format-font', 'update-table-style'];
+
+        // Verify permission based on action type
+        if (syncActions.includes(action)) {
+            // Sync actions can be done by reports managers or super_admin
+            await verifyPermission(req, supabase, ['reports.manage', 'system.manage'])
+        } else if (readActions.includes(action)) {
+            // Read actions can be done by reports managers or super_admin
+            await verifyPermission(req, supabase, ['reports.manage', 'system.manage'])
+        } else {
+            // Write operations (create, modify structure) — only super_admin
+            await verifyPermission(req, supabase, 'system.manage')
+        }
 
         // === READ ACTIONS ===
 

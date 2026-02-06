@@ -119,7 +119,7 @@ AS $$
 DECLARE
     v_state TEXT;
 BEGIN
-    v_state := encode(gen_random_bytes(32), 'hex');
+    v_state := encode(extensions.gen_random_bytes(32), 'hex');
     DELETE FROM public.oauth_states WHERE expires_at < now();
     INSERT INTO public.oauth_states (state, user_id, expires_at)
     VALUES (v_state, p_user_id, now() + interval '10 minutes');

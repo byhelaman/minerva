@@ -32,5 +32,8 @@ dist-ssr
 src-tauri/target
 src-tauri/gen
 
-_reference/*
+_archive/*
 *.key
+*.temp/
+*.agents/
+*.claude/

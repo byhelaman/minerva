@@ -10,53 +10,18 @@ import { BugReportButton } from "./features/docs/components/BugReportForm";
 import "./lib/i18n";
 import "./index.css";
 
-
-
-import { PublicClientApplication, EventType } from "@azure/msal-browser";
-import { MsalProvider } from "@azure/msal-react";
-import { msalConfig } from "./config/authConfig";
-
-const msalInstance = new PublicClientApplication(msalConfig);
-
-// Inicializar MSAL y manejar redirección
-msalInstance.initialize().then(() => {
-  // Usar primera cuenta por defecto si está disponible
-  if (!msalInstance.getActiveAccount() && msalInstance.getAllAccounts().length > 0) {
-    msalInstance.setActiveAccount(msalInstance.getAllAccounts()[0]);
-  }
-
-  // Opcional: Callback de eventos
-  msalInstance.addEventCallback((event) => {
-    if (event.eventType === EventType.LOGIN_SUCCESS && event.payload) {
-      // @ts-ignore
-      const account = event.payload.account;
-      msalInstance.setActiveAccount(account);
-    }
-  });
-
-  // Manejar respuesta de redirección (requerido para loginRedirect)
-  msalInstance.handleRedirectPromise().then((authResult) => {
-    if (authResult && authResult.account) {
-      msalInstance.setActiveAccount(authResult.account);
-    }
-
-    // Renderizar la App solo después de que MSAL esté listo
-    ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-      <React.StrictMode>
-        <MsalProvider instance={msalInstance}>
-          <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
-            <AuthProvider>
-              <BrowserRouter>
-                <SettingsProvider>
-                  <App />
-                  <BugReportButton />
-                  <Toaster />
-                </SettingsProvider>
-              </BrowserRouter>
-            </AuthProvider>
-          </ThemeProvider>
-        </MsalProvider>
-      </React.StrictMode>,
-    );
-  }).catch(error => console.error("MSAL Redirect Error:", error));
-});
+ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+  <React.StrictMode>
+    <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+      <AuthProvider>
+        <BrowserRouter>
+          <SettingsProvider>
+            <App />
+            <BugReportButton />
+            <Toaster />
+          </SettingsProvider>
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
+  </React.StrictMode>,
+);

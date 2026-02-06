@@ -90,7 +90,8 @@ async function handleInit(req: Request, corsHeaders: Record<string, string>): Pr
     })
 
     if (stateError || !state) {
-        throw new Error('Error al crear estado OAuth')
+        console.error('OAuth state creation failed:', stateError)
+        throw new Error(`OAuth state creation failed: ${stateError?.message || 'empty state'}`)
     }
 
     const authUrl = new URL('https://zoom.us/oauth/authorize')
@@ -216,11 +217,52 @@ async function handleDisconnect(req: Request, corsHeaders: Record<string, string
     // Verificación RBAC (Permiso: system.manage)
     await verifyPermission(req, supabase, 'system.manage')
 
-    // Eliminar cuenta. ¿Integridad referencial o limpieza manual de secretos?
-    // Por ahora, solo borramos la cuenta. Los secretos quedan en vault sin referencia.
-    await supabase.from('zoom_account').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    try {
+        // 1. Leer IDs de secretos del Vault antes de borrar la cuenta
+        const { data: account, error: fetchError } = await supabase
+            .from('zoom_account')
+            .select('access_token_id, refresh_token_id')
+            .single()
 
-    return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+        if (fetchError) {
+            console.warn('No Zoom account found to disconnect')
+            return new Response(JSON.stringify({ success: true, message: 'No account to disconnect' }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            })
+        }
+
+        // 2. Eliminar secretos del Vault si existen
+        if (account?.access_token_id && account?.refresh_token_id) {
+            const secretIds = [account.access_token_id, account.refresh_token_id]
+            const { error: deleteSecretsError } = await supabase.rpc('delete_zoom_secrets', {
+                p_secret_ids: secretIds
+            })
+
+            if (deleteSecretsError) {
+                console.error('Failed to delete Vault secrets:', deleteSecretsError)
+                // Continue anyway — account deletion is more important
+            }
+        }
+
+        // 3. Eliminar la cuenta Zoom
+        const { error: deleteAccountError } = await supabase
+            .from('zoom_account')
+            .delete()
+            .not('id', 'is', null)
+
+        if (deleteAccountError) {
+            throw new Error(`Failed to delete Zoom account: ${deleteAccountError.message}`)
+        }
+
+        return new Response(JSON.stringify({ success: true, message: 'Zoom account disconnected' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Failed to disconnect Zoom'
+        console.error('Disconnect error:', message)
+        return new Response(JSON.stringify({ error: message }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+    }
 }

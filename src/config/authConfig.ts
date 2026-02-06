@@ -12,9 +12,9 @@ import { LogLevel } from "@azure/msal-browser";
  */
 export const msalConfig = {
     auth: {
-        clientId: "8e787855-4eba-49f7-9e89-aba8c09cddfc",
+        clientId: import.meta.env.VITE_MSAL_CLIENT_ID ?? "",
         authority: "https://login.microsoftonline.com/common",
-        redirectUri: "http://localhost:1420", // Adjust if your Tauri app uses a different local URI or deep link
+        redirectUri: import.meta.env.VITE_MSAL_REDIRECT_URI ?? "http://localhost:1420",
     },
     cache: {
         cacheLocation: "sessionStorage", // This configures where your cache will be stored
