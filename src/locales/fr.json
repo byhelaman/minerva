@@ -116,8 +116,16 @@
             "software_update": "Mise à jour Logicielle",
             "software_update_desc": "Vérifier la dernière version de Minerva.",
             "check_updates_btn": "Vérifier les Mises à jour",
+            "checking_updates": "Vérification...",
+            "up_to_date": "Vous êtes à jour !",
+            "up_to_date_desc": "Minerva {{version}} est la dernière version.",
+            "update_available": "Mise à jour disponible",
+            "update_available_desc": "La version {{version}} est disponible au téléchargement.",
+            "update_error": "Impossible de vérifier les mises à jour",
             "version": "Version",
             "environment": "Environnement",
+            "environment_dev": "Développement",
+            "environment_prod": "Production",
             "build": "Build",
             "tauri": "Tauri"
         }

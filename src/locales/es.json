@@ -116,8 +116,16 @@
             "software_update": "Actualización de Software",
             "software_update_desc": "Buscar la última versión de Minerva.",
             "check_updates_btn": "Buscar Actualizaciones",
+            "checking_updates": "Buscando...",
+            "up_to_date": "¡Estás al día!",
+            "up_to_date_desc": "Minerva {{version}} es la versión más reciente.",
+            "update_available": "Actualización disponible",
+            "update_available_desc": "La versión {{version}} está disponible para descargar.",
+            "update_error": "No se pudo buscar actualizaciones",
             "version": "Versión",
             "environment": "Entorno",
+            "environment_dev": "Desarrollo",
+            "environment_prod": "Producción",
             "build": "Compilación",
             "tauri": "Tauri"
         }

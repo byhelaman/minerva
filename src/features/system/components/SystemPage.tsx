@@ -10,6 +10,7 @@ import { useAuth } from "@/components/auth-provider";
 import { ZoomIntegration } from "@/features/system/components/ZoomIntegration";
 import { MicrosoftIntegration } from "@/features/system/components/MicrosoftIntegration";
 import { Label } from "@/components/ui/label";
+import { ActivityLog } from "./ActivityLog";
 
 
 export function SystemPage() {
@@ -149,22 +150,7 @@ export function SystemPage() {
                         <MicrosoftIntegration />
                     </RequirePermission>
 
-                    {/* System Activity */}
-                    <Card className="shadow-none">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                Recent Activity
-                            </CardTitle>
-                            <CardDescription>
-                                System events and audit log.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-sm text-muted-foreground text-center py-8">
-                                Activity log coming soon...
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <ActivityLog />
                 </div>
             </div>
 

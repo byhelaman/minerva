@@ -1,6 +1,6 @@
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Monitor, Moon, Sun } from "lucide-react";
+import { Loader2, Monitor, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -27,12 +27,44 @@ import { BaseDirectory, exists, remove } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
 import { STORAGE_FILES } from "@/lib/constants";
 import { useTranslation } from "react-i18next";
+import { useUpdater } from "@/hooks/use-updater";
+import { getVersion, getTauriVersion } from "@tauri-apps/api/app";
+import { useState, useEffect } from "react";
 
 
 export function SettingsPage() {
     const { t, i18n } = useTranslation();
     const { setTheme } = useTheme();
     const { settings, updateSetting } = useSettings();
+    const { checkForUpdates, update, isChecking, error: updateError } = useUpdater();
+
+    const [appVersion, setAppVersion] = useState<string>("");
+    const [tauriVersion, setTauriVersion] = useState<string>("");
+
+    useEffect(() => {
+        getVersion().then(setAppVersion);
+        getTauriVersion().then(setTauriVersion);
+    }, []);
+
+    const handleCheckUpdates = async () => {
+        await checkForUpdates();
+
+        // Si no hay error y no hay update, estamos al día
+        if (!updateError && !update) {
+            toast.success(t("settings.system.up_to_date"), {
+                description: t("settings.system.up_to_date_desc", { version: appVersion }),
+            });
+        }
+    };
+
+    // Mostrar toast de error tras el check
+    useEffect(() => {
+        if (updateError) {
+            toast.error(t("settings.system.update_error"), {
+                description: updateError,
+            });
+        }
+    }, [updateError, t]);
 
     const handleClearCache = async () => {
         try {
@@ -362,8 +394,20 @@ export function SettingsPage() {
                                         {t("settings.system.software_update_desc")}
                                     </p>
                                 </div>
-                                <Button variant="outline" size="sm">
-                                    {t("settings.system.check_updates_btn")}
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleCheckUpdates}
+                                    disabled={isChecking}
+                                >
+                                    {isChecking ? (
+                                        <>
+                                            <Loader2 className="animate-spin" />
+                                            {t("settings.system.checking_updates")}
+                                        </>
+                                    ) : (
+                                        t("settings.system.check_updates_btn")
+                                    )}
                                 </Button>
                             </div>
 
@@ -371,19 +415,23 @@ export function SettingsPage() {
                             <div className="grid grid-cols-2 gap-4 pt-4 border-t text-sm">
                                 <div className="flex flex-col">
                                     <span className="text-muted-foreground text-xs">{t("settings.system.version")}</span>
-                                    <span className="font-medium">v2.0.1</span>
+                                    <span className="font-medium">{appVersion ? `v${appVersion}` : "—"}</span>
                                 </div>
                                 <div className="flex flex-col">
                                     <span className="text-muted-foreground text-xs">{t("settings.system.environment")}</span>
-                                    <span className="font-medium">Production (Windows)</span>
+                                    <span className="font-medium">
+                                        {import.meta.env.DEV
+                                            ? t("settings.system.environment_dev")
+                                            : t("settings.system.environment_prod")}
+                                    </span>
                                 </div>
                                 <div className="flex flex-col">
                                     <span className="text-muted-foreground text-xs">{t("settings.system.build")}</span>
-                                    <span className="font-medium">2026.01.11</span>
+                                    <span className="font-medium">{__BUILD_DATE__}</span>
                                 </div>
                                 <div className="flex flex-col">
                                     <span className="text-muted-foreground text-xs">{t("settings.system.tauri")}</span>
-                                    <span className="font-medium">v2.0.0</span>
+                                    <span className="font-medium">{tauriVersion ? `v${tauriVersion}` : "—"}</span>
                                 </div>
                             </div>
                         </CardContent>
