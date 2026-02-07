@@ -10,9 +10,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getValidAccessToken } from '../_shared/zoom-token-utils.ts'
 import { verifyPermission } from '../_shared/auth-utils.ts'
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
-const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
+const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const ZOOM_API_BASE = 'https://api.zoom.us/v2'
+const MAX_BATCH_SIZE = 50
 
 // CORS: Orígenes permitidos (Tauri + desarrollo)
 const ALLOWED_ORIGINS = [
@@ -27,6 +28,7 @@ function getCorsHeaders(req: Request) {
     return {
         'Access-Control-Allow-Origin': isAllowed ? origin : 'null',
         'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-name, x-app-version',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
     }
 }
 
@@ -189,6 +191,10 @@ serve(async (req: Request) => {
 
         // ========== MODO BATCH ==========
         if (isBatchRequest(body)) {
+            // FIX: Límite de tamaño de batch para prevenir abuso
+            if (body.requests.length > MAX_BATCH_SIZE) {
+                return jsonResponse({ error: `Batch size exceeds limit of ${MAX_BATCH_SIZE}` }, 400, corsHeaders)
+            }
             // ... (validaciones)
             // Procesar solicitudes en paralelo
             const results = await Promise.allSettled(

@@ -5,11 +5,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { verifyPermission } from '../_shared/auth-utils.ts'
 
-const MS_CLIENT_ID = Deno.env.get('MS_CLIENT_ID')!
-const MS_CLIENT_SECRET = Deno.env.get('MS_CLIENT_SECRET')!
-const MS_REDIRECT_URI = Deno.env.get('MS_REDIRECT_URI')!
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
-const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const MS_CLIENT_ID = Deno.env.get('MS_CLIENT_ID') ?? ''
+const MS_CLIENT_SECRET = Deno.env.get('MS_CLIENT_SECRET') ?? ''
+const MS_REDIRECT_URI = Deno.env.get('MS_REDIRECT_URI') ?? ''
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
+const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
 // SECURITY: Restrict CORS origins
 const ALLOWED_ORIGINS = [
@@ -24,6 +24,7 @@ function getCorsHeaders(req: Request) {
     return {
         'Access-Control-Allow-Origin': isAllowed ? origin : 'null',
         'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-name, x-app-version',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     }
 }
 
@@ -67,11 +68,12 @@ serve(async (req: Request) => {
         return new Response(JSON.stringify({ error: `Endpoint not found for path: ${path}` }), {
             status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
-    } catch (error: any) {
-        console.error('Auth error', error)
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        return new Response(JSON.stringify({ error: message }), {
-            status: 500,
+    } catch (error: unknown) {
+        console.error('Auth error:', error instanceof Error ? error.message : 'Unknown')
+        // FIX: No exponer detalles internos
+        const isAuthError = error instanceof Error && error.message.startsWith('Unauthorized')
+        return new Response(JSON.stringify({ error: isAuthError ? 'Unauthorized' : 'Internal server error' }), {
+            status: isAuthError ? 401 : 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
     }
@@ -131,8 +133,8 @@ async function handleCallback(url: URL, corsHeaders: Record<string, string>): Pr
     })
 
     if (!tokenResponse.ok) {
-        const err = await tokenResponse.json()
-        return new Response(`Microsoft Error: ${JSON.stringify(err)}`, { status: 400 })
+        console.error('Microsoft token exchange failed')
+        return new Response('Authentication failed', { status: 400 })
     }
 
     const tokens = await tokenResponse.json()
@@ -153,7 +155,7 @@ async function handleCallback(url: URL, corsHeaders: Record<string, string>): Pr
         p_expires_in: tokens.expires_in
     })
 
-    if (rpcError) return new Response(`Database Error: ${rpcError.message}`, { status: 500 })
+    if (rpcError) return new Response('Failed to save credentials', { status: 500 })
 
     return new Response('Microsoft connected successfully!\nYou can close this window.', {
         headers: { 'Content-Type': 'text/plain' }

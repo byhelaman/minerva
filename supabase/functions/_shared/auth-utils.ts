@@ -1,9 +1,11 @@
 // Supabase Edge Function: Shared Auth Utilities
 // Funciones compartidas de autenticación y autorización para Edge Functions
 
-import { createClient, SupabaseClient } from 'npm:@supabase/supabase-js@2.94.1'
+import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// Roles permitidos por nivel de acceso
+// =============================================
+// Constantes de roles
+// =============================================
 export const ROLES = {
     SUPER_ADMIN_ONLY: ['super_admin'],
     ADMIN_AND_ABOVE: ['super_admin', 'admin'],
@@ -11,15 +13,27 @@ export const ROLES = {
 
 type RoleSet = typeof ROLES[keyof typeof ROLES]
 
-/**
- * Verifica que el usuario autenticado tiene uno de los roles permitidos.
- * 
- * @param req - Request con header Authorization
- * @param supabase - Cliente Supabase con service role
- * @param allowedRoles - Array de roles permitidos
- * @returns Usuario autenticado si tiene permisos
- * @throws Error si no está autorizado
- */
+// =============================================
+// Comparación timing-safe para strings
+// =============================================
+// FIX: Evita ataques de timing en comparaciones de tokens/claves
+function constantTimeEqual(a: string, b: string): boolean {
+    const encoder = new TextEncoder()
+    const bufA = encoder.encode(a)
+    const bufB = encoder.encode(b)
+
+    if (bufA.byteLength !== bufB.byteLength) return false
+
+    let result = 0
+    for (let i = 0; i < bufA.byteLength; i++) {
+        result |= bufA[i] ^ bufB[i]
+    }
+    return result === 0
+}
+
+// =============================================
+// Verificación por rol (Role-based)
+// =============================================
 export async function verifyUserRole(
     req: Request,
     supabase: SupabaseClient,
@@ -37,7 +51,6 @@ export async function verifyUserRole(
         throw new Error('Unauthorized: Invalid token')
     }
 
-    // Verificar rol en profiles
     const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role')
@@ -55,35 +68,28 @@ export async function verifyUserRole(
     return user
 }
 
-/**
- * Verifica que el request tiene una clave interna válida.
- * Útil para cronjobs y llamadas server-to-server.
- * 
- * @param req - Request con header x-internal-key
- * @returns true si la clave es válida
- */
+// =============================================
+// Verificación por clave interna (timing-safe)
+// =============================================
+// FIX: Usa comparación timing-safe en lugar de === directo
 export function verifyInternalKey(req: Request): boolean {
     const INTERNAL_API_KEY = Deno.env.get('INTERNAL_API_KEY')
     if (!INTERNAL_API_KEY) return false
 
     const providedKey = req.headers.get('x-internal-key')
-    return providedKey === INTERNAL_API_KEY
+    if (!providedKey) return false
+
+    return constantTimeEqual(providedKey, INTERNAL_API_KEY)
 }
 
-/**
- * Verifica autorización combinada: usuario con permiso O clave interna.
- * 
- * @param req - Request
- * @param supabase - Cliente Supabase
- * @param requiredPermission - Permiso requerido para autenticación de usuario
- * @returns true si autorizado por cualquier método
- */
+// =============================================
+// Verificación combinada: usuario + clave interna
+// =============================================
 export async function verifyAccess(
     req: Request,
     supabase: SupabaseClient,
     requiredPermission: string
 ): Promise<boolean> {
-    // Primero intentar autenticación por usuario con permiso granular
     const authHeader = req.headers.get('authorization')
     if (authHeader) {
         try {
@@ -94,19 +100,12 @@ export async function verifyAccess(
         }
     }
 
-    // Fallback a clave interna
     return verifyInternalKey(req)
 }
 
-/**
- * Verifica que el usuario tiene un permiso específico (Granular Permission).
- * Acepta un string para verificar un permiso exacto, o un array para verificar AL MENOS UNO de ellos.
- * 
- * @param req - Request con header Authorization
- * @param supabase - Cliente Supabase
- * @param requiredPermission - String del permiso requerido (ej: 'meetings.create') o array de permisos
- * @returns Usuario autenticado
- */
+// =============================================
+// Verificación por permiso granular (JWT-based)
+// =============================================
 export async function verifyPermission(
     req: Request,
     supabase: SupabaseClient,
@@ -124,8 +123,7 @@ export async function verifyPermission(
         throw new Error('Unauthorized: Invalid token')
     }
 
-    // ESTRATEGIA OPTIMIZADA: Leer de base de datos usando RPC has_permission
-    // IMPORTANTE: Debemos usar un cliente con el token del usuario para que auth.jwt() sea correcto
+    // Crear cliente con token del usuario para que auth.jwt() funcione en has_permission
     const userClient = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
         Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -136,7 +134,7 @@ export async function verifyPermission(
         }
     )
 
-    // Si es un array, verificar AL MENOS UNO (OR logic)
+    // Array de permisos: verificar AL MENOS UNO (OR logic)
     if (Array.isArray(requiredPermission)) {
         for (const perm of requiredPermission) {
             const { data: hasPerm, error: rpcError } = await userClient.rpc('has_permission', {
@@ -144,25 +142,24 @@ export async function verifyPermission(
             })
 
             if (!rpcError && hasPerm) {
-                return user // Found at least one matching permission
+                return user
             }
         }
 
-        throw new Error(`Unauthorized: Missing at least one of these permissions: ${requiredPermission.join(', ')}`)
+        throw new Error('Unauthorized: Insufficient permissions')
     }
 
-    // Si es un string, verificar exacto (AND logic - solo ese permiso)
+    // String: verificar permiso exacto
     const { data: hasPerm, error: rpcError } = await userClient.rpc('has_permission', {
         required_permission: requiredPermission
     })
 
     if (rpcError) {
-        console.error('Permission check failed:', rpcError)
         throw new Error('Unauthorized: Permission check failed')
     }
 
     if (!hasPerm) {
-        throw new Error(`Unauthorized: Missing permission ${requiredPermission}`)
+        throw new Error('Unauthorized: Insufficient permissions')
     }
 
     return user

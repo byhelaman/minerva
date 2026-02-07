@@ -1,11 +1,11 @@
 -- ============================================
--- Minerva v2 - 001: Core Access (Roles, Profiles, Auth, RLS)
+-- Minerva v2 — 001: Core Access
 -- ============================================
--- Combina roles, permisos, perfiles, auth hook, RPCs base, RLS y seguridad.
+-- Roles, permisos, perfiles, auth hook, RPCs base, RLS, seguridad.
 -- Ejecutar primero en Supabase SQL Editor.
 
 -- =============================================
--- ROLES + PERMISSIONS
+-- ROLES + PERMISOS
 -- =============================================
 CREATE TABLE public.roles (
     name TEXT PRIMARY KEY,
@@ -27,6 +27,11 @@ CREATE TABLE public.role_permissions (
     PRIMARY KEY (role, permission)
 );
 
+-- Índices en FK de role_permissions
+CREATE INDEX idx_role_permissions_role ON public.role_permissions(role);
+CREATE INDEX idx_role_permissions_permission ON public.role_permissions(permission);
+
+-- Datos semilla: Roles
 INSERT INTO public.roles (name, description, hierarchy_level) VALUES
     ('super_admin', 'Full system control, Zoom integration', 100),
     ('admin', 'Manage users and system settings', 80),
@@ -35,6 +40,7 @@ INSERT INTO public.roles (name, description, hierarchy_level) VALUES
     ('viewer', 'Read-only access to own schedules', 10),
     ('guest', 'Unverified user. No access to data.', 0);
 
+-- Datos semilla: Permisos (incluye reports.manage)
 INSERT INTO public.permissions (name, description, min_role_level) VALUES
     ('schedules.read', 'View own schedules', 10),
     ('schedules.write', 'Upload and edit schedules', 50),
@@ -46,8 +52,10 @@ INSERT INTO public.permissions (name, description, min_role_level) VALUES
     ('users.manage', 'Create, delete, and change user roles', 80),
     ('system.view', 'View system settings', 80),
     ('system.manage', 'Modify system settings', 100),
-    ('reports.view', 'View system reports', 80);
+    ('reports.view', 'View system reports', 80),
+    ('reports.manage', 'Manage reports: import, delete, sync', 80);
 
+-- Datos semilla: Asignación de permisos por rol
 INSERT INTO public.role_permissions (role, permission) VALUES
     ('viewer', 'schedules.read'),
     ('operator', 'schedules.read'),
@@ -67,6 +75,7 @@ INSERT INTO public.role_permissions (role, permission) VALUES
     ('admin', 'users.manage'),
     ('admin', 'system.view'),
     ('admin', 'reports.view'),
+    ('admin', 'reports.manage'),
     ('super_admin', 'schedules.read'),
     ('super_admin', 'schedules.write'),
     ('super_admin', 'schedules.manage'),
@@ -77,10 +86,11 @@ INSERT INTO public.role_permissions (role, permission) VALUES
     ('super_admin', 'users.manage'),
     ('super_admin', 'system.view'),
     ('super_admin', 'system.manage'),
-    ('super_admin', 'reports.view');
+    ('super_admin', 'reports.view'),
+    ('super_admin', 'reports.manage');
 
 -- =============================================
--- PROFILES
+-- PERFILES
 -- =============================================
 CREATE TABLE public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -94,6 +104,29 @@ CREATE TABLE public.profiles (
 CREATE INDEX idx_profiles_email ON public.profiles(email);
 CREATE INDEX idx_profiles_role ON public.profiles(role);
 
+-- =============================================
+-- FUNCIONES UTILITARIAS
+-- =============================================
+
+-- Función genérica para actualizar updated_at (reutilizable por cualquier tabla)
+CREATE OR REPLACE FUNCTION public.handle_updated_at()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER update_profiles_modtime
+    BEFORE UPDATE ON public.profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_updated_at();
+
+-- Crear perfil automáticamente al registrarse
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -116,23 +149,6 @@ CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW
     EXECUTE FUNCTION public.handle_new_user();
-
-CREATE OR REPLACE FUNCTION public.handle_profile_updated()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-BEGIN
-    NEW.updated_at = now();
-    RETURN NEW;
-END;
-$$;
-
-CREATE TRIGGER on_profile_updated
-    BEFORE UPDATE ON public.profiles
-    FOR EACH ROW
-    EXECUTE FUNCTION public.handle_profile_updated();
 
 -- =============================================
 -- AUTH HOOK (JWT Custom Claims)
@@ -178,6 +194,7 @@ BEGIN
 END;
 $$;
 
+-- Permisos exclusivos para auth hook
 GRANT USAGE ON SCHEMA public TO supabase_auth_admin;
 GRANT EXECUTE ON FUNCTION public.custom_access_token_hook TO supabase_auth_admin;
 REVOKE EXECUTE ON FUNCTION public.custom_access_token_hook FROM authenticated, anon, public;
@@ -188,6 +205,27 @@ GRANT SELECT ON TABLE public.role_permissions TO supabase_auth_admin;
 -- =============================================
 -- RPCs BASE
 -- =============================================
+
+-- Verificar permisos del JWT (usado internamente por RPCs de gestión)
+CREATE OR REPLACE FUNCTION public.has_permission(required_permission text)
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    user_permissions jsonb;
+BEGIN
+    user_permissions := (auth.jwt() -> 'permissions')::jsonb;
+    RETURN user_permissions ? required_permission;
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN false;
+END;
+$$;
+
+-- Obtener perfil propio con permisos
 CREATE OR REPLACE FUNCTION public.get_my_profile()
 RETURNS JSON
 LANGUAGE sql
@@ -209,9 +247,10 @@ AS $$
     )
     FROM public.profiles p
     JOIN public.roles r ON p.role = r.name
-    WHERE p.id = auth.uid();
+    WHERE p.id = (SELECT auth.uid());
 $$;
 
+-- Verificar si un email ya existe (para flujo de registro)
 CREATE OR REPLACE FUNCTION public.check_email_exists(p_email TEXT)
 RETURNS BOOLEAN
 LANGUAGE sql
@@ -222,6 +261,7 @@ AS $$
     SELECT EXISTS (SELECT 1 FROM public.profiles WHERE email = p_email);
 $$;
 
+-- Actualizar display name propio
 CREATE OR REPLACE FUNCTION public.update_my_display_name(new_display_name TEXT)
 RETURNS void
 LANGUAGE plpgsql
@@ -230,15 +270,46 @@ SET search_path = ''
 AS $$
 BEGIN
     UPDATE public.profiles
-    SET display_name = new_display_name,
-        updated_at = NOW()
+    SET display_name = new_display_name
     WHERE id = auth.uid();
 END;
 $$;
 
+-- Verificar contraseña del usuario actual sin crear nueva sesión
+CREATE OR REPLACE FUNCTION public.verify_user_password(p_password TEXT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    v_user_id UUID;
+    v_encrypted_password TEXT;
+BEGIN
+    v_user_id := auth.uid();
+
+    IF v_user_id IS NULL THEN
+        RAISE EXCEPTION 'Not authenticated';
+    END IF;
+
+    SELECT encrypted_password INTO v_encrypted_password
+    FROM auth.users WHERE id = v_user_id;
+
+    IF v_encrypted_password IS NULL THEN
+        RETURN FALSE;
+    END IF;
+
+    RETURN v_encrypted_password = extensions.crypt(p_password, v_encrypted_password);
+END;
+$$;
+
+-- Grants para RPCs base
+GRANT EXECUTE ON FUNCTION public.has_permission(text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_my_profile() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.check_email_exists(TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.update_my_display_name(TEXT) TO authenticated;
+REVOKE ALL ON FUNCTION public.verify_user_password(TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.verify_user_password(TEXT) TO authenticated;
 
 -- =============================================
 -- RLS POLICIES
@@ -260,6 +331,7 @@ CREATE POLICY "role_permissions_select" ON public.role_permissions
     FOR SELECT TO authenticated
     USING (true);
 
+-- Perfiles: usuario ve el suyo, admins ven todos
 CREATE POLICY "profiles_select" ON public.profiles
     FOR SELECT USING (
         id = (SELECT auth.uid())
@@ -271,6 +343,8 @@ CREATE POLICY "profiles_insert" ON public.profiles
         id = (SELECT auth.uid())
     );
 
+-- Perfiles: usuario edita el suyo (display_name), admins editan todos (role)
+-- La protección de columnas (email, role) se implementa con triggers abajo
 CREATE POLICY "profiles_update" ON public.profiles
     FOR UPDATE USING (
         id = (SELECT auth.uid())
@@ -283,8 +357,35 @@ CREATE POLICY "profiles_delete" ON public.profiles
     );
 
 -- =============================================
--- SECURITY TRIGGER (privilege escalation prevention)
+-- TRIGGERS DE SEGURIDAD
 -- =============================================
+
+-- Prevenir modificación de email por UPDATE vía API
+CREATE OR REPLACE FUNCTION public.prevent_email_modification()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+    -- Permitir acceso directo a la BD (Dashboard, migrations, service_role)
+    IF auth.uid() IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    IF OLD.email IS DISTINCT FROM NEW.email THEN
+        RAISE EXCEPTION 'Email modification is not allowed through direct update';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER check_email_update
+    BEFORE UPDATE ON public.profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION public.prevent_email_modification();
+
+-- Prevenir escalamiento de privilegios en cambio de rol vía API
 CREATE OR REPLACE FUNCTION public.prevent_role_self_update()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -297,9 +398,13 @@ DECLARE
     target_current_level int;
     new_role_level int;
 BEGIN
+    -- Permitir acceso directo a la BD (Dashboard, migrations, service_role)
     caller_id := auth.uid();
+    IF caller_id IS NULL THEN
+        RETURN NEW;
+    END IF;
     caller_hierarchy_level := COALESCE(
-        (SELECT (auth.jwt() ->> 'hierarchy_level'))::int,
+        ((SELECT auth.jwt()) ->> 'hierarchy_level')::int,
         0
     );
 
@@ -313,16 +418,14 @@ BEGIN
         END IF;
 
         SELECT r.hierarchy_level INTO target_current_level
-        FROM public.roles r
-        WHERE r.name = OLD.role;
+        FROM public.roles r WHERE r.name = OLD.role;
 
         IF target_current_level >= caller_hierarchy_level THEN
             RAISE EXCEPTION 'Permission denied: cannot modify user with equal or higher privileges';
         END IF;
 
         SELECT r.hierarchy_level INTO new_role_level
-        FROM public.roles r
-        WHERE r.name = NEW.role;
+        FROM public.roles r WHERE r.name = NEW.role;
 
         IF new_role_level >= caller_hierarchy_level THEN
             RAISE EXCEPTION 'Permission denied: cannot assign role with equal or higher privileges than yours';
@@ -333,16 +436,15 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS check_role_update ON public.profiles;
 CREATE TRIGGER check_role_update
     BEFORE UPDATE ON public.profiles
     FOR EACH ROW
     EXECUTE FUNCTION public.prevent_role_self_update();
 
 -- =============================================
--- MANUAL STEP: enable auth hook in Supabase dashboard
+-- PASO MANUAL: Habilitar auth hook en Supabase Dashboard
 -- =============================================
 -- 1. Dashboard → Authentication → Hooks
 -- 2. "Customize Access Token (JWT) Claims"
--- 3. Select schema "public", function "custom_access_token_hook"
--- 4. Save
+-- 3. Seleccionar schema "public", función "custom_access_token_hook"
+-- 4. Guardar

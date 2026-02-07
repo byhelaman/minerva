@@ -9,8 +9,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getValidAccessToken } from '../_shared/zoom-token-utils.ts'
 import { verifyAccess } from '../_shared/auth-utils.ts'
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
-const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
+const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const ZOOM_API_BASE = 'https://api.zoom.us/v2'
 
 // SEGURIDAD: Restringir orígenes CORS
@@ -27,6 +27,7 @@ function getCorsHeaders(req: Request) {
   return {
     'Access-Control-Allow-Origin': isAllowed ? origin : 'null',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-internal-key, x-app-name, x-app-version',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
   }
 }
 
@@ -54,23 +55,30 @@ serve(async (req: Request) => {
     let accessToken: string
     try {
       accessToken = await getValidAccessToken(supabase)
-    } catch (authError: any) {
-      return jsonResponse({ error: authError.message }, 401, corsHeaders)
+    } catch (authError: unknown) {
+      return jsonResponse({ error: authError instanceof Error ? authError.message : 'Auth error' }, 401, corsHeaders)
     }
 
-    // 1. Sincronizar Usuarios
+    // 1. Sincronizar Usuarios (con paginación)
     console.log('Starting user sync')
-    const usersResponse = await fetch(`${ZOOM_API_BASE}/users?page_size=300`, {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    })
+    let allUsers: any[] = []
+    let nextPageToken = ''
 
-    if (!usersResponse.ok) {
-      const error = await usersResponse.json()
-      return jsonResponse({ error: 'Failed to fetch users', details: error }, 500, corsHeaders)
-    }
+    do {
+      const pageUrl = `${ZOOM_API_BASE}/users?page_size=300${nextPageToken ? `&next_page_token=${nextPageToken}` : ''}`
+      const usersResponse = await fetch(pageUrl, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      })
 
-    const usersData = await usersResponse.json()
-    const allUsers = usersData.users || []
+      if (!usersResponse.ok) {
+        const error = await usersResponse.json()
+        return jsonResponse({ error: 'Failed to fetch users', details: error }, 500, corsHeaders)
+      }
+
+      const usersData = await usersResponse.json()
+      allUsers.push(...(usersData.users || []))
+      nextPageToken = usersData.next_page_token || ''
+    } while (nextPageToken)
 
     // Filtro: Excluir roles admin/owner, pero siempre incluir emails en lista blanca
     // MEJORA: Usar Variable de Entorno para Lista Blanca
@@ -124,7 +132,8 @@ serve(async (req: Request) => {
         })
 
       if (usersError) {
-        console.error('User sync failed')
+        console.error('User sync failed:', usersError.message)
+        // FIX: No swallow silenciosamente — reportar en respuesta
       }
     }
 
@@ -202,7 +211,7 @@ serve(async (req: Request) => {
         })
 
       if (meetingsError) {
-        console.error('Meeting sync failed')
+        console.error('Meeting sync failed:', meetingsError.message)
       }
       totalMeetings = uniqueMeetings.length
     }

@@ -5,11 +5,12 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { verifyPermission } from '../_shared/auth-utils.ts'
 
-const ZOOM_CLIENT_ID = Deno.env.get('ZOOM_CLIENT_ID')!
-const ZOOM_CLIENT_SECRET = Deno.env.get('ZOOM_CLIENT_SECRET')!
-const ZOOM_REDIRECT_URI = Deno.env.get('ZOOM_REDIRECT_URI')!
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
-const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+// Validar variables de entorno requeridas
+const ZOOM_CLIENT_ID = Deno.env.get('ZOOM_CLIENT_ID') ?? ''
+const ZOOM_CLIENT_SECRET = Deno.env.get('ZOOM_CLIENT_SECRET') ?? ''
+const ZOOM_REDIRECT_URI = Deno.env.get('ZOOM_REDIRECT_URI') ?? ''
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
+const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
 // SEGURIDAD: Restringir orígenes CORS
 // Agrega tu dominio de producción u orígenes específicos de Tauri aquí
@@ -25,6 +26,7 @@ function getCorsHeaders(req: Request) {
     return {
         'Access-Control-Allow-Origin': isAllowed ? origin : 'null',
         'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-name, x-app-version',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     }
 }
 
@@ -68,10 +70,11 @@ serve(async (req: Request) => {
             status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
     } catch (error: unknown) {
-        console.error('Auth error')
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        return new Response(JSON.stringify({ error: message }), {
-            status: message === 'Unauthorized' ? 401 : 500,
+        console.error('Auth error:', error instanceof Error ? error.message : 'Unknown')
+        // FIX: No exponer detalles internos en la respuesta
+        const isAuthError = error instanceof Error && error.message.startsWith('Unauthorized')
+        return new Response(JSON.stringify({ error: isAuthError ? 'Unauthorized' : 'Internal server error' }), {
+            status: isAuthError ? 401 : 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
     }
@@ -91,7 +94,7 @@ async function handleInit(req: Request, corsHeaders: Record<string, string>): Pr
 
     if (stateError || !state) {
         console.error('OAuth state creation failed:', stateError)
-        throw new Error(`OAuth state creation failed: ${stateError?.message || 'empty state'}`)
+        throw new Error('OAuth state creation failed')
     }
 
     const authUrl = new URL('https://zoom.us/oauth/authorize')
@@ -143,8 +146,8 @@ async function handleCallback(url: URL, corsHeaders: Record<string, string>): Pr
     })
 
     if (!tokenResponse.ok) {
-        const err = await tokenResponse.json()
-        return new Response(`Zoom Error: ${JSON.stringify(err)}`, { status: 400 })
+        console.error('Zoom token exchange failed')
+        return new Response('Authentication failed', { status: 400 })
     }
 
     const tokens = await tokenResponse.json()
@@ -169,8 +172,8 @@ async function handleCallback(url: URL, corsHeaders: Record<string, string>): Pr
     })
 
     if (rpcError) {
-        console.error('Credential storage failed')
-        return new Response(`Error de Base de Datos: ${rpcError.message}`, { status: 500 })
+        console.error('Credential storage failed:', rpcError.message)
+        return new Response('Failed to save credentials', { status: 500 })
     }
 
     return new Response('Zoom conectado exitosamente!\nPuedes cerrar esta ventana.', {

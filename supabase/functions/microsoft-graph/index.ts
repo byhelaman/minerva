@@ -2,13 +2,13 @@
 // Interactúa con Microsoft Graph API (OneDrive)
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'npm:@supabase/supabase-js@2.94.1'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { verifyPermission } from '../_shared/auth-utils.ts'
 
-const MS_CLIENT_ID = Deno.env.get('MS_CLIENT_ID')!
-const MS_CLIENT_SECRET = Deno.env.get('MS_CLIENT_SECRET')!
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
-const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const MS_CLIENT_ID = Deno.env.get('MS_CLIENT_ID') ?? ''
+const MS_CLIENT_SECRET = Deno.env.get('MS_CLIENT_SECRET') ?? ''
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
+const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
 const ALLOWED_ORIGINS = [
     'http://localhost:1420',
@@ -22,10 +22,11 @@ function getCorsHeaders(req: Request) {
     return {
         'Access-Control-Allow-Origin': isAllowed ? origin : 'null',
         'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-name, x-app-version',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
     }
 }
 
-async function getAccessToken(supabase: any) {
+async function getAccessToken(supabase: ReturnType<typeof createClient>) {
     const { data: creds, error } = await supabase
         .from('microsoft_credentials_decrypted')
         .select('*')
@@ -88,7 +89,8 @@ serve(async (req: Request) => {
 
         // Determine required permission based on action
         const readActions = ['list-children', 'list-worksheets', 'list-content', 'list-tables', 'read-table-rows'];
-        const syncActions = ['upsert-rows-by-key', 'replace-table-data', 'append-rows'];
+        // FIX: Eliminado 'append-rows' — acción no implementada
+        const syncActions = ['upsert-rows-by-key', 'replace-table-data'];
         const writeActions = ['create-worksheet', 'update-range', 'upload-file', 'create-table', 'resize-table', 'format-columns', 'format-font', 'update-table-style'];
 
         // Verify permission based on action type
@@ -385,10 +387,8 @@ serve(async (req: Request) => {
                     } catch (e) {
                         // Ignore fetch error
                     }
-                    // Fallback: Return dummy success
-                    return new Response(JSON.stringify({ id: 'existing_table_ignored', name: 'Table1' }), {
-                        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-                    })
+                    // FIX: No devolver datos falsos — lanzar error descriptivo
+                    throw new Error('Table may already exist but could not be retrieved')
                 } else {
                     throw new Error(err.error?.message || 'Failed to create table')
                 }
@@ -899,9 +899,10 @@ serve(async (req: Request) => {
 
         return new Response(JSON.stringify({ error: 'Invalid action' }), { status: 400, headers: corsHeaders })
 
-    } catch (error: any) {
-        console.error('Graph Error', error)
-        return new Response(JSON.stringify({ error: error.message }), {
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Internal server error'
+        console.error('Graph Error:', message)
+        return new Response(JSON.stringify({ error: message }), {
             status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
     }
