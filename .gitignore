@@ -32,8 +32,18 @@ dist-ssr
 src-tauri/target
 src-tauri/gen
 
-_archive/*
+# Lockfiles (project uses pnpm)
+package-lock.json
+yarn.lock
+
+# AI agent files
+.agents/
+.claude/
+
+# Archives and temp
+_archive/
 *.key
 *.temp/
-*.agents/
-*.claude/
+
+# Test coverage
+coverage/

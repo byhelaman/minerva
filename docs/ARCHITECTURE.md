@@ -125,7 +125,7 @@ minerva_v2/
 │
 ├── supabase/                     # Backend-as-a-Service
 │   ├── config.toml               # Configuración de desarrollo local
-│   ├── migrations/               # Migraciones SQL (13 archivos, 001–016 con gaps)
+│   ├── migrations/               # Migraciones SQL (6 archivos consolidados, 001–006)
 │   └── functions/                # Edge Functions en Deno
 │       ├── _shared/              # Utilidades compartidas de auth/tokens
 │       ├── zoom-auth/            # Flujo OAuth de Zoom
@@ -136,10 +136,9 @@ minerva_v2/
 │       └── microsoft-graph/      # Operaciones OneDrive/Excel
 │
 ├── tests/                        # Archivos de prueba (Vitest)
-│   ├── matcher_meetings.test.ts
-│   ├── matcher_schedules.test.ts
-│   ├── matcher_users.test.ts
-│   └── penalties.test.ts
+│   ├── matching/                 # 6 archivos: matcher, penalties, normalizer, scorer
+│   ├── schedules/                # 4 archivos: time-utils, overlap-utils, merge-utils, schema
+│   └── lib/                      # 2 archivos: date-utils, rate-limiter
 │
 └── docs/                         # Documentación del proyecto
     ├── ARCHITECTURE.md            # ← Este archivo
@@ -148,7 +147,7 @@ minerva_v2/
     ├── EXCEL_SYSTEM.md            # Parser de Excel, schemas, servicios de horarios
     ├── SUPABASE_BACKEND.md        # Edge Functions, esquema DB, RLS, Vault
     ├── matching_logic.md          # Documentación del algoritmo de emparejamiento
-    ├── zoom_setup.md              # Guía de configuración de integración Zoom
+    ├── ZOOM_SETUP.md              # Guía de configuración de integración Zoom
     ├── microsoft_setup.md         # Guía de configuración de integración Microsoft
     └── release_guide.md           # Proceso de release
 ```
@@ -434,20 +433,15 @@ JWT Custom Claims (vía custom_access_token_hook):
 
 ### 7.4 Migraciones
 
+6 archivos consolidados (anteriormente 13):
+
 ```
-001_core_access.sql           — perfiles, roles, permisos, triggers RBAC
-002_user_management.sql       — RPCs de gestión de usuarios (update_user_role, get_user_count)
-003_zoom_integration.sql      — zoom_account, zoom_users, zoom_meetings, estado OAuth
+001_core_access.sql           — perfiles, roles, permisos, triggers RBAC, RPCs base
+002_user_management.sql       — RPCs de gestión de usuarios y roles
+003_zoom_integration.sql      — zoom_account, zoom_users, zoom_meetings, estado OAuth, Vault RPCs
 004_webhooks_bug_reports.sql   — webhook_events, bug_reports, función de limpieza
-005_realtime_security.sql     — políticas de canales Realtime
-006_microsoft_integration.sql — microsoft_account, vista de credenciales, RPCs de config
-008_published_schedules.sql   — tabla published_schedules
-009_schedule_entries.sql      — schedule_entries con clave única compuesta
-012_delete_zoom_secrets.sql   — RPC de limpieza de Vault para Zoom
-013_verify_user_password.sql  — RPC de verificación de contraseña (sin side-effects de sesión)
-014_reports_manage_permission.sql — permiso reports.manage
-015_delete_microsoft_secrets.sql  — RPC de limpieza de Vault para Microsoft
-016_update_microsoft_credentials_view.sql — vista actualizada con microsoft_name
+005_microsoft_integration.sql — microsoft_account, vista de credenciales, RPCs de config
+006_schedules_realtime.sql    — published_schedules, schedule_entries, Realtime, REPLICA IDENTITY
 ```
 
 ---

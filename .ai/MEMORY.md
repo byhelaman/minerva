@@ -48,7 +48,7 @@ Este archivo es un **mapa de navegación** para agentes AI que trabajan en Miner
 | `USER_FLOWS.md` | 9 flujos de usuario, matriz de permisos, protección de rutas | Cambios en rutas, permisos, gates de UI, roles |
 | `AUTH_SYSTEM.md` | AuthProvider, JWT claims, sesión desktop, MSAL, rate limiter | Cambios en login, signup, sesión, providers de auth |
 | `EXCEL_SYSTEM.md` | Parser Excel (2 formatos), schemas Zod, validación, auto-save | Cambios en carga/parseo de horarios Excel |
-| `SUPABASE_BACKEND.md` | 6 Edge Functions, 13 migraciones, esquema DB, RLS, Vault | Cambios en DB, funciones Edge, RLS, migraciones |
+| `SUPABASE_BACKEND.md` | 6 Edge Functions, 6 migraciones consolidadas, esquema DB, RLS, Vault | Cambios en DB, funciones Edge, RLS, migraciones |
 | `matching_logic.md` | Motor de emparejamiento: normalizer, 3 búsquedas, 10 penalizaciones, scorer | Cambios en lógica de matching/scoring |
 | `zoom_setup.md` | OAuth Zoom, 4 Edge Functions, webhooks, batch ops, useZoomStore | Cambios en integración Zoom |
 | `microsoft_setup.md` | OAuth Microsoft, 15+ acciones Graph, config OneDrive, tokens | Cambios en integración Microsoft/OneDrive |
@@ -228,8 +228,8 @@ minerva_v2/
 │   │   ├── zoom-webhook/
 │   │   ├── microsoft-auth/
 │   │   └── microsoft-graph/
-│   └── migrations/                 ← 13 archivos SQL (001-016, gaps en 007/010/011)
-├── tests/                          ← Vitest tests (76 tests, matching engine)
+│   └── migrations/                 ← 6 archivos SQL consolidados (001-006)
+├── tests/                          ← Vitest tests (212 tests, matching/schedules/lib)
 └── src-tauri/                      ← Tauri (Rust)
 ```
 
@@ -254,7 +254,7 @@ minerva_v2/
 
 ```
 □ pnpm tsc --noEmit     → Sin errores de tipo
-□ pnpm test:run          → 76 tests pasando
+□ pnpm test:run          → 212 tests pasando
 □ ¿Cambié comportamiento del matching? → Actualizar tests + docs/matching_logic.md
 □ ¿Cambié migraciones? → Actualizar docs/SUPABASE_BACKEND.md
 □ ¿Cambié rutas/permisos? → Actualizar docs/USER_FLOWS.md

@@ -3,7 +3,7 @@
 Aplicación de escritorio (Tauri 2) para gestión de horarios educativos con emparejamiento automático de reuniones Zoom e integración con OneDrive.
 
 **Stack:** React 19 · TypeScript 5.9 · Vite 7 · Tauri 2 (Rust) · Supabase (PostgreSQL + Edge Functions) · Zustand 5  
-**Versión actual:** 0.1.9  
+**Versión actual:** 0.2.0  
 **Idiomas:** English, Español, Français (i18next)
 
 ## Requisitos
@@ -42,23 +42,16 @@ pnpm tsc --noEmit       # Type-check (no hay script de lint)
 
 ### 2. Ejecutar Migraciones (en orden)
 
-Ejecutar cada archivo en el **SQL Editor** de Supabase:
+Ejecutar cada archivo en el **SQL Editor** de Supabase (6 archivos consolidados):
 
 | Orden | Archivo | Descripción |
 |-------|---------|-------------|
-| 1 | `001_core_access.sql` | Tablas core (roles, permisos) y datos semilla |
-| 2 | `002_user_management.sql` | Perfiles, RPCs de gestión de usuarios |
-| 3 | `003_zoom_integration.sql` | Tablas de integración Zoom (OAuth, meetings, users) |
-| 4 | `004_webhooks_bug_reports.sql` | Webhooks y reportes de bugs |
-| 5 | `005_realtime_security.sql` | Políticas Realtime y seguridad |
-| 6 | `006_microsoft_integration.sql` | Integración Microsoft (OneDrive, Vault) |
-| 7 | `008_published_schedules.sql` | Horarios publicados |
-| 8 | `009_schedule_entries.sql` | Entradas de horarios individuales |
-| 9 | `012_delete_zoom_secrets.sql` | RPC para eliminar secretos Zoom del Vault |
-| 10 | `013_verify_user_password.sql` | RPC verificación de contraseña |
-| 11 | `014_reports_manage_permission.sql` | Permiso reports.manage |
-| 12 | `015_delete_microsoft_secrets.sql` | RPC para eliminar secretos Microsoft del Vault |
-| 13 | `016_update_microsoft_credentials_view.sql` | Fix vista de credenciales Microsoft |
+| 1 | `001_core_access.sql` | Tablas core (roles, permisos), datos semilla, triggers RBAC, RPCs base |
+| 2 | `002_user_management.sql` | RPCs de gestión de usuarios y roles |
+| 3 | `003_zoom_integration.sql` | Tablas de integración Zoom (OAuth, meetings, users), Vault RPCs |
+| 4 | `004_webhooks_bug_reports.sql` | Webhooks, reportes de bugs, función de limpieza |
+| 5 | `005_microsoft_integration.sql` | Integración Microsoft (OneDrive, Vault, vista de credenciales) |
+| 6 | `006_schedules_realtime.sql` | Horarios publicados, schedule entries, Realtime, REPLICA IDENTITY |
 
 ### 3. Habilitar Auth Hook
 

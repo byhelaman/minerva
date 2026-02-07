@@ -46,7 +46,7 @@ git tag vX.Y.Z
 git push origin main --tags
 ```
 
-> **Importante:** El tag debe tener el prefijo `v` (e.g., `v0.1.9`). El workflow de CI se activa con tags que coinciden con `v*`.
+> **Importante:** El tag debe tener el prefijo `v` (e.g., `v0.2.0`). El workflow de CI se activa con tags que coinciden con `v*`.
 
 ### 3. CI/CD — GitHub Actions
 

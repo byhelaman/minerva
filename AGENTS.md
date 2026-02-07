@@ -2,7 +2,7 @@
 
 Tauri 2 desktop app (Rust + React 19 + Vite 7) for educational schedule management with Zoom matching and OneDrive integration. Backend: Supabase (PostgreSQL + Deno Edge Functions). Supports en/es/fr via i18next.
 
-**Current version:** 0.1.9
+**Current version:** 0.2.0
 
 ## Build & Test Commands
 
@@ -12,7 +12,7 @@ pnpm tauri dev                     # Full desktop dev (Vite + native window)
 pnpm build                         # tsc && vite build
 pnpm tauri build                   # Production build (MSI/NSIS → src-tauri/target/release/)
 pnpm test                          # Vitest watch mode
-pnpm test:run                      # Vitest single run (76 tests)
+pnpm test:run                      # Vitest single run (212 tests)
 pnpm vitest run -t "test name"     # Run a single test by name
 pnpm tsc --noEmit                  # Type-check (there is NO lint script)
 ```
@@ -29,9 +29,9 @@ Detailed technical docs (written in Spanish). **Read the relevant doc before mod
 | `docs/USER_FLOWS.md` | User flows per role, permission matrix, route protection | Modifying routes, permissions, UI gates |
 | `docs/AUTH_SYSTEM.md` | Auth (Supabase + MSAL), JWT claims, sessions, rate limiter | Touching auth, login, providers |
 | `docs/EXCEL_SYSTEM.md` | Excel parser (2 formats), Zod schemas, validation, auto-save | Modifying schedule upload/parse |
-| `docs/SUPABASE_BACKEND.md` | Edge Functions, DB schema (13 migrations), RLS, Vault | Changing DB, RLS, Edge Functions |
+| `docs/SUPABASE_BACKEND.md` | Edge Functions, DB schema (6 consolidated migrations), RLS, Vault | Changing DB, RLS, Edge Functions |
 | `docs/matching_logic.md` | Matching engine: normalizer, 3-tier search, 10 penalties | Modifying matching/scoring logic |
-| `docs/zoom_setup.md` | Zoom: OAuth, 4 Edge Functions, webhooks, batch ops, useZoomStore | Touching Zoom integration |
+| `docs/ZOOM_SETUP.md` | Zoom: OAuth, 4 Edge Functions, webhooks, batch ops, useZoomStore | Touching Zoom integration |
 | `docs/microsoft_setup.md` | Microsoft: OAuth, Graph API (15+ actions), OneDrive config | Touching Microsoft integration |
 | `docs/release_guide.md` | Release process, CI/CD, signing, updater | Preparing a release |
 
@@ -100,7 +100,7 @@ Most deploy with `--no-verify-jwt` (custom auth inside). Shared utils in `_share
 
 ### Database
 
-13 migration files (001–006, 008–009, 012–016). Key tables: `profiles`, `roles`, `permissions`, `schedule_entries`, `published_schedules`, `zoom_users`, `zoom_meetings`, `zoom_account`, `microsoft_account`, `webhook_events`, `bug_reports`. **Full schema: `docs/SUPABASE_BACKEND.md`**
+6 consolidated migration files (001–006). Key tables: `profiles`, `roles`, `permissions`, `schedule_entries`, `published_schedules`, `zoom_users`, `zoom_meetings`, `zoom_account`, `microsoft_account`, `webhook_events`, `bug_reports`. **Full schema: `docs/SUPABASE_BACKEND.md`**
 
 ## Permissions & Authorization
 
@@ -131,9 +131,12 @@ Integration pattern (Zoom, Microsoft):
 
 ## Testing
 
-- Tests live in `tests/` at project root (not co-located)
+- Tests live in `tests/` at project root (not co-located), organized in subdirectories:
+  - `tests/matching/` — matcher, penalties, normalizer, scorer (6 files)
+  - `tests/schedules/` — time-utils, overlap-utils, merge-utils, schema (4 files)
+  - `tests/lib/` — date-utils, rate-limiter (2 files)
 - Vitest with globals enabled — `describe`, `it`, `expect` available without imports
-- Current tests cover the matching engine exclusively (76 tests)
+- 212 tests across 12 files covering matching, schedules, and lib
 - After changing behavior: add or update tests, even if not explicitly asked
 - After moving files or changing imports: run `pnpm tsc --noEmit`
 

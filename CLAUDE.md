@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Minerva v2 is a **Tauri 2 desktop app** (Rust + React 19 + Vite 7) for managing educational schedules with Zoom meeting matching and Microsoft OneDrive integration. Backend is Supabase (PostgreSQL + Deno Edge Functions). The app supports English, Spanish, and French (i18next with `src/locales/`).
 
-**Current version:** 0.1.9
+**Current version:** 0.2.0
 
 ## Commands
 
@@ -34,9 +34,9 @@ Detailed technical documentation lives in `docs/` (written in Spanish):
 | `docs/USER_FLOWS.md` | User flows per role, permission matrix, route protection |
 | `docs/AUTH_SYSTEM.md` | Auth (Supabase + MSAL), JWT claims, session management, rate limiter |
 | `docs/EXCEL_SYSTEM.md` | Excel parser (2 formats), Zod schemas, validation, auto-save |
-| `docs/SUPABASE_BACKEND.md` | Edge Functions, DB schema (13 migrations), RLS, Vault, Realtime |
+| `docs/SUPABASE_BACKEND.md` | Edge Functions, DB schema (6 consolidated migrations), RLS, Vault, Realtime |
 | `docs/matching_logic.md` | Matching engine: normalizer, 3-tier search, 10 penalties, scorer |
-| `docs/zoom_setup.md` | Zoom integration: OAuth, 4 Edge Functions, webhooks, batch ops, useZoomStore |
+| `docs/ZOOM_SETUP.md` | Zoom integration: OAuth, 4 Edge Functions, webhooks, batch ops, useZoomStore |
 | `docs/microsoft_setup.md` | Microsoft integration: OAuth, Graph API, OneDrive config, tokens |
 | `docs/release_guide.md` | Release process, CI/CD, signing, updater, troubleshooting |
 
@@ -135,9 +135,9 @@ Most deploy with `--no-verify-jwt` (custom auth logic inside). Shared utils in `
 
 ### Database Migrations (`supabase/migrations/`)
 
-13 migration files (001–006, 008–009, 012–016). Run via Supabase SQL Editor in order.
+6 consolidated migration files (001–006). Run via Supabase SQL Editor in order.
 
-Key tables: `profiles`, `roles`, `permissions`, `schedule_entries`, `published_schedules`, `incidences`, `zoom_users`, `zoom_meetings`, `zoom_account`, `microsoft_account`, `webhook_logs`, `bug_reports`.
+Key tables: `profiles`, `roles`, `permissions`, `schedule_entries`, `published_schedules`, `zoom_users`, `zoom_meetings`, `zoom_account`, `microsoft_account`, `webhook_events`, `bug_reports`.
 
 Full schema documentation: `docs/SUPABASE_BACKEND.md`
 
@@ -182,12 +182,13 @@ Full schema documentation: `docs/SUPABASE_BACKEND.md`
 
 ## Testing
 
-Tests live in `tests/` at the project root (not co-located). Vitest globals are enabled (`describe`, `it`, `expect` available without imports). Test files:
+Tests live in `tests/` at the project root (not co-located). Vitest globals are enabled (`describe`, `it`, `expect` available without imports). Organized in subdirectories:
 
-- `matcher_schedules.test.ts`, `matcher_users.test.ts`, `matcher_meetings.test.ts` — matching integration tests
-- `penalties.test.ts` — scoring penalty tests (all 10 penalty functions)
+- `tests/matching/` — matcher_meetings, matcher_schedules, matcher_users, penalties, normalizer, scorer (6 files)
+- `tests/schedules/` — time-utils, overlap-utils, merge-utils, schedule-schema (4 files)
+- `tests/lib/` — date-utils, rate-limiter (2 files)
 
-**76 tests, all passing.**
+**212 tests across 12 files, all passing.**
 
 ## Environment Variables
 

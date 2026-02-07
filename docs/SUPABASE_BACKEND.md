@@ -1,7 +1,7 @@
 # Minerva v2 — Backend Supabase
 
 > Documentación completa de Edge Functions, esquema de base de datos, seguridad RLS, Vault y Realtime.  
-> Última actualización: 2025-07-16
+> Última actualización: 2026-02-06
 
 ---
 
