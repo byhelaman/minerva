@@ -3,7 +3,7 @@ import { useScheduleSyncStore } from "@/features/schedules/stores/useScheduleSyn
 import { PublishedSchedule } from "@/features/schedules/types";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-import { formatDateForDisplay } from "@/lib/utils";
+import { formatDateForDisplay } from "@/lib/date-utils";
 
 export function ScheduleUpdateBanner() {
     const { latestPublished, checkForUpdates, loadPublishedSchedule, dismissUpdate } = useScheduleSyncStore();

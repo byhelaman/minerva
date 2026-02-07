@@ -2,9 +2,9 @@ import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AlertCircle, XCircle, RefreshCw, HelpCircle, Hand, BadgeCheck } from "lucide-react";
 import { AssignmentRow } from "../../modals/assignment/assignment-columns";
-import { ZoomMeetingCandidate } from "@/features/matching/services/matcher";
+import type { ZoomMeetingCandidate } from "@/features/matching/types";
 import { Row } from "@tanstack/react-table";
-import { formatTimestampForDisplay } from "@/lib/utils";
+import { formatTimestampForDisplay } from "@/lib/date-utils";
 
 interface StatusCellProps {
     row: Row<AssignmentRow>;

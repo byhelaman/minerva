@@ -73,3 +73,45 @@ export function formatTimeTo12Hour(value: string | number): string {
     const hours12 = hours % 12 || 12; // Convierte 0 a 12
     return `${String(hours12).padStart(2, "0")}:${String(minutes).padStart(2, "0")} ${period}`;
 }
+
+/**
+ * Convierte cualquier valor (null, undefined, string, number) a formato HH:MM.
+ * Maneja fracciones decimales de Excel y strings ya formateados.
+ * Usado por los servicios de Supabase y Excel para normalizar tiempos de la DB.
+ */
+export function ensureTimeFormat(time: unknown): string {
+    if (!time && time !== 0) return '';
+
+    if (typeof time === 'string') {
+        const trimmed = time.trim();
+        // Ya en formato HH:MM — normalizar padding
+        if (/^\d{1,2}:\d{2}/.test(trimmed)) {
+            const parts = trimmed.split(':');
+            return `${parts[0].padStart(2, '0')}:${parts[1].substring(0, 2)}`;
+        }
+        // Intentar parsear como decimal
+        const num = parseFloat(trimmed);
+        if (!isNaN(num)) {
+            const totalMinutes = Math.round(num * 24 * 60);
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        }
+        return trimmed;
+    }
+
+    if (typeof time === 'number') {
+        const totalMinutes = Math.round(time * 24 * 60);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    }
+
+    return String(time);
+}
+
+/** Parsea string HH:MM a minutos desde medianoche */
+export function parseTimeToMinutes(time: string): number {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+}

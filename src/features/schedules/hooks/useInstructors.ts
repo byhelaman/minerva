@@ -1,11 +1,9 @@
 import { useMemo } from "react";
 import { useZoomStore } from "@/features/matching/stores/useZoomStore";
+import type { Instructor } from "../types";
 
-export interface Instructor {
-    id: string;
-    display_name: string;
-    email: string;
-}
+// Re-exportar para mantener compatibilidad
+export type { Instructor } from "../types";
 
 export function useInstructors() {
     const { users } = useZoomStore();

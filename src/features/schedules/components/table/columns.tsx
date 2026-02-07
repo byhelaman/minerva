@@ -1,9 +1,9 @@
 import { type ColumnDef } from "@tanstack/react-table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { type Schedule } from "@schedules/utils/excel-parser";
+import type { Schedule } from "@schedules/types";
 import { DataTableColumnHeader } from "./data-table-column-header";
 import { DataTableRowActions } from "./data-table-row-actions";
-import { formatDateForDisplay } from "@/lib/utils";
+import { formatDateForDisplay } from "@/lib/date-utils";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle } from "lucide-react";
 

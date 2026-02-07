@@ -19,7 +19,6 @@
     "@fontsource-variable/geist": "^5.2.8",
     "@fontsource-variable/geist-mono": "^5.2.7",
     "@hookform/resolvers": "^5.2.2",
-    "@microsoft/microsoft-graph-client": "^3.0.7",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-avatar": "^1.1.11",

@@ -1,47 +1,14 @@
 import Fuse, { IFuseOptions } from 'fuse.js';
-import { Schedule } from '@/features/schedules/utils/excel-parser';
+import type { Schedule } from '@/features/schedules/types';
 import { normalizeString } from '../utils/normalizer';
 import { evaluateMatch } from '../scoring/scorer';
 import { clearLevenshteinCache } from '../scoring/penalties';
 import { THRESHOLDS } from '../config/matching.config';
 import type { MatchOptions } from '../scoring/types';
+import type { ZoomMeetingCandidate, ZoomUserCandidate, MatchResult } from '../types';
 
-export interface ZoomMeetingCandidate {
-    meeting_id: string;
-    topic: string;
-    host_id: string;
-    start_time: string;
-    join_url?: string;
-    created_at?: string;
-}
-
-export interface ZoomUserCandidate {
-    id: string;
-    email: string;
-    first_name: string;
-    last_name: string;
-    display_name: string;
-}
-
-export interface MatchResult {
-    schedule: Schedule;
-    originalState?: Omit<MatchResult, 'originalState'>; // Backup completo del estado original
-    status: 'assigned' | 'to_update' | 'not_found' | 'ambiguous' | 'manual';
-    reason: string; // Mensaje corto para la columna Reason
-    detailedReason?: string; // Mensaje detallado para el hover card
-    meeting_id?: string;
-    found_instructor?: {
-        id: string;
-        email: string;
-        display_name: string;
-    };
-    bestMatch?: ZoomMeetingCandidate;
-    candidates: ZoomMeetingCandidate[];
-    ambiguousCandidates?: ZoomMeetingCandidate[];
-    matchedCandidate?: ZoomMeetingCandidate;
-    score?: number;
-    manualMode?: boolean; // Habilita edición manual de checkbox e instructor
-}
+// Re-exportar tipos para mantener compatibilidad con imports existentes
+export type { ZoomMeetingCandidate, ZoomUserCandidate, MatchResult } from '../types';
 
 /**
  * Servicio para emparejar Horarios con Reuniones de Zoom y Validar Anfitriones.

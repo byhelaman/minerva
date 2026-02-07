@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import { formatDateForDisplay } from '@/lib/utils';
+import { formatDateForDisplay } from '@/lib/date-utils';
 import { jwtDecode } from "jwt-decode";
 import { PublishedSchedule, SchedulesConfig } from '../types';
 import { scheduleEntriesService } from '../services/schedule-entries-service';
 import { useScheduleDataStore } from './useScheduleDataStore';
 import { useScheduleUIStore } from './useScheduleUIStore';
+import { registerSignOutCleanup } from '@/components/auth-provider';
 // import { mergeSchedulesWithIncidences } from '../utils/merge-utils';
 
 interface ScheduleSyncState {
@@ -369,3 +370,6 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
         }
     }
 }));
+
+// Registrar limpieza automática al cerrar sesión
+registerSignOutCleanup(() => useScheduleSyncStore.getState().resetSyncState());

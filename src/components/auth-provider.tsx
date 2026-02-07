@@ -4,7 +4,6 @@ import { supabase } from "@/lib/supabase";
 import { jwtDecode } from "jwt-decode";
 import { logger } from "@/lib/logger";
 import { toast } from "sonner";
-import { useScheduleSyncStore } from "@/features/schedules/stores/useScheduleSyncStore";
 
 // Tipos
 export interface Profile {
@@ -45,6 +44,20 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// ── Registro de callbacks de limpieza al cerrar sesión ─────────────
+// Permite que stores/features registren su cleanup sin acoplar el provider.
+const signOutCleanupCallbacks: Array<() => void> = [];
+
+/** Registra una función que se ejecutará al cerrar sesión */
+export function registerSignOutCleanup(callback: () => void): () => void {
+    signOutCleanupCallbacks.push(callback);
+    // Retorna función para desregistrar
+    return () => {
+        const idx = signOutCleanupCallbacks.indexOf(callback);
+        if (idx !== -1) signOutCleanupCallbacks.splice(idx, 1);
+    };
+}
 
 // Extraer profile desde el JWT + user metadata (sin llamar RPC)
 const extractProfileFromSession = (session: Session): Profile => {
@@ -252,8 +265,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
         });
 
-        // Limpiar estado de Zustand (memoria)
-        useScheduleSyncStore.getState().resetSyncState();
+        // Limpiar estado registrado (stores, etc.)
+        signOutCleanupCallbacks.forEach(cb => cb());
 
         toast.dismiss();
         await supabase.auth.signOut();
@@ -328,14 +341,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    // Verificar contraseña actual (via RPC — no session side-effects)
+    // Verificar contraseña actual
     const verifyCurrentPassword = async (password: string) => {
-        const { data, error } = await supabase.rpc('verify_user_password', {
-            p_password: password,
+        if (!profile?.email) {
+            return { error: new Error("No email found") };
+        }
+        const { error } = await supabase.auth.signInWithPassword({
+            email: profile.email,
+            password,
         });
-        if (error) return { error: error as Error };
-        if (data !== true) return { error: new Error("Invalid password") };
-        return { error: null };
+        return { error: error as Error | null };
     };
 
     return (

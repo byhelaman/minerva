@@ -5,14 +5,14 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ScheduleDataTable } from "@schedules/components/table/ScheduleDataTable";
 import { getAssignmentColumns, AssignmentRow } from "./assignment-columns";
-import { Schedule } from "@schedules/utils/excel-parser";
+import type { Schedule } from "@schedules/types";
 import { useZoomStore } from "@/features/matching/stores/useZoomStore";
 import { useInstructors } from "@/features/schedules/hooks/useInstructors";
 import { useHostMap } from "@/features/schedules/hooks/useHostMap";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import type { MatchResult } from "@/features/matching/services/matcher";
+import type { MatchResult } from "@/features/matching/types";
 
 interface AssignLinkModalProps {
     open: boolean;

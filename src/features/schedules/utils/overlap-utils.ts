@@ -1,12 +1,5 @@
-import { Schedule } from "./excel-parser";
-
-/**
- * Parse time string (HH:MM) to minutes since midnight
- */
-function parseTimeToMinutes(time: string): number {
-    const [hours, minutes] = time.split(":").map(Number);
-    return hours * 60 + minutes;
-}
+import type { Schedule } from "../types";
+import { parseTimeToMinutes } from "./time-utils";
 
 /**
  * Check if two time ranges overlap

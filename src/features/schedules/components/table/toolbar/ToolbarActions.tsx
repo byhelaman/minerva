@@ -9,7 +9,7 @@ import { writeTextFile, BaseDirectory } from "@tauri-apps/plugin-fs";
 import { Button } from "@/components/ui/button";
 import { useScheduleSyncStore } from "@/features/schedules/stores/useScheduleSyncStore";
 import { useScheduleUIStore } from "@/features/schedules/stores/useScheduleUIStore";
-import { formatDateForDisplay } from "@/lib/utils";
+import { formatDateForDisplay } from "@/lib/date-utils";
 
 import {
     DropdownMenu,
@@ -29,7 +29,7 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { formatTimeTo12Hour } from "@schedules/utils/time-utils";
-import { Schedule } from "@schedules/utils/excel-parser";
+import type { Schedule } from "@schedules/types";
 import { PublishedSchedule } from "@/features/schedules/types";
 import { useSettings } from "@/components/settings-provider";
 import { RequirePermission } from "@/components/RequirePermission";

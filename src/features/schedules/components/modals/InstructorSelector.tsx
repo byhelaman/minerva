@@ -4,7 +4,7 @@ import { Check, ChevronsUpDown } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import type { Instructor } from "../../hooks/useInstructors";
+import type { Instructor } from "../../types";
 
 interface InstructorSelectorProps extends Omit<ComponentPropsWithoutRef<typeof Button>, "onChange" | "value"> {
     value?: string;

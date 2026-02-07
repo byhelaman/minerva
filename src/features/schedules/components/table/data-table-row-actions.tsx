@@ -15,7 +15,7 @@ import {
     DropdownMenuSubTrigger,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { type Schedule } from "@schedules/utils/excel-parser";
+import type { Schedule } from "@schedules/types";
 import { IncidenceModal } from "../modals/IncidenceModal";
 import { QUICK_STATUS_PRESETS } from "@schedules/constants/incidence-presets";
 

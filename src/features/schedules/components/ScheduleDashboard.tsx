@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useSettings } from "@/components/settings-provider";
 import { RequirePermission } from "@/components/RequirePermission";
 import { STORAGE_FILES } from "@/lib/constants";
-import { formatDateToISO, formatDateForDisplay } from "@/lib/utils";
+import { formatDateToISO, formatDateForDisplay } from "@/lib/date-utils";
 import { Bot, CalendarPlus, CalendarSearch } from "lucide-react";
 import { SearchLinkModal } from "./modals/search/SearchLinkModal";
 import { CreateLinkModal } from "./modals/creation/CreateLinkModal";

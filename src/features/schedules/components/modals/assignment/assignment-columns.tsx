@@ -1,14 +1,14 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "@schedules/components/table/data-table-column-header";
-import { Schedule } from "@schedules/utils/excel-parser";
+import type { Schedule } from "@schedules/types";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MoreHorizontal, Hand, RotateCcw, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ZoomMeetingCandidate } from "@/features/matching/services/matcher";
+import type { ZoomMeetingCandidate } from "@/features/matching/types";
 import { StatusCell } from "@schedules/components/table/cells/StatusCell";
 import { InstructorCell } from "@schedules/components/table/cells/InstructorCell";
-import type { Instructor } from "@schedules/hooks/useInstructors";
+import type { Instructor } from "@schedules/types";
 
 // Definir la estructura de los datos de asignación
 // Esto extiende Schedule pero se centra en el aspecto de la asignación

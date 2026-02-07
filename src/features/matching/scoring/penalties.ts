@@ -9,7 +9,9 @@ import {
     SYNONYM_GROUPS,
     STRUCTURAL_TOKENS,
     PROGRAM_TYPES,
+    PROGRAM_TYPE_GROUPS,
     PERSON_FORMAT_PATTERNS,
+    LEVENSHTEIN_CONFIG,
     getAllIrrelevantWords,
 } from '../config/matching.config';
 import { normalizeString } from '../utils/normalizer';
@@ -65,18 +67,7 @@ const extractNonLevelNumbers = (str: string): string[] => {
 // MATRIZ DE CONFLICTOS DECLARATIVA
 // ============================================================================
 
-/**
- * Define grupos de tipos de programa que son mutuamente excluyentes.
- * Cada grupo tiene un ID y los tokens que lo representan (sinónimos).
- * El orden en el array determina la prioridad en los mensajes de error.
- */
-const PROGRAM_TYPE_GROUPS = [
-    { id: 'CH', tokens: ['ch'] },
-    { id: 'TRIO', tokens: ['trio'] },
-    { id: 'DUO', tokens: ['duo', 'bvd'] },
-    { id: 'PRIVADO', tokens: ['privado', 'bvp'] },
-    { id: 'BVS', tokens: ['bvs'] },
-] as const;
+// PROGRAM_TYPE_GROUPS importado desde matching.config.ts (fuente de verdad: matching.config.json)
 
 /**
  * Detecta qué tipo de programa está presente en un conjunto de tokens.
@@ -230,9 +221,9 @@ export const structuralTokenMissing: PenaltyFunction = (ctx) => {
 
 /**
  * LRU Cache para Levenshtein - evita cálculos redundantes y limita uso de memoria
- * Tamaño máximo configurable para prevenir crecimiento indefinido en sesiones largas
+ * Tamaño máximo desde matching.config.json
  */
-const MAX_LEVENSHTEIN_CACHE_SIZE = 5000;
+const MAX_LEVENSHTEIN_CACHE_SIZE = LEVENSHTEIN_CONFIG.maxCacheSize;
 const levenshteinCache = new Map<string, number>();
 
 /**

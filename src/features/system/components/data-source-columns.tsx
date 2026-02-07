@@ -1,9 +1,9 @@
 import { type ColumnDef } from "@tanstack/react-table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { type Schedule } from "@/features/schedules/utils/excel-parser";
+import type { Schedule } from "@/features/schedules/types";
 import { DataTableColumnHeader } from "@/features/schedules/components/table/data-table-column-header";
 import { DataTableRowActions } from "@/features/schedules/components/table/data-table-row-actions";
-import { formatDateForDisplay } from "@/lib/utils";
+import { formatDateForDisplay } from "@/lib/date-utils";
 
 export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, enableHtmlCopy: boolean = false): ColumnDef<Schedule>[] => [
     {

@@ -12,7 +12,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Instructor } from "@/features/schedules/hooks/useInstructors";
+import type { Instructor } from "@/features/schedules/types";
 import { InstructorSelector } from "./InstructorSelector";
 import { INCIDENCE_PRESETS } from "../../constants/incidence-presets";
 import { ScrollArea } from "@/components/ui/scroll-area";

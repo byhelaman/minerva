@@ -1,7 +1,7 @@
 /**
  * Configuración del Sistema de Matching
  * 
- * Lee la configuración desde 'irrelevant-words.json' que actúa como
+ * Lee la configuración desde 'matching.config.json' que actúa como
  * fuente única de verdad para el sistema.
  */
 
@@ -27,6 +27,8 @@ export const SYNONYM_GROUPS = config.tokens.synonyms;
 
 export const STRUCTURAL_TOKENS = new Set(config.tokens.structural);
 export const PROGRAM_TYPES = new Set(config.tokens.programTypes);
+export const PROGRAM_TYPE_GROUPS = config.tokens.programTypeGroups;
+export const LEVENSHTEIN_CONFIG = config.fuzzyMatching.levenshtein;
 
 // ============================================================================
 // PATRONES REGEX

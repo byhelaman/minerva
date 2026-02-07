@@ -42,3 +42,9 @@ export interface SchedulesConfig {
     incidencesTableId: string | null;
     incidencesTableName: string | null;
 }
+
+export interface Instructor {
+    id: string;
+    display_name: string;
+    email: string;
+}

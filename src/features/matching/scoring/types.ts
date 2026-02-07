@@ -2,7 +2,7 @@
  * Tipos e interfaces para el sistema de scoring
  */
 
-import type { ZoomMeetingCandidate } from '../services/matcher';
+import type { ZoomMeetingCandidate } from '../types';
 
 /**
  * Contexto de scoring - toda la información necesaria para evaluar un match

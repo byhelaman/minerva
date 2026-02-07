@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { DataTableFacetedFilter } from "../data-table-faceted-filter";
 import { cn } from "@/lib/utils";
-import { Schedule } from "@schedules/utils/excel-parser";
+import type { Schedule } from "@schedules/types";
 import { RequirePermission } from "@/components/RequirePermission";
 
 // Options definitions

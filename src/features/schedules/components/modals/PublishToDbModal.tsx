@@ -13,7 +13,7 @@ import { useScheduleSyncStore } from "@/features/schedules/stores/useScheduleSyn
 import { useScheduleUIStore } from "@/features/schedules/stores/useScheduleUIStore";
 import { useScheduleDataStore } from "@/features/schedules/stores/useScheduleDataStore";
 import { Loader2 } from "lucide-react";
-import { formatDateForDisplay, parseISODate } from "@/lib/utils";
+import { formatDateForDisplay, parseISODate } from "@/lib/date-utils";
 
 interface PublishToDbModalProps {
     open: boolean;

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { formatTimestampForDisplay } from "@/lib/utils";
+import { formatTimestampForDisplay } from "@/lib/date-utils";
 
 interface SearchLinkModalProps {
     open: boolean;

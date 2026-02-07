@@ -30,7 +30,7 @@ function Layout() {
 }
 
 import { UpdateDialog } from "@/components/update-dialog";
-import { GlobalSyncManager } from "@/features/system/components/GlobalSyncManager";
+import { GlobalSyncManager } from "@/components/GlobalSyncManager";
 
 function App() {
   return (

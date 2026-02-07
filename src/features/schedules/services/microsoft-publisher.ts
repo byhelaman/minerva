@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { SchedulesConfig } from '../types';
 import { scheduleEntriesService } from './schedule-entries-service';
+import { ensureTimeFormat } from '../utils/time-utils';
 
 /** Converts column-name-keyed char widths to Excel-letter-keyed pixel widths (table starts at col B) */
 function toExcelColumnWidths(
@@ -16,38 +17,6 @@ function toExcelColumnWidths(
         }
     });
     return result;
-}
-
-/** Ensures time is in HH:MM string format */
-function ensureTimeFormat(time: any): string {
-    if (!time && time !== 0) return '';
-
-    // If already string in HH:MM format, return as-is
-    if (typeof time === 'string') {
-        const trimmed = time.trim();
-        if (/^\d{1,2}:\d{2}/.test(trimmed)) {
-            // Pad hour if needed (8:00 -> 08:00)
-            const parts = trimmed.split(':');
-            return `${parts[0].padStart(2, '0')}:${parts[1].substring(0, 2)}`;
-        }
-        // Try to parse if it's a decimal string
-        const num = parseFloat(trimmed);
-        if (!isNaN(num)) {
-            time = num;
-        } else {
-            return trimmed; // Return original if can't parse
-        }
-    }
-
-    // If it's a number (decimal fraction of day), convert to HH:MM
-    if (typeof time === 'number') {
-        const totalMinutes = Math.round(time * 24 * 60);
-        const hours = Math.floor(totalMinutes / 60);
-        const minutes = totalMinutes % 60;
-        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-    }
-
-    return String(time);
 }
 
 /**

@@ -26,7 +26,7 @@ import {
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { detectOverlaps, getScheduleKey } from "@schedules/utils/overlap-utils";
-import { Schedule } from "@schedules/utils/excel-parser";
+import type { Schedule } from "@schedules/types";
 import { cn } from "@/lib/utils";
 
 interface ScheduleDataTableProps<TData, TValue> {

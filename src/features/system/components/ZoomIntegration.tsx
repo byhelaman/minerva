@@ -129,8 +129,8 @@ export function ZoomIntegration() {
                         setIsConnecting(false);
                         toast.success("Zoom connected successfully!");
                     }
-                } catch (e) {
-                    // Ignorar
+                } catch {
+                    // Ignorar — polling silencioso
                 }
             }, POLL_INTERVAL);
 

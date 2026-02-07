@@ -84,7 +84,7 @@ export function ForgotPasswordDialog({
                 setResendCountdown(30);
                 toast.success("Verification code resent");
             }
-        } catch (error) {
+        } catch {
             toast.error("Failed to resend code");
         } finally {
             setIsLoading(false);
@@ -142,7 +142,7 @@ export function ForgotPasswordDialog({
                 setResendCountdown(30);
                 toast.success("Verification code sent to your email");
             }
-        } catch (error) {
+        } catch {
             toast.error("Failed to send code");
         } finally {
             setIsLoading(false);
@@ -164,7 +164,7 @@ export function ForgotPasswordDialog({
             } else {
                 setStep("password");
             }
-        } catch (error) {
+        } catch {
             toast.error("Failed to verify code");
         } finally {
             setIsLoading(false);
@@ -189,7 +189,7 @@ export function ForgotPasswordDialog({
                 handleOpenChange(false);
                 navigate("/");
             }
-        } catch (error) {
+        } catch {
             toast.error("Failed to update password");
         } finally {
             setIsLoading(false);

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { ScheduleDataTable } from "@/features/schedules/components/table/ScheduleDataTable";
 import { getDataSourceColumns } from "../data-source-columns";
-import { Schedule } from "@/features/schedules/utils/excel-parser";
+import type { Schedule } from "@/features/schedules/types";
 import {
     Dialog,
     DialogContent,

@@ -11,7 +11,8 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { parseExcelFile, Schedule } from "@schedules/utils/excel-parser";
+import type { Schedule } from "@schedules/types";
+import { parseExcelFile } from "@schedules/utils/excel-parser";
 
 interface FileInfo {
     file: File;

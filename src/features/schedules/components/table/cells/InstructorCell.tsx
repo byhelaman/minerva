@@ -1,7 +1,7 @@
 import { AssignmentRow } from "../../modals/assignment/assignment-columns";
 import { Row } from "@tanstack/react-table";
 import { InstructorSelector } from "../../modals/InstructorSelector";
-import type { Instructor } from "../../../hooks/useInstructors";
+import type { Instructor } from "@schedules/types";
 
 interface InstructorCellProps {
     row: Row<AssignmentRow>;

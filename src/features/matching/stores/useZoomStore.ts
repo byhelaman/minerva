@@ -1,21 +1,13 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
-import { ZoomMeetingCandidate, MatchResult } from '../services/matcher';
-import { Schedule } from '@/features/schedules/utils/excel-parser';
+import type { ZoomMeetingCandidate, ZoomUserCandidate, MatchResult } from '../types';
+import type { Schedule } from '@/features/schedules/types';
 import { logger } from '@/lib/logger';
-
-interface ZoomUser {
-    id: string;
-    email: string;
-    first_name: string;
-    last_name: string;
-    display_name: string;
-}
 
 interface ZoomState {
     // Datos
     meetings: ZoomMeetingCandidate[];
-    users: ZoomUser[];
+    users: ZoomUserCandidate[];
     matchResults: MatchResult[];
     activeMeetingIds: string[];
 
@@ -51,7 +43,7 @@ interface ZoomState {
     _activeFetchPromise: Promise<void> | null;
 
     // Método interno para inicializar el worker
-    _initWorker: (meetings: ZoomMeetingCandidate[], users: ZoomUser[]) => void;
+    _initWorker: (meetings: ZoomMeetingCandidate[], users: ZoomUserCandidate[]) => void;
 }
 
 export const useZoomStore = create<ZoomState>((set, get) => ({
@@ -126,7 +118,7 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
                         'zoom_meetings',
                         'meeting_id, topic, host_id, start_time, join_url, created_at'
                     ),
-                    fetchAllPages<ZoomUser>(
+                    fetchAllPages<ZoomUserCandidate>(
                         'zoom_users',
                         'id, email, first_name, last_name, display_name'
                     )
@@ -165,7 +157,7 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
         }
     },
 
-    _initWorker: (meetings: ZoomMeetingCandidate[], users: ZoomUser[]) => {
+    _initWorker: (meetings: ZoomMeetingCandidate[], users: ZoomUserCandidate[]) => {
         const currentWorker = get().worker;
         if (currentWorker) {
             currentWorker.terminate();

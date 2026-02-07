@@ -5,7 +5,7 @@
  * y determina la decisión final de matching usando un patrón de Rule Engine.
  */
 
-import type { ZoomMeetingCandidate } from '../services/matcher';
+import type { ZoomMeetingCandidate } from '../types';
 import type { ScoringContext, ScoringResult, MatchEvaluation, AppliedPenalty, MatchOptions, PenaltyFunction } from './types';
 import { ALL_PENALTIES } from './penalties';
 import { BASE_SCORE, THRESHOLDS } from '../config/matching.config';

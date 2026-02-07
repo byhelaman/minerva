@@ -1,15 +1,5 @@
-import { MatchingService, ZoomMeetingCandidate, ZoomUserCandidate } from '../services/matcher';
-import { Schedule } from '@/features/schedules/utils/excel-parser';
-
-// Definir tipos de mensajes
-export type WorkerMessage =
-    | { type: 'INIT'; meetings: ZoomMeetingCandidate[]; users: ZoomUserCandidate[] }
-    | { type: 'MATCH'; schedules: Schedule[] };
-
-export type WorkerResponse =
-    | { type: 'READY' }
-    | { type: 'MATCH_RESULT'; results: any[] } // MatchResult[]
-    | { type: 'ERROR'; error: string };
+import { MatchingService } from '../services/matcher';
+import type { WorkerMessage } from '../types';
 
 let matcher: MatchingService | null = null;
 

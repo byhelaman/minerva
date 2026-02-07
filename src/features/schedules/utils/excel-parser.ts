@@ -1,10 +1,7 @@
 import { read, utils } from "xlsx";
 import { formatTimeTo24h, parseTimeValue } from "./time-utils";
 import { ScheduleSchema } from "../schemas/schedule-schema";
-import { Schedule } from "../types";
-
-// Re-exportar Schedule para compatibilidad
-export type { Schedule } from "../types";
+import type { Schedule } from "../types";
 
 // =============================================================================
 // CONFIGURACIÓN DEL PARSER

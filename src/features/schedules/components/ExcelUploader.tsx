@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
-import { parseExcelFile, Schedule } from "../utils/excel-parser";
+import type { Schedule } from "../types";
+import { parseExcelFile } from "../utils/excel-parser";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { UploadCloud, FileSpreadsheet, Loader2 } from "lucide-react";
