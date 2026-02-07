@@ -522,7 +522,7 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
                         ) : (
                             <Button variant="outline" size="sm" onClick={handleConnect}>
                                 <Link2 />
-                                Connect Microsoft
+                                Connect
                             </Button>
                         )
                     )}

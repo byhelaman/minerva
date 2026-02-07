@@ -301,7 +301,7 @@ export function ZoomIntegration() {
                             ) : (
                                 <Button variant="outline" size="sm" onClick={handleConnect}>
                                     <Link2 />
-                                    Connect Zoom
+                                    Connect
                                 </Button>
                             )
                         )}

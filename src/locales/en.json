@@ -41,7 +41,7 @@
             "desc": "Connect your personal Zoom account.",
             "not_connected": "Not Connected",
             "no_account_linked": "No account linked",
-            "connect_button": "Connect Zoom"
+            "connect_button": "Connect"
         }
     },
     "settings": {
