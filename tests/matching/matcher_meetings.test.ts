@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { MatchingService, ZoomMeetingCandidate } from '../src/features/matching/services/matcher';
-import { scoreCandidate } from '../src/features/matching/scoring/scorer';
+import { MatchingService, ZoomMeetingCandidate } from '../../src/features/matching/services/matcher';
+import { scoreCandidate } from '../../src/features/matching/scoring/scorer';
 
 const mockMeetings: ZoomMeetingCandidate[] = [
     { meeting_id: 'm1', topic: 'BVP - JUAN ALBERTO RIVERA - L9 (ONLINE)', host_id: 'h1', start_time: '2023-01-01' },
@@ -95,13 +95,13 @@ describe('MatchingService - Meetings', () => {
         expect(result.meeting_id).toBeUndefined();
     });
 
-    // isWeakMatch guardrail: TRIO NOVA L4 should NOT match TRIO TECHCORP L4
-    // because "NOVA" is a distinctive token not present in "TECHCORP"
+    // Guardrail isWeakMatch: TRIO NOVA L4 NO debe matchear con TRIO TECHCORP L4
+    // porque "NOVA" es un token distintivo que no está presente en "TECHCORP"
     it('should NOT match Topic: TRIO TECHCORP L4 with TRIO NOVA (isWeakMatch guardrail)', () => {
         const schedule = { program: 'TRIO NOVA L4 (NOVA)(PRESENCIAL-TRAVEL)', instructor: 'Any' } as any;
         const result = matcher.findMatch(schedule);
-        expect(result.meeting_id).toBeUndefined(); // Now correctly rejected
-        expect(result.status).toBe('not_found'); // WEAK_MATCH is a hard reject, returns not_found
+        expect(result.meeting_id).toBeUndefined(); // Ahora correctamente rechazado
+        expect(result.status).toBe('not_found'); // WEAK_MATCH es un rechazo fuerte, retorna not_found
     });
 
     // debe dar error, no debe hacer matching
@@ -117,7 +117,7 @@ describe('MatchingService - Meetings', () => {
         const schedule = { program: 'DUO TECHCORP L4 (ONLINE)', instructor: 'Any' } as any;
         const result = matcher.findMatch(schedule);
         expect(result.meeting_id).toBeUndefined();
-        expect(result.status).toBe('not_found'); // Critical conflict -> not_found
+        expect(result.status).toBe('not_found'); // Conflicto crítico -> not_found
     });
 
     // debe hacer matching
@@ -154,7 +154,7 @@ describe('MatchingService - Meetings', () => {
         const schedule = { program: 'TRIO GLOBALTECH N8 (PRESENCIAL-TRAVEL)', instructor: 'Any' } as any;
         const result = matcher.findMatch(schedule);
         expect(result.meeting_id).toBeUndefined(); // No matchea porque CH != TRIO
-        expect(result.status).toBe('not_found'); // CH vs TRIO -> not_found
+        expect(result.status).toBe('not_found'); // CH vs TRIO -> no encontrado
     });
 
     // Este test sigue siendo válido - Level Mismatch (L3 vs L2) sigue activo
@@ -162,7 +162,7 @@ describe('MatchingService - Meetings', () => {
         const schedule = { program: 'CH ACME L3 (ONLINE)', instructor: 'Any' } as any;
         const result = matcher.findMatch(schedule);
         expect(result.meeting_id).toBeUndefined();
-        expect(result.status).toBe('ambiguous'); // Returns ambiguous (disqualified) instead of not_found for visibility // Level conflict results in not_found
+        expect(result.status).toBe('ambiguous'); // Retorna ambiguo (descalificado) en lugar de not_found para visibilidad
     });
 
     // Conflicto de Número de Grupo - CH 1 no debe matchear con CH 3
@@ -171,7 +171,7 @@ describe('MatchingService - Meetings', () => {
         const result = matcher.findMatch(schedule);
         // No debe matchear porque "1" != "3" (aunque comparten "2" del nivel L2)
         expect(result.meeting_id).toBeUndefined();
-        expect(result.status).toBe('ambiguous'); // Returns ambiguous (disqualified) instead of not_found for visibility
+        expect(result.status).toBe('ambiguous'); // Retorna ambiguo (descalificado) en lugar de not_found para visibilidad
     });
 
     // Test para falso positivo - empresa vs persona no relacionada
@@ -185,13 +185,6 @@ describe('MatchingService - Meetings', () => {
 
         const schedule = { program: 'GLOBEX CORP - ENG L3', instructor: 'Any' } as any;
         const result = testMatcher.findMatch(schedule);
-
-        console.log('Company vs Person Test Result:', {
-            status: result.status,
-            meeting_id: result.meeting_id,
-            reason: result.reason,
-            score: result.score
-        });
 
         // No debe matchear porque "globex" no está en el topic
         // Debe ser "ambiguous" con score muy bajo o "not_found"
@@ -273,8 +266,6 @@ describe('MatchingService - Meetings', () => {
             { ignoreLevelMismatch: true }
         );
 
-        console.log('TRIO Test:', result.status, result.meeting_id, result.score);
-
         // Debería asignar porque solo cambia el nivel
         expect(result.status).toBe('assigned');
         expect(result.meeting_id).toBe('trio_match');
@@ -351,13 +342,6 @@ describe('MatchingService - Meetings', () => {
         // Query genérica "WORKSHOP" con ignoreLevelMismatch (como usa el modal)
         const result = testMatcher.findMatchByTopic('WORKSHOP', { ignoreLevelMismatch: true });
 
-        console.log('Workshop Ambiguity Test:', {
-            status: result.status,
-            meeting_id: result.meeting_id,
-            score: result.score,
-            reason: result.reason,
-            candidates: result.candidates?.length
-        });
         // Debe ser ambiguo o not_found, PERO NO assigned
         expect(result.status).not.toBe('assigned');
         // Idealmente ambiguous
@@ -450,36 +434,15 @@ describe('MatchingService - Ambiguous Cases', () => {
 
     // Test para Números Huérfanos con Hermanos
     it('should return ambiguous when CH ACME L2 matches CH 1/2/3 ACME L2 (orphan number with siblings)', () => {
-        // Input: "CH ACME L2" (sin número de grupo)
-        // Topics disponibles: "CH 1 ACME L2", "CH 2 ACME L2", "CH 3 ACME L2"
-        // Debe marcar ambiguo (ya sea por scores similares o por números huérfanos)
         const schedule = { program: 'CH ACME L2 (ONLINE)', instructor: 'Any' } as any;
         const result = matcher.findMatch(schedule);
-        expect(result.status).toBe('ambiguous'); // Returns ambiguous (disqualified) instead of not_found for visibility
-        // El candidato fue rechazado por Level Conflict
+        expect(result.status).toBe('ambiguous');
     });
 
     // Test Case para debuggear ambigüedad reportada por usuario
     it('should match correctly: Torres Flores (PER)(ONLINE), Maria Fernanda', () => {
         const schedule = { program: 'Torres Flores (PER)(ONLINE), Maria Fernanda', instructor: 'Any' } as any;
         const result = matcher.findMatch(schedule);
-
-        // Candidato correcto: BVP - MARIA TORRES FLORES - L1 (ONLINE)
-        // Candidato incorrecto: BVP - MARIA FERNANDA RUIZ VEGA - L4 (CRASH-ONLINE)
-
-        if (result.status === 'ambiguous') {
-            const c1 = result.ambiguousCandidates?.find(c => c.topic.includes('TORRES'));
-            const c2 = result.ambiguousCandidates?.find(c => c.topic.includes('RUIZ VEGA'));
-            console.log('Ambiguo - Scores:', {
-                c1: c1?.topic,
-                c2: c2?.topic,
-                candidates: result.ambiguousCandidates?.map(c => c.topic)
-            });
-        }
-
-        if (result.meeting_id !== 'm_persona1') {
-            console.log('❌ Resultado inesperado:', JSON.stringify(result, null, 2));
-        }
 
         expect(result.meeting_id).toBe('m_persona1'); // Asegurar que matchea el correcto
         expect(result.status).toBe('assigned');      // Y que no es ambiguo
@@ -488,23 +451,8 @@ describe('MatchingService - Ambiguous Cases', () => {
     // ========== HEURISTICA DE PERSONAS CON SEGUNDOS NOMBRES ==========
 
     it('should match person with extra middle name: Del Valle Moreno, Ricardo David', () => {
-        // Este test demuestra que la heurística de personas funciona
-        // cuando ambos query y topic son detectados como formato de persona
-        // y el topic está cubierto por la query pero hay tokens extra
-
-        // La query tiene formato "Apellido (País), Nombre Segundo" 
-        // El topic tiene formato "NOMBRE APELLIDO APELLIDO - INFO"
-        // Con la heurística de personas, "david" (segundo nombre) penaliza solo -10 en lugar de -60
-
         const schedule = { program: 'Del Valle Moreno (Per)(Online), Ricardo David', instructor: 'Any' } as any;
         const result = matcher.findMatch(schedule);
-
-        // Si no encuentra candidatos, el status será not_found
-        // Esto indica que el problema está en la fase de búsqueda, no en el scoring
-        if (result.status === 'not_found' && result.reason === 'Reunión no encontrada') {
-            // Log para debug - el meeting no fue encontrado como candidato
-            console.log('Note: Meeting not found as candidate - may need to tune Fuse.js/Token matching thresholds');
-        }
 
         // El test valida la heurística solo si el candidato fue encontrado
         if (result.meeting_id) {
@@ -515,8 +463,6 @@ describe('MatchingService - Ambiguous Cases', () => {
 });
 
 // ========== TESTS DE MATCHING SIN PREFIJO BVP ==========
-// Estos tests validan el caso de uso del CreateLinkModal donde el usuario
-// ingresa nombres sin prefijo "BVP" pero los meetings en DB sí lo tienen
 
 const bvpPrefixMeetings: ZoomMeetingCandidate[] = [
     { meeting_id: 'bvp1', topic: 'HECTOR RAFAEL MAIDANA - L5 (ONLINE)', host_id: 'h1', start_time: '2023-01-01' },
@@ -534,37 +480,18 @@ describe('MatchingService - Query without BVP prefix', () => {
     it('should match "HECTOR RAFAEL MAIDANA - L5 (ONLINE)" to BVP topic', () => {
         const schedule = { program: 'BVP - HECTOR RAFAEL MAIDANA - L5 (ONLINE)', instructor: 'Any' } as any;
         const result = matcher.findMatch(schedule);
-
-        console.log('HECTOR Test:', result.status, result.meeting_id, result.score);
-
         expect(result.meeting_id).toBe('bvp1');
     });
 
     it('should match "AIDA CALDERON - L7 (ONLINE)" to BVP topic', () => {
         const schedule = { program: 'BVP - AIDA CALDERON - L7 (ONLINE)', instructor: 'Any' } as any;
         const result = matcher.findMatch(schedule);
-
-        console.log('Test 2 Result:', {
-            status: result.status,
-            meeting_id: result.meeting_id,
-            reason: result.reason,
-            candidates: result.candidates?.length
-        });
-
         expect(result.meeting_id).toBe('bvp2');
     });
 
     it('should match "GUIDO MORENO - L1 (HIBRIDO)" to BVP topic', () => {
         const schedule = { program: 'BVP - GUIDO MORENO - L1 (HIBRIDO)', instructor: 'Any' } as any;
         const result = matcher.findMatch(schedule);
-
-        console.log('Test 3 Result:', {
-            status: result.status,
-            meeting_id: result.meeting_id,
-            reason: result.reason,
-            candidates: result.candidates?.length
-        });
-
         expect(result.meeting_id).toBe('bvp3');
     });
 });
@@ -579,39 +506,24 @@ describe('MatchingService - Scotiabank vs Person', () => {
         };
         const matcher = new MatchingService([haydukMeeting], []);
 
-        // Test Case 1: Automatic Assignment (Strict)
-        // strict mode should return no match or very low score
+        // Caso 1: Asignación Automática (Estricto)
         const resultStrict = matcher.findMatchByTopic('SCOTIABANK O - ENG L3');
-        console.log('Scotiabank Strict:', {
-            status: resultStrict.status,
-            score: resultStrict.score,
-            reason: resultStrict.reason
-        });
 
-        // Test Case 2: Create Zoom Links (Relaxed)
-        const resultRelaxed = matcher.findMatchByTopic('SCOTIABANK O - ENG L3', { ignoreLevelMismatch: true });
-        console.log('Scotiabank Relaxed:', {
-            status: resultRelaxed.status,
-            score: resultRelaxed.score,
-            reason: resultRelaxed.reason
-        });
+        // Caso 2: Crear Zoom Links (Relajado) — también rechazado
+        matcher.findMatchByTopic('SCOTIABANK O - ENG L3', { ignoreLevelMismatch: true });
 
-        // Debug scoring details
-        const scoring = scoreCandidate(
+        // Debug de detalles de scoring
+        scoreCandidate(
             'SCOTIABANK O - ENG L3',
             haydukMeeting,
             [haydukMeeting]
         );
-        console.log('Scotiabank Scoring:', scoring.finalScore);
-        scoring.penalties.forEach(p => console.log(`  ${p.name}: ${p.points} (${p.reason})`));
 
-        // Expectation: Should be rejected or have very low score due to different company/content
-        expect(resultStrict.status).toBe('not_found'); // Was 'assigned' but expectations changed to 'not_found' for hard reject
+        // Expectativa: Debe ser rechazado o tener score muy bajo por empresa/contenido diferente
+        expect(resultStrict.status).toBe('not_found');
     });
 
     it('should NOT flag COMPANY_CONFLICT for Person Names (e.g. Espinoza vs Repsol)', () => {
-        // Case: Query is "ESPINOZA", Topic is "JUAN ESPINOZA (REPSOL)"
-        // "Espinoza" is a name, NOT a company conflict with "Repsol"
         const repsolMeeting: ZoomMeetingCandidate = {
             meeting_id: 'repsol1',
             topic: 'JUAN ESPINOZA (REPSOL) - ENG L3',
@@ -619,23 +531,17 @@ describe('MatchingService - Scotiabank vs Person', () => {
             start_time: '2023-01-01'
         };
 
-        // "ESPINOZA" should match because the name matches, and it shouldn't be treated as a company
         const scoring = scoreCandidate(
             'ESPINOZA',
             repsolMeeting,
             [repsolMeeting]
         );
 
-        console.log('Espinoza Scoring:', scoring.finalScore);
-        scoring.penalties.forEach(p => console.log(`  ${p.name}: ${p.points}`));
-
         const companyConflict = scoring.penalties.find(p => p.name === 'COMPANY_CONFLICT');
         expect(companyConflict).toBeUndefined();
     });
 
     it('should NOT flag COMPANY_CONFLICT for Accented Names (e.g. Mejía vs CRASH)', () => {
-        // Case: Query "Mejía Ora (PER)(ONLINE)..." vs Topic "BVP - MAYRA MEJIA ORA - L2 (CRASH-ONLINE)"
-        // "Mejía" gets tokenized as "MEJ" due to accent if regex is wrong, causing conflict with "CRASH"
         const crashMeeting: ZoomMeetingCandidate = {
             meeting_id: 'crash1',
             topic: 'BVP - MAYRA MEJIA ORA - L2 (CRASH-ONLINE)',
@@ -643,17 +549,12 @@ describe('MatchingService - Scotiabank vs Person', () => {
             start_time: '2023-01-01'
         };
 
-
         const scoring = scoreCandidate(
             'Mejía Ora (PER)(ONLINE), Mayra Kasandra',
             crashMeeting,
             [crashMeeting]
         );
 
-        console.log('Mejia Scoring:', scoring.finalScore);
-        scoring.penalties.forEach(p => console.log(`  ${p.name}: ${p.points}`));
-
-        // Should be found as a valid (but maybe low score) match, BUT definitely NOT a company conflict
         const companyConflict = scoring.penalties.find(p => p.name === 'COMPANY_CONFLICT');
         expect(companyConflict).toBeUndefined();
     });

@@ -1,6 +1,5 @@
-
 import { describe, it, expect, beforeEach } from 'vitest';
-import { MatchingService, ZoomMeetingCandidate, ZoomUserCandidate } from '../src/features/matching/services/matcher';
+import { MatchingService, ZoomMeetingCandidate, ZoomUserCandidate } from '../../src/features/matching/services/matcher';
 
 const mockUsers: ZoomUserCandidate[] = [
     { id: 'u1', email: 'u1@test.com', first_name: 'Steve', last_name: 'Miller', display_name: 'Steve Miller' },

@@ -1,6 +1,5 @@
-
 import { describe, it, expect, beforeEach } from 'vitest';
-import { MatchingService, ZoomMeetingCandidate, ZoomUserCandidate } from '../src/features/matching/services/matcher';
+import { MatchingService, ZoomMeetingCandidate, ZoomUserCandidate } from '../../src/features/matching/services/matcher';
 
 // Usuarios Mock de DB - datos ficticios para tests
 const mockUsers: ZoomUserCandidate[] = [
@@ -48,34 +47,29 @@ describe('MatchingService - Users', () => {
     // ========== CASOS DE TEST NEGATIVOS ==========
 
     it('should NOT match Pedro Garcia when searching for Juan Garcia', () => {
-        // Solo coincide apellido - no debería ser suficiente
         const schedule = { program: 'Any Program', instructor: 'Juan Garcia Lopez' } as any;
         const result = matcher.findMatch(schedule);
         expect(result.found_instructor).toBeUndefined();
     });
 
     it('should NOT match Carlos Ramos when searching for Eduardo Ramos', () => {
-        // Mismo apellido, diferente nombre - no debería coincidir
         const schedule = { program: 'Any Program', instructor: 'Eduardo Antonio Ramos' } as any;
         const result = matcher.findMatch(schedule);
         expect(result.found_instructor).toBeUndefined();
     });
 
     it('should NOT match Sofia Morales when searching for Sofia Rodriguez', () => {
-        // Mismo nombre, diferente apellido - no debería coincidir
         const schedule = { program: 'Any Program', instructor: 'Sofia Patricia Rodriguez' } as any;
         const result = matcher.findMatch(schedule);
         expect(result.found_instructor).toBeUndefined();
     });
 
     it('should NOT match Fiorela Garcia when searching for Ana Garcia', () => {
-        // Preparar matcher con usuario Fiorela Garcia
         const usersWithFiorela: ZoomUserCandidate[] = [
             { id: 'fg1', email: 'fiorela@test.com', first_name: 'Fiorela', last_name: 'Garcia', display_name: 'Fiorela Garcia' },
         ];
         const matcherWithFiorela = new MatchingService(mockMeetings, usersWithFiorela);
 
-        // Buscar Ana Garcia - no debería matchear con Fiorela Garcia (solo comparten apellido)
         const schedule = { program: 'Any Program', instructor: 'Ana Garcia' } as any;
         const result = matcherWithFiorela.findMatch(schedule);
         expect(result.found_instructor).toBeUndefined();

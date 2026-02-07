@@ -10,12 +10,12 @@ import {
     numericConflict,
     orphanNumberWithSiblings,
     orphanLevelWithSiblings
-} from '../src/features/matching/scoring/penalties';
-import { ScoringContext, MatchOptions } from '../src/features/matching/scoring/types';
-import { ZoomMeetingCandidate } from '../src/features/matching/services/matcher';
-import { normalizeString } from '../src/features/matching/utils/normalizer';
+} from '../../src/features/matching/scoring/penalties';
+import { ScoringContext, MatchOptions } from '../../src/features/matching/scoring/types';
+import { ZoomMeetingCandidate } from '../../src/features/matching/services/matcher';
+import { normalizeString } from '../../src/features/matching/utils/normalizer';
 
-// Helper to create mock context
+// Helper para crear contexto mock
 function mockContext(program: string, topic: string, options?: MatchOptions, otherCandidates: ZoomMeetingCandidate[] = []): ScoringContext {
     const candidate: ZoomMeetingCandidate = {
         meeting_id: 'm1',
@@ -82,7 +82,6 @@ describe('Penalties Unit Tests', () => {
 
     describe('companyConflict', () => {
         it('should return PENALTY when companies differ (SCOTIABANK vs HAYDUK)', () => {
-            // Note: companyConflict expects topic company in parens "Expected (HAYDUK)"
             const ctx = mockContext('SCOTIABANK APP', 'APP (HAYDUK)');
             const result = companyConflict(ctx);
             expect(result).not.toBeNull();
@@ -96,7 +95,6 @@ describe('Penalties Unit Tests', () => {
         });
 
         it('should return NULL if query company is part of person name in topic', () => {
-            // "ESPINOZA" in query, "JUAN ESPINOZA" in topic
             const ctx = mockContext('ESPINOZA', 'JUAN ESPINOZA (OTHER)');
             const result = companyConflict(ctx);
             expect(result).toBeNull();
@@ -105,7 +103,6 @@ describe('Penalties Unit Tests', () => {
 
     describe('programVsPerson', () => {
         it('should return PENALTY when query is Program and topic is Person format', () => {
-            // TRIO is program, "JUAN GARCIA LOPEZ - KEYNOTES (ONLINE)" is person
             const ctx = mockContext('TRIO APP', 'JUAN GARCIA LOPEZ - KEYNOTES (ONLINE)');
             const result = programVsPerson(ctx);
             expect(result).not.toBeNull();
@@ -202,7 +199,6 @@ describe('Penalties Unit Tests', () => {
 
     describe('weakMatch', () => {
         it('should return PENALTY when no distinctive tokens match', () => {
-            // Query "ABC", Topic "XYZ" -> No match
             const ctx = mockContext('ABC', 'XYZ');
             const result = weakMatch(ctx);
             expect(result).not.toBeNull();
@@ -210,16 +206,13 @@ describe('Penalties Unit Tests', () => {
         });
 
         it('should return PARTIAL_MATCH when some tokens missing', () => {
-            // Query "ABC DEF", Topic "ABC" -> Missing "DEF"
             const ctx = mockContext('ABC DEF', 'ABC');
             const result = weakMatch(ctx);
             expect(result).not.toBeNull();
-            // Note: partial match returns different name depending on context
             expect(result?.name).not.toBeNull();
         });
 
         it('should return NULL for good match', () => {
-            // Query "ABC", Topic "ABC" -> Perfect
             const ctx = mockContext('ABC', 'ABC');
             const result = weakMatch(ctx);
             expect(result).toBeNull();

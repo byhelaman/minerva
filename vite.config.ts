@@ -39,5 +39,18 @@ export default defineConfig(async () => ({
   },
   test: {
     globals: true,
+    include: ['tests/**/*.test.ts'],
+    coverage: {
+      provider: 'v8',
+      include: [
+        'src/features/matching/**/*.ts',
+        'src/features/schedules/utils/**/*.ts',
+        'src/features/schedules/schemas/**/*.ts',
+        'src/lib/date-utils.ts',
+        'src/lib/rate-limiter.ts',
+        'src/lib/utils.ts',
+      ],
+      exclude: ['**/*.d.ts', '**/types.ts', '**/types/**'],
+    },
   },
 }));
