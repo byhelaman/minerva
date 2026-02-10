@@ -46,18 +46,14 @@ Detailed technical documentation lives in `docs/` (written in Spanish):
 
 ### Provider Hierarchy (src/main.tsx)
 
-MSAL initializes first (async), then React renders with this provider nesting:
-
 ```
-MsalProvider
+React.StrictMode
   └─ ThemeProvider
       └─ AuthProvider
           └─ BrowserRouter
               └─ SettingsProvider
-                  └─ App
+                  └─ App + BugReportButton + Toaster
 ```
-
-MSAL must complete `initialize()` and `handleRedirectPromise()` before React renders.
 
 ### Routing (src/App.tsx)
 
@@ -110,32 +106,28 @@ Desktop-optimized configuration:
 - RLS on all tables; policies use `auth.jwt()`
 - Role hierarchy: viewer (10) → operator (50) → admin (80) → super_admin (100)
 
+### Permissions Quick Reference
+
+- **`schedules.read`** (10+) — View own schedules
+- **`schedules.write`** (50+) — Upload and edit schedules
+- **`schedules.manage`** (80+) — Publish global schedules
+- **`reports.view`** (80+) — Access Reports page
+- **`reports.manage`** (80+) — Import, delete, sync reports
+- **`system.manage`** (100) — Connect integrations (Zoom, OneDrive)
+
+Components use `<RequirePermission>` for UI gates. Edge Functions verify permissions via `_shared/auth-utils.ts`.
+
 ### Matching Engine (`src/features/matching/`)
 
-- **Matcher** (`services/matcher.ts`) — Three-tier search: exact normalized → Fuse.js fuzzy → token set fallback
-- **Scorer** (`scoring/scorer.ts`) — ScoringEngine with 10 penalty functions, evaluateMatch() decision logic
-- **Penalties** (`scoring/penalties.ts`) — 10 registered penalty functions with ALL_PENALTIES registry
-- **Config** (`config/matching.config.json`) — Source of truth for penalties, thresholds, irrelevant words (10 categories)
-- **Normalizer** (`utils/normalizer.ts`) — Unicode normalization, diacritics removal, irrelevant word filtering
-- **Web Worker** (`workers/match.worker.ts`) — Runs off main thread; messages: `INIT`→`READY`, `MATCH`→`MATCH_RESULT`
-- Worker lifecycle managed by `useZoomStore`: terminated and recreated when data changes
-
-Full documentation: `docs/matching_logic.md`
+Three-tier search (exact normalized → Fuse.js fuzzy → token set fallback) with 10 penalty functions and a scoring engine. Runs off main thread in a **Web Worker** (`match.worker.ts`). Config source of truth: `config/matching.config.json`. Worker lifecycle managed by `useZoomStore`: terminated and recreated when data changes. **Full docs: `docs/matching_logic.md`**
 
 ### Supabase Edge Functions (Deno, `supabase/functions/`)
 
-- `zoom-api` — Create/update Zoom meetings (batch support, type 2 daily / type 8 recurring)
-- `zoom-auth` — OAuth 2.0 flow with Zoom (S2S + Vault storage)
-- `zoom-sync` — Sync users and meetings from Zoom API to DB (paginated)
-- `zoom-webhook` — Receives Zoom webhooks (HMAC signed)
-- `microsoft-auth` — OAuth 2.0 flow with Microsoft (init, callback, status, disconnect, update-config)
-- `microsoft-graph` — OneDrive operations: 5 read actions, 3 sync actions, 8 write actions
-
-Most deploy with `--no-verify-jwt` (custom auth logic inside). Shared utils in `_shared/auth-utils.ts`.
+6 Edge Functions: `zoom-api`, `zoom-auth`, `zoom-sync`, `zoom-webhook`, `microsoft-auth`, `microsoft-graph`. Most deploy with `--no-verify-jwt` (custom auth inside). Shared utils in `_shared/auth-utils.ts`. **Full docs: `docs/SUPABASE_BACKEND.md`**
 
 ### Database Migrations (`supabase/migrations/`)
 
-6 consolidated migration files (001–006). Run via Supabase SQL Editor in order.
+7 migration files (001–007). Run via Supabase SQL Editor in order. 001–006 are consolidated; 007 (`delete_account`) is standalone.
 
 Key tables: `profiles`, `roles`, `permissions`, `schedule_entries`, `published_schedules`, `zoom_users`, `zoom_meetings`, `zoom_account`, `microsoft_account`, `webhook_events`, `bug_reports`.
 
@@ -202,6 +194,10 @@ Edge Function secrets (set via `supabase secrets set`):
 - `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_REDIRECT_URI`
 
 
+## CI/CD
+
+Single workflow: `.github/workflows/release.yml` — triggers on `v*` tags, builds Windows MSI/NSIS via `tauri-apps/tauri-action`. No CI for tests or type-checking — run `pnpm tsc --noEmit` and `pnpm test:run` locally before committing.
+
 ## Conventions
 
 - TypeScript strict mode — no `any`, prefer inference
@@ -211,3 +207,12 @@ Edge Function secrets (set via `supabase secrets set`):
 - Run `pnpm test` and `pnpm tsc --noEmit` before committing
 - Complex changes (refactors, new features, architecture decisions) require confirming understanding before acting
 - All project documentation written in Spanish
+- Vite injects `__BUILD_DATE__` at build time (defined in `vite.config.ts`)
+
+## Gotchas
+
+- **Read the relevant `docs/` file before modifying any feature** — they contain detailed architecture decisions and implementation specifics
+- Matching engine: Levenshtein distance is hardcoded to 1 in the code despite `allowedDistanceLong: 2` in config (distance 2 caused false positives like MARIA↔MAYRA)
+- Matching penalty values live in `matching.config.json`, NOT hardcoded in TypeScript
+- Microsoft: `append-rows` is listed in `syncActions` but has no handler — returns 400. Use `upsert-rows-by-key` or `replace-table-data` instead
+- Edge Functions deploy with `--no-verify-jwt` — they implement custom auth internally via `_shared/auth-utils.ts`

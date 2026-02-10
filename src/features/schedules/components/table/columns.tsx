@@ -14,7 +14,7 @@ export const getScheduleColumns = (
             id: "select",
             size: 36,
             header: ({ table }) => (
-                <div className="flex justify-center items-center mb-1">
+                <div className="flex justify-center items-center mb-1 w-8">
                     <Checkbox
                         checked={
                             table.getIsAllPageRowsSelected() ||
@@ -91,16 +91,17 @@ export const getScheduleColumns = (
         },
         {
             accessorKey: "instructor",
-            size: 150,
+            size: 200,
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Instructor" />
             ),
             cell: ({ row }) => (
-                <div>{row.getValue("instructor")}</div>
+                <div className="truncate max-w-40">{row.getValue("instructor")}</div>
             ),
         },
         {
             accessorKey: "program",
+            size: 400,
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Program" />
             ),
@@ -112,7 +113,7 @@ export const getScheduleColumns = (
                             {row.original.type}
                         </Badge>
                     )}
-                    <span>{row.getValue("program")}</span>
+                    <span className="truncate max-w-100">{row.getValue("program")}</span>
                 </div>
             ),
         },
@@ -121,14 +122,14 @@ export const getScheduleColumns = (
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Mins" className="justify-center" />
             ),
-            cell: ({ row }) => <div className="w-[50px] text-center">{row.getValue("minutes")}</div>,
+            cell: ({ row }) => <div className="w-12.5 mx-auto text-center">{row.getValue("minutes")}</div>,
         },
         {
             accessorKey: "units",
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Units" className="justify-center" />
             ),
-            cell: ({ row }) => <div className="w-[50px] text-center">{row.getValue("units")}</div>,
+            cell: ({ row }) => <div className="w-12.5 mx-auto text-center">{row.getValue("units")}</div>,
         },
         {
             id: "actions",

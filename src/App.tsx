@@ -15,14 +15,14 @@ import { ProtectedRoute, AdminRoute } from "@/components/ProtectedRoute";
 
 function Layout() {
   return (
-    <div className="flex flex-col min-h-screen gap-6 p-5">
-      <div className="flex pr-3">
+    <div className="flex flex-col h-screen p-5">
+      <div className="flex p-3 px-5">
         <MainNav />
         <div className="ml-auto flex items-center space-x-4">
           <UserNav />
         </div>
       </div>
-      <div className="w-full max-w-[1400px] mx-auto pb-8">
+      <div className="w-full px-8 mx-auto flex-1 flex flex-col min-h-0 overflow-auto pb-8">
         <Outlet />
       </div>
     </div>

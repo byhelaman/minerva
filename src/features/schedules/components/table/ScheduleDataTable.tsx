@@ -269,7 +269,7 @@ export function ScheduleDataTable<TData, TValue>({
     }, [tableData]);
 
     return (
-        <div className="space-y-4 p-1">
+        <div className="flex flex-col flex-1 min-h-0 gap-4 p-1">
             {/* Toolbar with Search, Filters, and View Options */}
             <DataTableToolbar
                 table={table}
@@ -303,82 +303,84 @@ export function ScheduleDataTable<TData, TValue>({
             />
 
             {/* Table */}
-            <div className="rounded-md border">
-                <Table>
-                    <TableHeader>
-                        {table.getHeaderGroups().map((headerGroup) => (
-                            <TableRow key={headerGroup.id}>
-                                {headerGroup.headers.map((header) => {
+            <div className="flex-1 min-h-0 overflow-auto">
+                <div className="rounded-md border">
+                    <Table>
+                        <TableHeader>
+                            {table.getHeaderGroups().map((headerGroup) => (
+                                <TableRow key={headerGroup.id}>
+                                    {headerGroup.headers.map((header) => {
+                                        return (
+                                            <TableHead
+                                                key={header.id}
+                                                colSpan={header.colSpan}
+                                                style={{
+                                                    width: header.getSize() !== 150 ? header.getSize() : undefined,
+                                                }}
+                                            >
+                                                {header.isPlaceholder
+                                                    ? null
+                                                    : flexRender(
+                                                        header.column.columnDef.header,
+                                                        header.getContext()
+                                                    )}
+                                            </TableHead>
+                                        );
+                                    })}
+                                </TableRow>
+                            ))}
+                        </TableHeader>
+                        <TableBody>
+                            {table.getRowModel().rows?.length ? (
+                                table.getRowModel().rows.map((row) => {
+                                    const rowKey = getScheduleKey(row.original as Schedule);
+                                    const isConflict = overlapResult.allOverlaps.has(rowKey);
+
+                                    // Detectar si la reunión está activa
+                                    // Soporta: meeting_id/meetingId para modals, program para Management
+                                    const original = row.original as { meeting_id?: string; meetingId?: string; program?: string };
+                                    const rowMeetingId = original.meeting_id || original.meetingId;
+                                    const isActiveByMeetingId = rowMeetingId && props.activeMeetingIds?.includes(rowMeetingId);
+                                    const isActiveByProgram = original.program && props.activePrograms?.has(original.program);
+                                    const isActive = isActiveByMeetingId || isActiveByProgram;
+
+                                    // Detectar si la fila tiene error de validación
+                                    const hasError = props.errorRowKeys?.has(rowKey);
+
                                     return (
-                                        <TableHead
-                                            key={header.id}
-                                            colSpan={header.colSpan}
-                                            style={{
-                                                width: header.getSize() !== 150 ? header.getSize() : undefined,
-                                            }}
+                                        <TableRow
+                                            key={row.id}
+                                            data-state={row.getIsSelected() && "selected"}
+                                            className={cn(
+                                                isConflict && "text-destructive",
+                                                isActive && "bg-green-50 dark:bg-green-950/20 border-l-2 border-l-green-500",
+                                                hasError && "bg-red-50 dark:bg-red-950/20 border-l-2 border-l-red-500"
+                                            )}
                                         >
-                                            {header.isPlaceholder
-                                                ? null
-                                                : flexRender(
-                                                    header.column.columnDef.header,
-                                                    header.getContext()
-                                                )}
-                                        </TableHead>
+                                            {row.getVisibleCells().map((cell) => (
+                                                <TableCell key={cell.id}>
+                                                    {flexRender(
+                                                        cell.column.columnDef.cell,
+                                                        cell.getContext()
+                                                    )}
+                                                </TableCell>
+                                            ))}
+                                        </TableRow>
                                     );
-                                })}
-                            </TableRow>
-                        ))}
-                    </TableHeader>
-                    <TableBody>
-                        {table.getRowModel().rows?.length ? (
-                            table.getRowModel().rows.map((row) => {
-                                const rowKey = getScheduleKey(row.original as Schedule);
-                                const isConflict = overlapResult.allOverlaps.has(rowKey);
-
-                                // Detectar si la reunión está activa
-                                // Soporta: meeting_id/meetingId para modals, program para Management
-                                const original = row.original as { meeting_id?: string; meetingId?: string; program?: string };
-                                const rowMeetingId = original.meeting_id || original.meetingId;
-                                const isActiveByMeetingId = rowMeetingId && props.activeMeetingIds?.includes(rowMeetingId);
-                                const isActiveByProgram = original.program && props.activePrograms?.has(original.program);
-                                const isActive = isActiveByMeetingId || isActiveByProgram;
-
-                                // Detectar si la fila tiene error de validación
-                                const hasError = props.errorRowKeys?.has(rowKey);
-
-                                return (
-                                    <TableRow
-                                        key={row.id}
-                                        data-state={row.getIsSelected() && "selected"}
-                                        className={cn(
-                                            isConflict && "text-destructive",
-                                            isActive && "bg-green-50 dark:bg-green-950/20 border-l-2 border-l-green-500",
-                                            hasError && "bg-red-50 dark:bg-red-950/20 border-l-2 border-l-red-500"
-                                        )}
+                                })
+                            ) : (
+                                <TableRow>
+                                    <TableCell
+                                        colSpan={resolvedColumns.length}
+                                        className="h-24 text-center"
                                     >
-                                        {row.getVisibleCells().map((cell) => (
-                                            <TableCell key={cell.id}>
-                                                {flexRender(
-                                                    cell.column.columnDef.cell,
-                                                    cell.getContext()
-                                                )}
-                                            </TableCell>
-                                        ))}
-                                    </TableRow>
-                                );
-                            })
-                        ) : (
-                            <TableRow>
-                                <TableCell
-                                    colSpan={resolvedColumns.length}
-                                    className="h-24 text-center"
-                                >
-                                    No results.
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
+                                        No results.
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
             </div>
 
             {/* Pagination */}

@@ -18,6 +18,15 @@
         "danger_zone_desc": "Acciones irreversibles para tu cuenta.",
         "delete_account_warning": "Una vez que elimines tu cuenta, no hay vuelta atrás. Por favor, asegúrate.",
         "delete_account": "Eliminar Cuenta",
+        "delete_confirm_title": "¿Eliminar tu cuenta?",
+        "delete_confirm_desc": "Esto eliminará permanentemente tu cuenta y todos los datos asociados:",
+        "delete_warning_1": "Tu perfil e información personal",
+        "delete_warning_2": "Tus asociaciones de Zoom (si las hay)",
+        "delete_warning_3": "Tus reportes de errores serán anonimizados",
+        "delete_confirm_label": "Escribe tu correo electrónico para confirmar",
+        "deleting": "Eliminando...",
+        "delete_failed": "Error al eliminar la cuenta",
+        "delete_success": "Cuenta eliminada exitosamente",
         "preferences": "Preferencias",
         "preferences_desc": "Administra tu configuración regional.",
         "language": "Idioma",
@@ -60,11 +69,9 @@
         },
         "notifications": {
             "title": "Notificaciones",
-            "desc": "Configura cómo deseas ser notificado.",
-            "weekly_digest": "Resumen Semanal",
-            "weekly_digest_desc": "Recibe un resumen semanal de cambios en el horario.",
-            "realtime_alerts": "Alertas en Tiempo Real",
-            "realtime_alerts_desc": "Recibe notificaciones inmediatas sobre conflictos."
+            "desc": "Configura las preferencias de notificaciones dentro de la aplicación.",
+            "schedule_updates": "Actualizaciones de Horario",
+            "schedule_updates_desc": "Mostrar notificaciones cuando se publiquen nuevos horarios."
         },
         "automation": {
             "title": "Automatización",
@@ -128,6 +135,15 @@
             "environment_prod": "Producción",
             "build": "Compilación",
             "tauri": "Tauri"
+        },
+        "about": {
+            "title": "Acerca de",
+            "desc": "Información sobre Minerva y el desarrollador.",
+            "application": "Aplicación",
+            "developer": "Desarrollador",
+            "license": "Licencia",
+            "app_description": "Gestión de horarios educativos con integración de Zoom y OneDrive.",
+            "coffee_button": "Invítame un café"
         }
     }
 }

@@ -6,7 +6,8 @@ import * as z from "zod";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
-
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabase";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -19,7 +20,18 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+    AlertDialog,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Loader2 } from "lucide-react";
 
 const accountFormSchema = z.object({
@@ -48,9 +60,13 @@ type PasswordFormValues = z.infer<typeof passwordFormSchema>;
 
 export function ProfilePage() {
     const { t } = useTranslation();
-    const { profile, updateDisplayName, updatePassword, verifyCurrentPassword } = useAuth();
+    const { profile, updateDisplayName, updatePassword, verifyCurrentPassword, signOut } = useAuth();
+    const navigate = useNavigate();
     const [isAccountLoading, setIsAccountLoading] = useState(false);
     const [isPasswordLoading, setIsPasswordLoading] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
     const accountForm = useForm<AccountFormValues>({
         resolver: zodResolver(accountFormSchema),
@@ -129,14 +145,35 @@ export function ProfilePage() {
         }
     }
 
+    async function onDeleteAccount() {
+        if (deleteConfirmText !== profile?.email) return;
+
+        setIsDeleting(true);
+        try {
+            const { error } = await supabase.rpc('delete_own_account');
+            if (error) {
+                toast.error(t("profile.delete_failed"), { description: error.message });
+                return;
+            }
+
+            toast.success(t("profile.delete_success"));
+            await signOut();
+            navigate("/login");
+        } catch {
+            toast.error(t("profile.delete_failed"));
+        } finally {
+            setIsDeleting(false);
+        }
+    }
+
     return (
-        <div className="space-y-6">
+        <div className="flex flex-col h-full min-h-0">
             <div className="flex flex-col py-8 my-4 gap-1">
                 <h1 className="text-xl font-bold tracking-tight">{t("profile.title")}</h1>
-                <p className="text-muted-foreground">{t("profile.subtitle")}</p>
+                <p className="text-muted-foreground text-sm">{t("profile.subtitle")}</p>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-2 flex-1 overflow-auto min-h-0 pb-6 pr-4">
                 {/* Left Column */}
                 <div className="space-y-6">
                     {/* Account Information */}
@@ -325,9 +362,53 @@ export function ProfilePage() {
                             </p>
                         </CardContent>
                         <CardFooter>
-                            <Button variant="destructive" className="w-full sm:w-auto">
-                                {t("profile.delete_account")}
-                            </Button>
+                            <AlertDialog open={deleteDialogOpen} onOpenChange={(open) => {
+                                setDeleteDialogOpen(open);
+                                if (!open) setDeleteConfirmText("");
+                            }}>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="destructive" className="w-full sm:w-auto">
+                                        {t("profile.delete_account")}
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>{t("profile.delete_confirm_title")}</AlertDialogTitle>
+                                        <AlertDialogDescription asChild>
+                                            <div className="space-y-4">
+                                                <p>{t("profile.delete_confirm_desc")}</p>
+                                                <ul className="list-disc list-inside text-sm space-y-1">
+                                                    <li>{t("profile.delete_warning_1")}</li>
+                                                    <li>{t("profile.delete_warning_3")}</li>
+                                                </ul>
+                                                <div className="space-y-2 pt-2">
+                                                    <Label htmlFor="delete-confirm">
+                                                        {t("profile.delete_confirm_label")}
+                                                    </Label>
+                                                    <Input
+                                                        id="delete-confirm"
+                                                        value={deleteConfirmText}
+                                                        onChange={(e) => setDeleteConfirmText(e.target.value)}
+                                                        placeholder={profile?.email || ""}
+                                                        autoComplete="off"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                                        <Button
+                                            variant="destructive"
+                                            onClick={onDeleteAccount}
+                                            disabled={isDeleting || deleteConfirmText !== profile?.email}
+                                        >
+                                            {isDeleting && <Loader2 className="animate-spin" />}
+                                            {isDeleting ? t("profile.deleting") : t("profile.delete_account")}
+                                        </Button>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
                         </CardFooter>
                     </Card>
                 </div>

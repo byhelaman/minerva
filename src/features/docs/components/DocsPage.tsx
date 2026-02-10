@@ -70,7 +70,7 @@ export function DocsPage() {
         <div className="flex flex-col h-[calc(100vh-140px)]">
             <div className="flex flex-col py-8 my-4 gap-1 flex-none">
                 <h1 className="text-xl font-bold tracking-tight">Documentation</h1>
-                <p className="text-muted-foreground">Learn how to use Minerva v2 effectively.</p>
+                <p className="text-muted-foreground text-sm">Learn how to use Minerva v2 effectively.</p>
             </div>
 
             <div className="grid gap-8 md:grid-cols-[200px_1fr] h-full overflow-hidden">
@@ -519,7 +519,7 @@ export function DocsPage() {
                                     <div className="space-y-1">
                                         <p className="font-medium">Notifications</p>
                                         <p className="text-muted-foreground">
-                                            Configure Weekly Digest emails and Real-time Alerts for conflicts.
+                                            Control in-app notifications for schedule updates published by other users.
                                         </p>
                                     </div>
 
@@ -717,37 +717,27 @@ export function DocsPage() {
                             <div>
                                 <h2 className="text-lg font-semibold tracking-tight mb-2">Contact & Support</h2>
                                 <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                                    Need help? We're here for you.
+                                    Need help or want to report an issue?
                                 </p>
 
                                 <div className="grid gap-4 md:grid-cols-2">
                                     <Card className="shadow-none">
                                         <CardHeader>
-                                            <CardTitle className="text-sm">📧 Email Support</CardTitle>
+                                            <CardTitle className="text-sm">🐛 Report a Bug</CardTitle>
                                             <CardDescription>
-                                                For general inquiries and support requests.
+                                                Use the built-in bug report form available in the bottom-left corner of the screen.
                                             </CardDescription>
                                         </CardHeader>
-                                        <CardContent>
-                                            <p className="text-sm text-primary">support@minerva-app.com</p>
-                                        </CardContent>
                                     </Card>
                                     <Card className="shadow-none">
                                         <CardHeader>
-                                            <CardTitle className="text-sm">🐛 Report Issues</CardTitle>
+                                            <CardTitle className="text-sm">☕ Support Development</CardTitle>
                                             <CardDescription>
-                                                Found a bug? Let us know so we can fix it.
+                                                If you find Minerva useful, consider supporting the developer. Visit Settings → About for more info.
                                             </CardDescription>
                                         </CardHeader>
-                                        <CardContent>
-                                            <p className="text-sm text-primary">bugs@minerva-app.com</p>
-                                        </CardContent>
                                     </Card>
                                 </div>
-
-                                <p className="text-xs text-muted-foreground mt-4">
-                                    Response times are typically within 24-48 business hours.
-                                </p>
                             </div>
                         </section>
                     </div>

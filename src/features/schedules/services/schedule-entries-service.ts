@@ -170,6 +170,68 @@ export const scheduleEntriesService = {
     },
 
     /**
+     * Batch upsert schedules WITH incidence data (Pull from Excel flow).
+     * Unlike publishSchedules(), this includes ALL fields in the upsert,
+     * so incidence data from Excel overwrites existing DB values.
+     * Returns the count of unique rows sent to upsert.
+     */
+    async importSchedules(schedules: Schedule[], publishedBy: string): Promise<{ upsertedCount: number; duplicatesSkipped: number }> {
+        if (schedules.length === 0) return { upsertedCount: 0, duplicatesSkipped: 0 };
+
+        const uniqueKeys = new Set<string>();
+        const rows: any[] = [];
+        let duplicatesSkipped = 0;
+
+        for (const s of schedules) {
+            const key = `${s.date}|${s.program}|${s.start_time}|${s.instructor}`;
+
+            if (!uniqueKeys.has(key)) {
+                uniqueKeys.add(key);
+                rows.push({
+                    // Composite key fields
+                    date: s.date,
+                    program: s.program,
+                    start_time: s.start_time,
+                    instructor: s.instructor,
+
+                    // Base schedule fields
+                    shift: s.shift,
+                    branch: s.branch,
+                    end_time: s.end_time,
+                    code: s.code,
+                    minutes: s.minutes,
+                    units: s.units,
+
+                    // Incidence fields (INCLUDED for import)
+                    status: s.status || null,
+                    substitute: s.substitute || null,
+                    type: s.type || null,
+                    subtype: s.subtype || null,
+                    description: s.description || null,
+                    department: s.department || null,
+                    feedback: s.feedback || null,
+
+                    published_by: publishedBy,
+                    synced_at: null
+                });
+            } else {
+                duplicatesSkipped++;
+            }
+        }
+
+        const { error } = await supabase
+            .from('schedule_entries')
+            .upsert(rows, {
+                onConflict: 'date,program,start_time,instructor',
+                ignoreDuplicates: false
+            });
+
+        if (error) throw error;
+
+        return { upsertedCount: rows.length, duplicatesSkipped };
+    },
+
+    /**
      * Update a specific entry's incidence data (IncidenceModal).
      * Returns true if the update was successful (row existed), false otherwise.
      */

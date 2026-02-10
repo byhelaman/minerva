@@ -182,11 +182,12 @@ export function validateSchedule(schedule: Schedule): string[] | null {
 
 /**
  * Executes the import by upserting validated schedules to Supabase.
+ * Uses importSchedules() which includes incidence fields (status, type, etc.).
  */
-export async function executeImport(schedules: Schedule[], publishedBy: string): Promise<void> {
+export async function executeImport(schedules: Schedule[], publishedBy: string): Promise<{ upsertedCount: number; duplicatesSkipped: number }> {
     if (schedules.length === 0) {
         throw new Error('No schedules to import');
     }
 
-    await scheduleEntriesService.publishSchedules(schedules, publishedBy);
+    return scheduleEntriesService.importSchedules(schedules, publishedBy);
 }

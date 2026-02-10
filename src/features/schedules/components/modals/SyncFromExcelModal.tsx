@@ -131,9 +131,12 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
             const { data: { user } } = await supabase.auth.getUser();
             const userId = user?.id || '';
 
-            await executeImport(previewData, userId);
+            const { upsertedCount, duplicatesSkipped } = await executeImport(previewData, userId);
 
-            toast.success(`Successfully imported ${previewData.length} schedules`);
+            const description = duplicatesSkipped > 0
+                ? `${duplicatesSkipped} duplicate(s) were merged`
+                : undefined;
+            toast.success(`Successfully imported ${upsertedCount} schedules`, { description });
 
             onImportComplete?.();
             onOpenChange(false);
@@ -200,7 +203,7 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
 
                 {/* Loading State */}
                 {step === 'loading' && (
-                    <div className="flex flex-col items-center justify-center gap-2 h-full border border-dashed rounded-lg bg-muted/10 p-8 min-h-[400px]">
+                    <div className="flex flex-col items-center justify-center gap-2 h-full border border-dashed rounded-lg bg-muted/10 p-8 min-h-100">
                         <div className="relative flex items-center justify-center">
                             <Loader2 className="h-6 w-6 animate-spin" />
                         </div>
@@ -237,7 +240,7 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
 
                 {/* Importing State */}
                 {step === 'importing' && (
-                    <div className="flex flex-col items-center justify-center gap-2 h-full border border-dashed rounded-lg bg-muted/10 p-8 min-h-[400px]">
+                    <div className="flex flex-col items-center justify-center gap-2 h-full border border-dashed rounded-lg bg-muted/10 p-8 min-h-100">
                         <div className="relative flex items-center justify-center">
                             <Loader2 className="h-6 w-6 animate-spin" />
                         </div>

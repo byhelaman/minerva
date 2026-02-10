@@ -2,13 +2,10 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { format } from "date-fns";
 import { ScheduleDataTable } from "@/features/schedules/components/table/ScheduleDataTable";
 import { getDataSourceColumns } from "./data-source-columns";
-import { type ColumnDef } from "@tanstack/react-table";
-import { IncidenceModal } from "@/features/schedules/components/modals/IncidenceModal";
-
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Loader2, CloudUpload, RefreshCcw, ChevronDown, CalendarIcon, AlertCircle, CloudDownload, Download, Cloud, Upload } from "lucide-react";
+import { Loader2, CloudUpload, RefreshCcw, ChevronDown, CalendarIcon, AlertCircle, CloudDownload, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -21,13 +18,13 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { RequirePermission } from "@/components/RequirePermission";
 import { useAuth } from "@/components/auth-provider";
 
 import { useScheduleSyncStore } from "@/features/schedules/stores/useScheduleSyncStore";
 import { useScheduleDataStore } from "@/features/schedules/stores/useScheduleDataStore";
-import type { Schedule, DailyIncidence } from "@/features/schedules/types";
+import type { Schedule } from "@/features/schedules/types";
 import { mergeSchedulesWithIncidences } from "@/features/schedules/utils/merge-utils";
 import { ImportReportsModal } from "./modals/ImportReportsModal";
 import { UploadModal } from "@/features/schedules/components/modals/UploadModal";
@@ -40,6 +37,7 @@ import { formatTimeTo12Hour } from "@/features/schedules/utils/time-utils";
 import { useSettings } from "@/components/settings-provider";
 
 import { type DateRange } from "react-day-picker";
+import { ScheduleInfo } from "@/features/schedules/components/modals/ScheduleInfo";
 
 export function ReportsPage() {
     // State — default to today
@@ -69,13 +67,10 @@ export function ReportsPage() {
     const [isLocalLoading, setIsLocalLoading] = useState(false);
     const isLoading = isStoreLoading || isLocalLoading;
 
-    // Incidence modal state
-    const [modalOpen, setModalOpen] = useState(false);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-    const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
 
     // Sync store
-    const { syncToExcel, msConfig, refreshMsConfig } = useScheduleSyncStore();
+    const { syncToExcel, refreshMsConfig } = useScheduleSyncStore();
     const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
 
     // Load MS config on mount
@@ -120,36 +115,10 @@ export function ReportsPage() {
     // State for delete confirmation
     const [scheduleToDelete, setScheduleToDelete] = useState<Schedule | null>(null);
 
-    // Build columns with row click handler
-    const columns: ColumnDef<Schedule | DailyIncidence>[] = getDataSourceColumns(
-        // Pass delete handler
+    const columns = getDataSourceColumns(
         (schedule) => setScheduleToDelete(schedule),
         true // Enable HTML Copy
-    ).map(col => {
-        // Skip select and actions columns — they don't need click handlers
-        if (col.id === "select" || col.id === "actions") return col;
-
-        // Wrap cell renderer to add click-to-edit
-        const originalCell = col.cell;
-
-        return {
-            ...col,
-            cell: (props: any) => {
-                const rendered = typeof originalCell === 'function' ? originalCell(props) : null;
-                return (
-                    <div
-                        className="cursor-pointer"
-                        onClick={() => {
-                            setSelectedSchedule(props.row.original);
-                            setModalOpen(true);
-                        }}
-                    >
-                        {rendered}
-                    </div>
-                );
-            }
-        };
-    });
+    );
 
     // Handle sync (Single date only)
     const handleSync = async () => {
@@ -229,16 +198,13 @@ export function ReportsPage() {
         }
     };
 
-    // Sync is allowed if MS is connected and a start date is selected
-    const canSync = msConfig.isConnected && !!dateRange?.from;
-
     return (
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
             {/* Header */}
             <div className="flex flex-row items-center justify-between py-8 my-4 gap-4 flex-none">
                 <div className="flex flex-col gap-1">
                     <h1 className="text-xl font-bold tracking-tight">Reports</h1>
-                    <p className="text-muted-foreground">View and edit daily reports</p>
+                    <p className="text-muted-foreground text-sm">View and edit daily reports</p>
                 </div>
                 <div className="flex items-center gap-3">
 
@@ -293,8 +259,14 @@ export function ReportsPage() {
                             <AlertDialogHeader>
                                 <AlertDialogTitle>Sync to Excel?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    This action will overwrite any existing data for this date in the Excel file.
-                                    Are you sure you want to proceed?
+                                    This will push schedules for{" "}
+                                    <span className="font-semibold text-foreground">
+                                        {dateRange?.from ? format(dateRange.from, "PP") : "—"}
+                                        {dateRange?.to && dateRange.to.getTime() !== dateRange.from?.getTime()
+                                            ? ` - ${format(dateRange.to, "PP")}`
+                                            : ""}
+                                    </span>{" "}
+                                    to the Excel file. Existing data for {dateRange?.to && dateRange.to.getTime() !== dateRange.from?.getTime() ? "these dates" : "this date"} will be overwritten.
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -314,7 +286,7 @@ export function ReportsPage() {
             {/* Content */}
             <div className="flex-1 overflow-hidden flex flex-col">
                 {isLoading ? (
-                    <div className="flex flex-col items-center justify-center gap-2 h-full border border-dashed rounded-lg bg-muted/10 p-8 min-h-[400px]">
+                    <div className="flex flex-col items-center justify-center gap-2 h-full border border-dashed rounded-lg bg-muted/10 p-8 min-h-100">
                         <Loader2 className="h-6 w-6 animate-spin" />
                         <div className="text-center space-y-2">
                             <p className="text-sm font-medium">Loading report data...</p>
@@ -324,7 +296,7 @@ export function ReportsPage() {
                         </div>
                     </div>
                 ) : (
-                    <div className="flex-1 overflow-auto">
+                    <div className="flex-1 flex flex-col min-h-0">
                         <ScheduleDataTable
                             columns={columns}
                             data={tableData}
@@ -351,7 +323,7 @@ export function ReportsPage() {
                                 <>
                                     <RequirePermission permission="reports.manage">
                                         <DropdownMenuItem onClick={() => setUploadModalOpen(true)}>
-                                            <Upload />
+                                            <CloudUpload />
                                             Import Data
                                         </DropdownMenuItem>
                                     </RequirePermission>
@@ -361,7 +333,15 @@ export function ReportsPage() {
                                     </DropdownMenuItem>
                                     <RequirePermission permission="reports.manage">
                                         <DropdownMenuSeparator />
-                                        <DropdownMenuSub>
+                                        <DropdownMenuItem onClick={() => setConfirmSyncOpen(true)}>
+                                            <CloudUpload />
+                                            Push to Excel
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => setSyncFromExcelModalOpen(true)}>
+                                            <CloudDownload />
+                                            Pull from Excel
+                                        </DropdownMenuItem>
+                                        {/* <DropdownMenuSub>
                                             <DropdownMenuSubTrigger>
                                                 <Cloud />
                                                 OneDrive
@@ -382,7 +362,7 @@ export function ReportsPage() {
                                                     <span>Pull from Excel</span>
                                                 </DropdownMenuItem>
                                             </DropdownMenuSubContent>
-                                        </DropdownMenuSub>
+                                        </DropdownMenuSub> */}
                                         <DropdownMenuSeparator />
                                     </RequirePermission>
 
@@ -417,13 +397,6 @@ export function ReportsPage() {
                 )}
             </div>
 
-            {/* Incidence Modal */}
-            <IncidenceModal
-                open={modalOpen}
-                onOpenChange={setModalOpen}
-                schedule={selectedSchedule}
-            />
-
             {/* Upload Modal (Reusable) */}
             <UploadModal
                 open={uploadModalOpen}
@@ -450,15 +423,11 @@ export function ReportsPage() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Delete Schedule Entry?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Are you sure you want to delete this class from the schedule?
-                            <br />
-                            <span className="font-medium my-2 block">
-                                {scheduleToDelete?.program} <br />
-                                {scheduleToDelete?.start_time} - {scheduleToDelete?.end_time} <br />
-                                {scheduleToDelete?.instructor}
-                            </span>
-                            This action cannot be undone.
+                            Are you sure you want to delete this class? This action cannot be undone.
                         </AlertDialogDescription>
+                        {scheduleToDelete && (
+                            <ScheduleInfo schedule={scheduleToDelete} />
+                        )}
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>

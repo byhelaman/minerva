@@ -96,7 +96,7 @@ export const INCIDENCE_PRESETS: IncidencePreset[] = [
         status: "Yes",
         type: "Programación",
         subtype: "Programación en otro horario",
-        description: "Clase debe ser programada en otro horario / coordinación en proceso",
+        description: "Clase debe ser programada en otro horario",
         department: "Programación Latam"
     },
     {
@@ -108,13 +108,13 @@ export const INCIDENCE_PRESETS: IncidencePreset[] = [
         department: ""
     },
     {
-        label: "Horario Fijo Omitido",
+        label: "Programación Manual",
         status: "Yes",
-        type: "Programación",
-        subtype: "Omisión de horario fijo",
-        description: "Clase no fue programada en horario fijo establecido ",
-        department: "Programación Latam"
-    },
+        type: "Novedad",
+        subtype: "Otros",
+        description: "Programación manual",
+        department: ""
+    }
 ];
 
 /**

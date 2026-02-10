@@ -263,6 +263,9 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
     },
 
     checkForUpdates: async () => {
+        // Guard: Don't check while publishing (prevents race condition with Realtime)
+        if (get().isPublishing) return;
+
         const { dismissedVersions, currentVersionId, currentVersionUpdatedAt } = get();
 
         const { data: { session } } = await supabase.auth.getSession();

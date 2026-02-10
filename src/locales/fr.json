@@ -18,6 +18,15 @@
         "danger_zone_desc": "Actions irréversibles pour votre compte.",
         "delete_account_warning": "Une fois que vous supprimez votre compte, il n'y a pas de retour en arrière. Soyez certain.",
         "delete_account": "Supprimer le Compte",
+        "delete_confirm_title": "Supprimer votre compte ?",
+        "delete_confirm_desc": "Cela supprimera définitivement votre compte et toutes les données associées :",
+        "delete_warning_1": "Votre profil et vos informations personnelles",
+        "delete_warning_2": "Vos associations Zoom (le cas échéant)",
+        "delete_warning_3": "Vos rapports de bugs seront anonymisés",
+        "delete_confirm_label": "Tapez votre e-mail pour confirmer",
+        "deleting": "Suppression...",
+        "delete_failed": "Échec de la suppression du compte",
+        "delete_success": "Compte supprimé avec succès",
         "preferences": "Préférences",
         "preferences_desc": "Gérez vos paramètres régionaux.",
         "language": "Langue",
@@ -61,10 +70,8 @@
         "notifications": {
             "title": "Notifications",
             "desc": "Configurez comment vous souhaitez être notifié.",
-            "weekly_digest": "Résumé Hebdomadaire",
-            "weekly_digest_desc": "Recevez un résumé hebdomadaire des changements d'horaire.",
-            "realtime_alerts": "Alertes en Temps Réel",
-            "realtime_alerts_desc": "Soyez notifié immédiatement des conflits."
+            "schedule_updates": "Mises à jour des Horaires",
+            "schedule_updates_desc": "Afficher les notifications lorsque de nouveaux horaires sont publiés."
         },
         "automation": {
             "title": "Automatisation",
@@ -128,6 +135,15 @@
             "environment_prod": "Production",
             "build": "Build",
             "tauri": "Tauri"
+        },
+        "about": {
+            "title": "À propos",
+            "desc": "Informations sur Minerva et le développeur.",
+            "application": "Application",
+            "developer": "Développeur",
+            "license": "Licence",
+            "app_description": "Gestion d'horaires avec intégration Zoom et OneDrive.",
+            "coffee_button": "Offrez-moi un café"
         }
     }
 }

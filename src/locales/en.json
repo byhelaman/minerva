@@ -7,7 +7,7 @@
         "unknown": "Unknown"
     },
     "profile": {
-        "title": "Profile",
+        "title": "User Profile",
         "subtitle": "Manage your account settings and preferences.",
         "account_info": "Account Information",
         "account_info_desc": "Your personal account details.",
@@ -18,6 +18,15 @@
         "danger_zone_desc": "Irreversible actions for your account.",
         "delete_account_warning": "Once you delete your account, there is no going back. Please be certain.",
         "delete_account": "Delete Account",
+        "delete_confirm_title": "Delete your account?",
+        "delete_confirm_desc": "This will permanently delete your account and all associated data:",
+        "delete_warning_1": "Your profile and personal information",
+        "delete_warning_2": "Your Zoom associations (if any)",
+        "delete_warning_3": "Your bug reports will be anonymized",
+        "delete_confirm_label": "Type your email to confirm",
+        "deleting": "Deleting...",
+        "delete_failed": "Failed to delete account",
+        "delete_success": "Account deleted successfully",
         "preferences": "Preferences",
         "preferences_desc": "Manage your regional settings.",
         "language": "Language",
@@ -60,11 +69,9 @@
         },
         "notifications": {
             "title": "Notifications",
-            "desc": "Configure how you want to be notified.",
-            "weekly_digest": "Weekly Digest",
-            "weekly_digest_desc": "Receive a weekly summary of schedule changes.",
-            "realtime_alerts": "Real-time Alerts",
-            "realtime_alerts_desc": "Get notified immediately about conflicts."
+            "desc": "Configure in-app notification preferences.",
+            "schedule_updates": "Schedule Updates",
+            "schedule_updates_desc": "Show notifications when new schedules are published."
         },
         "automation": {
             "title": "Automation",
@@ -128,6 +135,15 @@
             "environment_prod": "Production",
             "build": "Build",
             "tauri": "Tauri"
+        },
+        "about": {
+            "title": "About",
+            "desc": "Information about Minerva and the developer.",
+            "application": "Application",
+            "developer": "Developer",
+            "license": "License",
+            "app_description": "Schedule management with Zoom and OneDrive integration.",
+            "coffee_button": "Buy me a coffee"
         }
     }
 }

@@ -1,6 +1,6 @@
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Monitor, Moon, Sun } from "lucide-react";
+import { ArrowUpRight, Coffee, Github, Loader2, Monitor, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -24,6 +24,7 @@ import {
 import { useTheme } from "@/components/theme-provider";
 import { useSettings } from "@/components/settings-provider";
 import { BaseDirectory, exists, remove } from "@tauri-apps/plugin-fs";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
 import { STORAGE_FILES } from "@/lib/constants";
 import { useTranslation } from "react-i18next";
@@ -90,6 +91,7 @@ export function SettingsPage() {
             updateSetting("theme", "system");
             updateSetting("openAfterExport", true);
             updateSetting("clearScheduleOnLoad", false);
+            updateSetting("realtimeNotifications", true);
             setTheme("system"); // Aplicar reinicio de tema
 
             if (filesDeleted > 0) {
@@ -106,13 +108,13 @@ export function SettingsPage() {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="flex flex-col h-full min-h-0">
             <div className="flex flex-col py-8 my-4 gap-1">
                 <h1 className="text-xl font-bold tracking-tight">{t("settings.title")}</h1>
                 <p className="text-muted-foreground">{t("settings.subtitle")}</p>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-2 flex-1 overflow-auto min-h-0 pb-6 pr-4">
                 {/* Left Column */}
                 <div className="space-y-6">
                     {/* Appearance */}
@@ -139,7 +141,7 @@ export function SettingsPage() {
                                         setTheme(value); // Aplicar al DOM
                                     }}
                                 >
-                                    <SelectTrigger className="w-[160px]">
+                                    <SelectTrigger className="min-w-30" size="sm">
                                         <SelectValue placeholder="Select theme" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -175,13 +177,13 @@ export function SettingsPage() {
                                     id="actions-respect-filters"
                                     checked={settings.actionsRespectFilters}
                                     onCheckedChange={(checked) => updateSetting("actionsRespectFilters", checked)}
-                                    className="h-[20px] w-[36px] [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
+                                    className="h-5 w-9 [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
                                 />
                             </div>
                         </CardContent>
                     </Card>
 
-                    {/* Notifications (New Block 1) */}
+                    {/* Notifications */}
                     <Card className="shadow-none">
                         <CardHeader>
                             <CardTitle>{t("settings.notifications.title")}</CardTitle>
@@ -191,22 +193,18 @@ export function SettingsPage() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="flex items-center justify-between space-x-2">
-                                <Label htmlFor="email-digest" className="flex flex-col items-start">
-                                    <span>{t("settings.notifications.weekly_digest")}</span>
+                                <Label htmlFor="realtime-notifications" className="flex flex-col items-start">
+                                    <span>{t("settings.notifications.schedule_updates")}</span>
                                     <span className="font-normal text-xs text-muted-foreground">
-                                        {t("settings.notifications.weekly_digest_desc")}
+                                        {t("settings.notifications.schedule_updates_desc")}
                                     </span>
                                 </Label>
-                                <Switch id="email-digest" className="h-[20px] w-[36px] [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4" />
-                            </div>
-                            <div className="flex items-center justify-between space-x-2">
-                                <Label htmlFor="realtime-alerts" className="flex flex-col items-start">
-                                    <span>{t("settings.notifications.realtime_alerts")}</span>
-                                    <span className="font-normal text-xs text-muted-foreground">
-                                        {t("settings.notifications.realtime_alerts_desc")}
-                                    </span>
-                                </Label>
-                                <Switch id="realtime-alerts" defaultChecked className="h-[20px] w-[36px] [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4" />
+                                <Switch
+                                    id="realtime-notifications"
+                                    checked={settings.realtimeNotifications}
+                                    onCheckedChange={(checked) => updateSetting("realtimeNotifications", checked)}
+                                    className="h-5 w-9 [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
+                                />
                             </div>
                         </CardContent>
                     </Card>
@@ -227,38 +225,41 @@ export function SettingsPage() {
                                         {t("settings.automation.auto_save_desc")}
                                     </span>
                                 </Label>
-                                <Switch
-                                    id="auto-save"
-                                    checked={settings.autoSave}
-                                    onCheckedChange={(checked) => updateSetting("autoSave", checked)}
-                                    className="h-[20px] w-[36px] [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
-                                />
+                                <div className="flex gap-3 items-center">
+                                    <Select
+                                        value={String(settings.autoSaveInterval)}
+                                        onValueChange={(value) => updateSetting("autoSaveInterval", Number(value))}
+                                        disabled={!settings.autoSave}
+                                    >
+                                        <SelectTrigger className="min-w-30" size="sm">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="1000">{t("settings.automation.interval_1s")}</SelectItem>
+                                            <SelectItem value="3000">{t("settings.automation.interval_3s")}</SelectItem>
+                                            <SelectItem value="5000">{t("settings.automation.interval_5s")}</SelectItem>
+                                            <SelectItem value="10000">{t("settings.automation.interval_10s")}</SelectItem>
+                                            <SelectItem value="30000">{t("settings.automation.interval_30s")}</SelectItem>
+                                            <SelectItem value="60000">{t("settings.automation.interval_1m")}</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <Switch
+                                        id="auto-save"
+                                        checked={settings.autoSave}
+                                        onCheckedChange={(checked) => updateSetting("autoSave", checked)}
+                                        className="h-5 w-9 [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
+                                    />
+                                </div>
                             </div>
-                            <div className="flex items-center justify-between space-x-2">
+                            {/* <div className="flex items-center justify-between space-x-2">
                                 <Label htmlFor="auto-save-interval" className="flex flex-col items-start">
                                     <span>{t("settings.automation.auto_save_interval")}</span>
                                     <span className="font-normal text-xs text-muted-foreground">
                                         {t("settings.automation.auto_save_interval_desc")}
                                     </span>
                                 </Label>
-                                <Select
-                                    value={String(settings.autoSaveInterval)}
-                                    onValueChange={(value) => updateSetting("autoSaveInterval", Number(value))}
-                                    disabled={!settings.autoSave}
-                                >
-                                    <SelectTrigger className="w-[120px]">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="1000">{t("settings.automation.interval_1s")}</SelectItem>
-                                        <SelectItem value="3000">{t("settings.automation.interval_3s")}</SelectItem>
-                                        <SelectItem value="5000">{t("settings.automation.interval_5s")}</SelectItem>
-                                        <SelectItem value="10000">{t("settings.automation.interval_10s")}</SelectItem>
-                                        <SelectItem value="30000">{t("settings.automation.interval_30s")}</SelectItem>
-                                        <SelectItem value="60000">{t("settings.automation.interval_1m")}</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                                
+                            </div> */}
                             <div className="flex items-center justify-between space-x-2">
                                 <Label htmlFor="clear-schedule-on-load" className="flex flex-col items-start">
                                     <span>{t("settings.automation.clear_schedule_on_load")}</span>
@@ -270,7 +271,7 @@ export function SettingsPage() {
                                     id="clear-schedule-on-load"
                                     checked={settings.clearScheduleOnLoad}
                                     onCheckedChange={(checked) => updateSetting("clearScheduleOnLoad", checked)}
-                                    className="h-[20px] w-[36px] [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
+                                    className="h-5 w-9 [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
                                 />
                             </div>
                         </CardContent>
@@ -296,7 +297,7 @@ export function SettingsPage() {
                                     id="open-after-export"
                                     checked={settings.openAfterExport}
                                     onCheckedChange={(checked) => updateSetting("openAfterExport", checked)}
-                                    className="h-[20px] w-[36px] [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
+                                    className="h-5 w-9 [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
                                 />
                             </div>
                         </CardContent>
@@ -330,7 +331,7 @@ export function SettingsPage() {
                                         });
                                     }}
                                 >
-                                    <SelectTrigger className="w-[160px]">
+                                    <SelectTrigger className="min-w-30" size="sm">
                                         <SelectValue placeholder="Select language" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -434,6 +435,72 @@ export function SettingsPage() {
                                     <span className="font-medium">{tauriVersion ? `v${tauriVersion}` : "—"}</span>
                                 </div>
                             </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* About */}
+                    <Card className="shadow-none">
+                        <CardHeader>
+                            <CardTitle>About</CardTitle>
+                            <CardDescription>
+                                Information about Minerva.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center justify-center size-12 rounded-xl bg-primary/10 shrink-0">
+                                    <span className="text-2xl font-bold text-primary">M</span>
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-base">Minerva</span>
+                                        {appVersion && (
+                                            <span className="text-[10px] font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded-md">
+                                                v{appVersion}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        Manage, view, and export your schedules with ease.
+                                    </p>
+                                </div>
+                            </div>  
+
+                            <div className="grid grid-cols-2 gap-4 pt-4 border-t text-sm">
+                                <div className="flex flex-col">
+                                    <span className="text-muted-foreground text-xs">Developer</span>
+                                    <span className="font-medium">byhelaman</span>
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-muted-foreground text-xs">License</span>
+                                    <span className="font-medium">MIT</span>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2 pt-4 border-t">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => openUrl("https://github.com/byhelaman/minerva")}
+                                >
+                                    <Github />
+                                    GitHub
+                                    <ArrowUpRight />
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => openUrl("https://www.buymeacoffee.com/helaman")}
+                                >
+                                    <Coffee />
+                                    Buy me a coffee
+                                    <ArrowUpRight />
+                                </Button>
+                            </div>
+
+                            <p className="text-xs text-muted-foreground pt-2">
+                                © 2026 minerva.
+                            </p>
                         </CardContent>
                     </Card>
                 </div>

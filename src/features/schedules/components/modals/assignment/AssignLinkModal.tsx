@@ -332,7 +332,7 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="flex-1 pr-2 overflow-auto">
+                <div className="flex-1 flex flex-col min-h-0 overflow-hidden pr-2">
                     {isLoadingData || isMatching ? (
                         <div className="flex flex-col items-center justify-center gap-2 h-full border border-dashed rounded-lg bg-muted/10 p-8 min-h-[400px]">
                             <div className="relative flex items-center justify-center">

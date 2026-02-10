@@ -50,13 +50,13 @@ export function SystemPage() {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="flex flex-col h-full min-h-0">
             <div className="flex flex-col py-8 my-4 gap-1">
                 <h1 className="text-xl font-bold tracking-tight">System Administration</h1>
-                <p className="text-muted-foreground">Manage users, roles, and system configuration.</p>
+                <p className="text-muted-foreground text-sm">Manage users, roles, and system configuration.</p>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-2 flex-1 overflow-auto min-h-0 pb-6 pr-4">
                 {/* Left Column */}
                 <div className="space-y-6">
                     {/* User Management */}

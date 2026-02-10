@@ -78,7 +78,7 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="flex-1 pr-2 overflow-auto">
+                <div className="flex-1 flex flex-col min-h-0 overflow-hidden pr-2">
                     <ScheduleDataTable
                         columns={columns}
                         data={data}

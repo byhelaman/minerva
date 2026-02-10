@@ -4,9 +4,11 @@ import { PublishedSchedule } from "@/features/schedules/types";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { formatDateForDisplay } from "@/lib/date-utils";
+import { useSettings } from "@/components/settings-provider";
 
 export function ScheduleUpdateBanner() {
     const { latestPublished, checkForUpdates, loadPublishedSchedule, dismissUpdate } = useScheduleSyncStore();
+    const { settings } = useSettings();
     const toastIdRef = useRef<string | number | null>(null);
     const lastSeenIdRef = useRef<string | null>(null);
 
@@ -21,7 +23,10 @@ export function ScheduleUpdateBanner() {
                 'postgres_changes',
                 { event: 'INSERT', schema: 'public', table: 'published_schedules' },
                 () => {
-                    checkForUpdates();
+                    // Don't trigger if we're the one publishing
+                    if (!useScheduleSyncStore.getState().isPublishing) {
+                        checkForUpdates();
+                    }
                 }
             )
             .subscribe();
@@ -33,6 +38,15 @@ export function ScheduleUpdateBanner() {
 
     // Handle Toast
     useEffect(() => {
+        // If notifications are disabled, dismiss any existing toast
+        if (!settings.realtimeNotifications) {
+            if (toastIdRef.current) {
+                toast.dismiss(toastIdRef.current);
+                toastIdRef.current = null;
+            }
+            return;
+        }
+
         if (latestPublished) {
             // If already showing this exact schedule, don't re-toast
             if (lastSeenIdRef.current === latestPublished.id) {
@@ -66,7 +80,7 @@ export function ScheduleUpdateBanner() {
             }
             lastSeenIdRef.current = null;
         }
-    }, [latestPublished, loadPublishedSchedule, dismissUpdate]);
+    }, [latestPublished, loadPublishedSchedule, dismissUpdate, settings.realtimeNotifications]);
 
     return null;
 }

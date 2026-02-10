@@ -10,6 +10,7 @@ interface AppSettings {
     theme: "light" | "dark" | "system";
     openAfterExport: boolean;
     clearScheduleOnLoad: boolean;
+    realtimeNotifications: boolean;
 }
 
 interface SettingsContextType {
@@ -25,6 +26,7 @@ const defaultSettings: AppSettings = {
     theme: "system",
     openAfterExport: true,
     clearScheduleOnLoad: false,
+    realtimeNotifications: true,
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);

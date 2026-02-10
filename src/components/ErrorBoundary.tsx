@@ -48,8 +48,8 @@ export class ErrorBoundary extends Component<Props, State> {
             }
 
             return (
-                <div className="flex items-center justify-center min-h-[400px] p-6">
-                    <Card className="w-full max-w-lg">
+                <div className="flex items-center justify-center min-h-100 p-6">
+                    <Card className="w-full max-w-lg shadow-none">
                         <CardHeader className="text-center">
                             <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
                                 <AlertTriangle className="h-6 w-6 text-destructive" />
@@ -68,7 +68,7 @@ export class ErrorBoundary extends Component<Props, State> {
                         </CardContent>
                         <CardFooter className="flex justify-center gap-3">
                             <Button variant="outline" onClick={this.handleReset}>
-                                <RefreshCw className="mr-2 h-4 w-4" />
+                                <RefreshCw />
                                 Try Again
                             </Button>
                             <Button onClick={this.handleReload}>

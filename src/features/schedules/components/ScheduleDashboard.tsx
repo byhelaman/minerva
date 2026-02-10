@@ -277,7 +277,7 @@ export function ScheduleDashboard() {
     );
 
     return (
-        <>
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
             <div className="flex py-8 my-4 gap-6 justify-between items-center">
                 <div className="flex flex-col gap-1">
                     <h1 className="text-xl font-bold tracking-tight">Management</h1>
@@ -379,6 +379,6 @@ export function ScheduleDashboard() {
             />
 
 
-        </>
+        </div>
     );
 }

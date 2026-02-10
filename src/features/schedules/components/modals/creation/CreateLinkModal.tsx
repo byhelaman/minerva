@@ -409,7 +409,7 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
                 {/* Step 2: Results */}
                 {step === 'results' && (
                     <>
-                        <div className="flex-1 overflow-auto pr-2">
+                        <div className="flex-1 flex flex-col min-h-0 overflow-hidden pr-2">
                             {isLoadingData || isValidating || isExecuting ? (
                                 <div className="flex flex-col items-center justify-center gap-2 h-full border border-dashed rounded-lg bg-muted/10 p-8 min-h-[400px]">
                                     <div className="relative flex items-center justify-center">

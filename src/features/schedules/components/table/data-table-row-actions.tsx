@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { Schedule } from "@schedules/types";
 import { IncidenceModal } from "../modals/IncidenceModal";
+import { ScheduleDetailsModal } from "../modals/ScheduleDetailsModal";
 import { QUICK_STATUS_PRESETS } from "@schedules/constants/incidence-presets";
 
 interface DataTableRowActionsProps {
@@ -31,19 +32,19 @@ export function DataTableRowActions({
     enableHtmlCopy = false,
 }: DataTableRowActionsProps) {
     const schedule = row.original;
-    const [detailsOpen, setDetailsOpen] = useState(false);
+    const [viewDetailsOpen, setViewDetailsOpen] = useState(false);
+    const [incidenceOpen, setIncidenceOpen] = useState(false);
     const [initialValues, setInitialValues] = useState<Record<string, string> | undefined>(undefined);
 
     const handleQuickStatus = (preset: typeof QUICK_STATUS_PRESETS[0]) => {
-        // Convert preset to initialValues format (exclude label)
         const { label, ...values } = preset;
         setInitialValues(values);
-        setDetailsOpen(true);
+        setIncidenceOpen(true);
     };
 
-    const handleViewDetails = () => {
-        setInitialValues(undefined); // Clear initial values
-        setDetailsOpen(true);
+    const handleEditIncidence = () => {
+        setInitialValues(undefined);
+        setIncidenceOpen(true);
     };
 
     return (
@@ -61,11 +62,14 @@ export function DataTableRowActions({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                     align="end"
-                    className="w-[160px]"
+                    className="w-40"
                     onCloseAutoFocus={(e) => e.preventDefault()}
                 >
-                    <DropdownMenuItem onClick={handleViewDetails}>
+                    <DropdownMenuItem onClick={() => setViewDetailsOpen(true)}>
                         View Details
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleEditIncidence}>
+                        Edit Incidence
                     </DropdownMenuItem>
                     <DropdownMenuItem
                         onClick={() => {
@@ -150,10 +154,17 @@ export function DataTableRowActions({
                 </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Incidence Modal */}
+            {/* View Details Modal (read-only) */}
+            <ScheduleDetailsModal
+                open={viewDetailsOpen}
+                onOpenChange={setViewDetailsOpen}
+                schedule={schedule}
+            />
+
+            {/* Incidence Modal (editable) */}
             <IncidenceModal
-                open={detailsOpen}
-                onOpenChange={setDetailsOpen}
+                open={incidenceOpen}
+                onOpenChange={setIncidenceOpen}
                 schedule={schedule}
                 initialValues={initialValues}
             />
