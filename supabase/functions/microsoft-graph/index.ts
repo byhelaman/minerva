@@ -731,7 +731,7 @@ serve(async (req: Request) => {
 
             existingRows.forEach((row: any) => {
                 const rowValues = row.values[0]; // Graph API returns values as [[...]]
-                const key = getKey(rowValues, headerRow);
+                const key = getKey(rowValues, tableHeaders); // Use TABLE headers for existing rows
                 existingRowMap.set(key, { index: row.index, values: rowValues });
             });
 

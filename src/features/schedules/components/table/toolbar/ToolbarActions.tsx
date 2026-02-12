@@ -231,7 +231,7 @@ export function ToolbarActions<TData>({
                         <ChevronDown />
                     </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
+                <DropdownMenuContent align="end">
                     {customActionItems}
                     {customActionItems && !hideDefaultActions && <DropdownMenuSeparator />}
 

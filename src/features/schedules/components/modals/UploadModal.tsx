@@ -26,7 +26,7 @@ interface UploadModalProps {
     strictValidation?: boolean;
 }
 
-const MAX_FILES = 5;
+const MAX_FILES = 10;
 
 function formatBytes(bytes: number, decimals = 1) {
     if (!+bytes) return '0 Bytes';

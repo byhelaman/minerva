@@ -9,6 +9,7 @@ import { ProfilePage } from "@/features/profile/components/ProfilePage";
 import { DocsPage } from "@/features/docs/components/DocsPage";
 import { SystemPage } from "@/features/system/components/SystemPage";
 import { ReportsPage } from "@/features/system/components/ReportsPage";
+import { StatisticsPage } from "@/features/statistics/components/StatisticsPage";
 import { LoginPage } from "@/features/auth/components/LoginPage";
 
 import { ProtectedRoute, AdminRoute } from "@/components/ProtectedRoute";
@@ -53,6 +54,7 @@ function App() {
           <Route path="/settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
           <Route path="/profile" element={<ErrorBoundary><ProfilePage /></ErrorBoundary>} />
           <Route path="/docs" element={<ErrorBoundary><DocsPage /></ErrorBoundary>} />
+          <Route path="/statistics" element={<ErrorBoundary><StatisticsPage /></ErrorBoundary>} />
 
           <Route path="/system" element={
             <AdminRoute>

@@ -116,7 +116,8 @@ export async function fetchAndValidateFromExcel(
         headers.forEach((header, idx) => {
             const fieldName = HEADER_MAP[header];
             if (fieldName) {
-                rowObj[fieldName] = rowArray[idx] ?? '';
+                const raw = rowArray[idx];
+                rowObj[fieldName] = typeof raw === 'string' ? raw.trim() : (raw ?? '');
             }
         });
 

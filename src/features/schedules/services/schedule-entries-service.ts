@@ -129,21 +129,26 @@ export const scheduleEntriesService = {
         const rows: any[] = [];
 
         for (const s of schedules) {
+            // Normalize composite key fields to prevent whitespace/format duplicates
+            const program = s.program.trim();
+            const instructor = s.instructor.trim();
+            const start_time = ensureTimeFormat(s.start_time);
+
             // Create composite key to detect duplicates in the INPUT array
             // Supabase upsert fails if the BATCH contains duplicate keys for the conflict constraint
-            const key = `${s.date}|${s.program}|${s.start_time}|${s.instructor}`;
+            const key = `${s.date}|${program}|${start_time}|${instructor}`;
 
             if (!uniqueKeys.has(key)) {
                 uniqueKeys.add(key);
                 rows.push({
                     date: s.date,
-                    program: s.program,
-                    start_time: s.start_time,
-                    instructor: s.instructor,
+                    program,
+                    start_time,
+                    instructor,
 
                     shift: s.shift,
                     branch: s.branch,
-                    end_time: s.end_time,
+                    end_time: ensureTimeFormat(s.end_time),
                     code: s.code,
                     minutes: s.minutes,
                     units: s.units,
@@ -170,9 +175,10 @@ export const scheduleEntriesService = {
     },
 
     /**
-     * Batch upsert schedules WITH incidence data (Pull from Excel flow).
-     * Unlike publishSchedules(), this includes ALL fields in the upsert,
-     * so incidence data from Excel overwrites existing DB values.
+     * Batch upsert schedules from Import/Pull flows.
+     * Incidence fields are only included when they have actual values,
+     * so existing incidence data in the DB is preserved when importing
+     * schedules without incidence information.
      * Returns the count of unique rows sent to upsert.
      */
     async importSchedules(schedules: Schedule[], publishedBy: string): Promise<{ upsertedCount: number; duplicatesSkipped: number }> {
@@ -183,37 +189,47 @@ export const scheduleEntriesService = {
         let duplicatesSkipped = 0;
 
         for (const s of schedules) {
-            const key = `${s.date}|${s.program}|${s.start_time}|${s.instructor}`;
+            // Normalize composite key fields to prevent whitespace/format duplicates
+            const program = s.program.trim();
+            const instructor = s.instructor.trim();
+            const start_time = ensureTimeFormat(s.start_time);
+
+            const key = `${s.date}|${program}|${start_time}|${instructor}`;
 
             if (!uniqueKeys.has(key)) {
                 uniqueKeys.add(key);
-                rows.push({
-                    // Composite key fields
+
+                const row: any = {
+                    // Composite key fields (normalized)
                     date: s.date,
-                    program: s.program,
-                    start_time: s.start_time,
-                    instructor: s.instructor,
+                    program,
+                    start_time,
+                    instructor,
 
                     // Base schedule fields
                     shift: s.shift,
                     branch: s.branch,
-                    end_time: s.end_time,
+                    end_time: ensureTimeFormat(s.end_time),
                     code: s.code,
                     minutes: s.minutes,
                     units: s.units,
 
-                    // Incidence fields (INCLUDED for import)
-                    status: s.status || null,
-                    substitute: s.substitute || null,
-                    type: s.type || null,
-                    subtype: s.subtype || null,
-                    description: s.description || null,
-                    department: s.department || null,
-                    feedback: s.feedback || null,
-
                     published_by: publishedBy,
                     synced_at: null
-                });
+                };
+
+                // Only include incidence fields when they have actual values.
+                // This prevents overwriting existing incidence data in the DB
+                // when importing schedules that don't carry incidence info.
+                if (s.status) row.status = s.status;
+                if (s.substitute) row.substitute = s.substitute;
+                if (s.type) row.type = s.type;
+                if (s.subtype) row.subtype = s.subtype;
+                if (s.description) row.description = s.description;
+                if (s.department) row.department = s.department;
+                if (s.feedback) row.feedback = s.feedback;
+
+                rows.push(row);
             } else {
                 duplicatesSkipped++;
             }
@@ -312,7 +328,7 @@ export const scheduleEntriesService = {
         let query = supabase
             .from('schedule_entries')
             .select('*')
-            .not('status', 'is', null) // Only real incidences
+            .not('type', 'is', null) // Only real incidences (type is the reliable field)
             .order('date', { ascending: true })
             .order('start_time', { ascending: true });
 

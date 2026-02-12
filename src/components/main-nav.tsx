@@ -5,9 +5,9 @@ import { useAuth } from "@/components/auth-provider"
 
 const navItems = [
     { title: "Home", href: "/" },
-    { title: "Docs", href: "/docs" },
     { title: "System", href: "/system", minLevel: 80 },
     { title: "Reports", href: "/reports", permission: "reports.view" },
+    { title: "Statistics", href: "/statistics" },
 ]
 
 export function MainNav({
