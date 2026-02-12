@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -337,6 +337,16 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
         [hostMap, dailyOnly, hostsList]
     );
 
+    const handleBulkCopy = useCallback((rows: ValidationResult[]) => {
+        const details = rows.map(row => {
+            return row.join_url
+                ? `${row.inputName}\n${row.join_url}`
+                : row.inputName;
+        }).join("\n\n");
+        navigator.clipboard.writeText(details);
+        toast.success("Details of selected meetings copied to clipboard");
+    }, []);
+
     // Líneas analizadas para vista previa
     const parsedLines = inputText.split('\n').filter(l => l.trim().length > 0);
 
@@ -441,6 +451,7 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
                                     enableRowSelection={(row) => row.status !== 'ambiguous'}
                                     controlledSelection={rowSelection}
                                     onControlledSelectionChange={setRowSelection}
+                                    onBulkCopy={handleBulkCopy}
                                     initialPageSize={25}
                                     statusOptions={[
                                         { label: "New", value: "to_create", icon: PlusCircle },

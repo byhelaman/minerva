@@ -25,9 +25,12 @@ import {
 
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
+import { DataTableFloatingBar } from "./data-table-floating-bar";
 import { detectOverlaps, getScheduleKey } from "@schedules/utils/overlap-utils";
 import type { Schedule } from "@schedules/types";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { formatDateForDisplay } from "@/lib/date-utils";
 
 interface ScheduleDataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[] | ((addStatusFilter: (status: string) => void) => ColumnDef<TData, TValue>[]);
@@ -79,6 +82,9 @@ interface ScheduleDataTableProps<TData, TValue> {
     customFilterItems?: React.ReactNode;
     hideDefaultActions?: boolean;
     onAddRow?: () => void;
+    onBulkDelete?: (rows: TData[]) => void;
+    onBulkCopy?: (rows: TData[]) => void;
+    hideBulkCopy?: boolean;
 }
 
 export function ScheduleDataTable<TData, TValue>({
@@ -268,6 +274,49 @@ export function ScheduleDataTable<TData, TValue>({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [tableData]);
 
+    const handleBulkCopy = () => {
+        const selectedRows = table.getFilteredSelectedRowModel().rows;
+        const tdStyle = "border: 1px solid #e5e7eb; padding: 2px 8px; white-space: nowrap; font-size: 10px;";
+        const thStyle = `${tdStyle} font-weight: 700;`;
+
+        const getFields = (s: Record<string, unknown>) => [
+            { label: "date", value: formatDateForDisplay(String(s.date || "-")) },
+            { label: "branch", value: String(s.branch || "-") },
+            { label: "start_time", value: String(s.start_time || "-") },
+            { label: "end_time", value: String(s.end_time || "-") },
+            { label: "instructor", value: String(s.instructor || "-") },
+            { label: "program", value: String(s.program || "-") },
+            { label: "status", value: String(s.status || "-") },
+            { label: "substitute", value: String(s.substitute || "-") },
+            { label: "type", value: String(s.type || "-") },
+            { label: "subtype", value: String(s.subtype || "-") },
+            { label: "description", value: String(s.description || "-") },
+            { label: "department", value: String(s.department || "-") },
+        ];
+
+        const headers = getFields({}).map(f => f.label);
+        const htmlRows = selectedRows.map(row => {
+            const fields = getFields(row.original as Record<string, unknown>);
+            return `<tr>${fields.map(f => `<td style="${tdStyle}">${f.value}</td>`).join("")}</tr>`;
+        });
+        const html = `<table style="border-collapse: collapse; width: 100%;"><thead><tr>${headers.map(h => `<th style="${thStyle}">${h}</th>`).join("")}</tr></thead><tbody>${htmlRows.join("")}</tbody></table>`;
+
+        const textRows = selectedRows.map(row => {
+            const fields = getFields(row.original as Record<string, unknown>);
+            return fields.map(f => `${f.label}: ${f.value}`).join("\n");
+        });
+        const text = textRows.join("\n\n");
+
+        navigator.clipboard.write([new ClipboardItem({
+            "text/html": new Blob([html], { type: "text/html" }),
+            "text/plain": new Blob([text], { type: "text/plain" }),
+        })]).then(() => {
+            toast.success(`${selectedRows.length} rows copied`);
+        }).catch(() => {
+            toast.error("Failed to copy");
+        });
+    };
+
     return (
         <div className="flex flex-col flex-1 min-h-0 gap-4 p-1">
             {/* Toolbar with Search, Filters, and View Options */}
@@ -381,6 +430,21 @@ export function ScheduleDataTable<TData, TValue>({
                         </TableBody>
                     </Table>
                 </div>
+
+                {/* Floating Action Bar */}
+                <DataTableFloatingBar
+                    selectedCount={table.getFilteredSelectedRowModel().rows.length}
+                    onCopy={props.hideBulkCopy ? undefined : (props.onBulkCopy ? () => {
+                        const selectedRows = table.getFilteredSelectedRowModel().rows.map(r => r.original);
+                        props.onBulkCopy!(selectedRows);
+                    } : handleBulkCopy)}
+                    onDelete={props.onBulkDelete ? () => {
+                        const selectedRows = table.getFilteredSelectedRowModel().rows.map(r => r.original);
+                        props.onBulkDelete!(selectedRows);
+                        table.resetRowSelection();
+                    } : undefined}
+                    onClearSelection={() => table.resetRowSelection()}
+                />
             </div>
 
             {/* Pagination */}

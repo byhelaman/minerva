@@ -23,8 +23,7 @@ import { RequirePermission } from "@/components/RequirePermission";
 import { useAuth } from "@/components/auth-provider";
 
 import { useScheduleSyncStore } from "@/features/schedules/stores/useScheduleSyncStore";
-import { useScheduleDataStore } from "@/features/schedules/stores/useScheduleDataStore";
-import type { Schedule } from "@/features/schedules/types";
+import type { Schedule, DailyIncidence } from "@/features/schedules/types";
 import { mergeSchedulesWithIncidences } from "@/features/schedules/utils/merge-utils";
 import { ImportReportsModal } from "./modals/ImportReportsModal";
 import { UploadModal } from "@/features/schedules/components/modals/UploadModal";
@@ -39,12 +38,29 @@ import { useSettings } from "@/components/settings-provider";
 import { type DateRange } from "react-day-picker";
 import { ScheduleInfo } from "@/features/schedules/components/modals/ScheduleInfo";
 
+// Module-level cache: persists across mount/unmount (page navigation)
+let reportCache: {
+    key: string; // "from|to"
+    schedules: Schedule[];
+    incidences: DailyIncidence[];
+    dateRange: DateRange;
+} | null = null;
+
+function getDateRangeKey(range: DateRange | undefined): string {
+    if (!range?.from) return "";
+    const from = format(range.from, "yyyy-MM-dd");
+    const to = range.to ? format(range.to, "yyyy-MM-dd") : from;
+    return `${from}|${to}`;
+}
+
 export function ReportsPage() {
-    // State — default to today
-    const [dateRange, setDateRange] = useState<DateRange | undefined>({
-        from: new Date(),
-        to: new Date(),
-    });
+    // State — restore last date range or default to today
+    const defaultDateRange: DateRange = { from: new Date(), to: new Date() };
+    const initialDateRange = reportCache?.dateRange ?? defaultDateRange;
+    const initialKey = getDateRangeKey(initialDateRange);
+    const hasCachedData = reportCache?.key === initialKey;
+
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(initialDateRange);
     const [calendarOpen, setCalendarOpen] = useState(false);
 
     // Filter state
@@ -55,17 +71,16 @@ export function ReportsPage() {
     const [syncFromExcelModalOpen, setSyncFromExcelModalOpen] = useState(false);
     const [importedData, setImportedData] = useState<Schedule[]>([]);
 
-    // Store state
-    const {
-        baseSchedules,
-        incidences,
-        isLoading: isStoreLoading,
-        fetchSchedulesForRange
-    } = useScheduleDataStore();
+    // Local state for report data (isolated from Management's draft store)
+    // Initialize from cache if available for the current date range
+    const [reportSchedules, setReportSchedules] = useState<Schedule[]>(
+        hasCachedData ? reportCache!.schedules : []
+    );
+    const [reportIncidences, setReportIncidences] = useState<DailyIncidence[]>(
+        hasCachedData ? reportCache!.incidences : []
+    );
 
-    // Local loading state for initial fetch or manual refresh
-    const [isLocalLoading, setIsLocalLoading] = useState(false);
-    const isLoading = isStoreLoading || isLocalLoading;
+    const [isLoading, setIsLoading] = useState(false);
 
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
@@ -80,44 +95,54 @@ export function ReportsPage() {
 
     // Format date to YYYY-MM-DD for Supabase queries
 
-    // Compute table data from store state (Reactive & Optimistic)
+    // Compute table data from local state
     const tableData = useMemo(() => {
-        const merged = mergeSchedulesWithIncidences(baseSchedules, incidences);
+        const merged = mergeSchedulesWithIncidences(reportSchedules, reportIncidences);
         if (showOnlyIncidences) {
             return merged.filter(row => !!row.type);
         }
         return merged;
-    }, [baseSchedules, incidences, showOnlyIncidences]);
+    }, [reportSchedules, reportIncidences, showOnlyIncidences]);
 
-    // Fetch data when date range changes
+    // Fetch data when date range changes (into local state, not shared store)
     const fetchData = useCallback(async () => {
         if (!dateRange?.from) return;
 
-        setIsLocalLoading(true);
-        try {
-            const fromStr = format(dateRange.from, "yyyy-MM-dd");
-            const toStr = dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : fromStr;
+        const fromStr = format(dateRange.from, "yyyy-MM-dd");
+        const toStr = dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : fromStr;
+        const key = `${fromStr}|${toStr}`;
 
-            await fetchSchedulesForRange(fromStr, toStr);
+        // Only show loading if no cached data for this range
+        const hasCached = reportCache?.key === key;
+        if (!hasCached) {
+            setIsLoading(true);
+        }
+
+        try {
+            const { schedules, incidences } = await scheduleEntriesService.getSchedulesByDateRange(fromStr, toStr);
+            setReportSchedules(schedules);
+            setReportIncidences(incidences);
+
+            // Update module-level cache
+            reportCache = { key, schedules, incidences, dateRange };
         } catch (error) {
             console.error("Failed to fetch report data:", error);
             toast.error("Failed to load report data");
         } finally {
-            setIsLocalLoading(false);
+            setIsLoading(false);
         }
-    }, [dateRange, fetchSchedulesForRange]);
+    }, [dateRange]);
 
     // Initial fetch on date change
     useEffect(() => {
         fetchData();
     }, [fetchData]);
 
-    // State for delete confirmation
-    const [scheduleToDelete, setScheduleToDelete] = useState<Schedule | null>(null);
+    // State for delete confirmation (supports single + bulk)
+    const [schedulesToDelete, setSchedulesToDelete] = useState<Schedule[]>([]);
 
     const columns = getDataSourceColumns(
-        (schedule) => setScheduleToDelete(schedule),
-        true // Enable HTML Copy
+        (schedule) => setSchedulesToDelete([schedule]),
     );
 
     // Handle sync (Single date only)
@@ -304,19 +329,18 @@ export function ReportsPage() {
                             hideUpload={true}
                             hideOverlaps={true}
                             hideDefaultActions={true}
+                            onBulkDelete={(rows) => setSchedulesToDelete(rows as Schedule[])}
                             customFilterItems={
                                 <Button
                                     variant="outline"
                                     size="sm"
                                     onClick={() => setShowOnlyIncidences(!showOnlyIncidences)}
-                                    className={cn(
-                                        "border-dashed",
-                                        showOnlyIncidences &&
-                                        "border-amber-500/50 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 hover:text-amber-600 hover:border-amber-500/50 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20 dark:hover:text-amber-400"
-                                    )}
+                                    className="border-dashed
+                                        border-amber-500/50 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 hover:text-amber-600 hover:border-amber-500/50 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20 dark:hover:text-amber-400"
                                 >
                                     <AlertCircle />
                                     Incidences
+                                    {showOnlyIncidences && ` (${reportIncidences.length})`}
                                 </Button>
                             }
                             customActionItems={
@@ -341,33 +365,11 @@ export function ReportsPage() {
                                             <CloudDownload />
                                             Pull from Excel
                                         </DropdownMenuItem>
-                                        {/* <DropdownMenuSub>
-                                            <DropdownMenuSubTrigger>
-                                                <Cloud />
-                                                OneDrive
-                                            </DropdownMenuSubTrigger>
-                                            <DropdownMenuSubContent>
-                                                <DropdownMenuItem
-                                                    disabled={!canSync}
-                                                    onClick={() => setConfirmSyncOpen(true)}
-                                                >
-                                                    <CloudUpload />
-                                                    <span>Push to Excel</span>
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem
-                                                    disabled={!msConfig?.isConnected}
-                                                    onClick={() => setSyncFromExcelModalOpen(true)}
-                                                >
-                                                    <CloudDownload />
-                                                    <span>Pull from Excel</span>
-                                                </DropdownMenuItem>
-                                            </DropdownMenuSubContent>
-                                        </DropdownMenuSub> */}
                                         <DropdownMenuSeparator />
                                     </RequirePermission>
 
                                     <RequirePermission permission="reports.manage">
-                                        <DropdownMenuItem onClick={() => fetchData()} disabled={isLoading}>
+                                        <DropdownMenuItem onClick={() => { reportCache = null; fetchData(); }} disabled={isLoading}>
                                             <RefreshCcw className={cn(isLoading && "animate-spin")} />
                                             Refresh Table
                                         </DropdownMenuItem>
@@ -376,13 +378,13 @@ export function ReportsPage() {
                             }
                             initialColumnVisibility={{
                                 shift: false,
+                                branch: false,
                                 end_time: false,
                                 code: false,
+                                instructor: false,
                                 minutes: false,
                                 units: false,
-                                substitute: false,
                                 subtype: false,
-                                description: false,
                                 department: false,
                                 feedback: false,
                             }}
@@ -417,16 +419,21 @@ export function ReportsPage() {
                 onConfirm={fetchData}
             />
 
-            {/* Delete Schedule Confirmation */}
-            <AlertDialog open={!!scheduleToDelete} onOpenChange={(open) => !open && setScheduleToDelete(null)}>
+            {/* Delete Schedule Confirmation (single + bulk) */}
+            <AlertDialog open={schedulesToDelete.length > 0} onOpenChange={(open) => !open && setSchedulesToDelete([])}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Schedule Entry?</AlertDialogTitle>
+                        <AlertDialogTitle>
+                            {schedulesToDelete.length === 1 ? "Delete Schedule Entry?" : `Delete ${schedulesToDelete.length} entries?`}
+                        </AlertDialogTitle>
                         <AlertDialogDescription>
-                            Are you sure you want to delete this class? This action cannot be undone.
+                            {schedulesToDelete.length === 1
+                                ? "Are you sure you want to delete this class? This action cannot be undone."
+                                : `Are you sure you want to delete ${schedulesToDelete.length} entries? This action cannot be undone.`
+                            }
                         </AlertDialogDescription>
-                        {scheduleToDelete && (
-                            <ScheduleInfo schedule={scheduleToDelete} />
+                        {schedulesToDelete.length === 1 && schedulesToDelete[0] && (
+                            <ScheduleInfo schedule={schedulesToDelete[0]} />
                         )}
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -434,9 +441,16 @@ export function ReportsPage() {
                         <AlertDialogAction
                             className="border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
                             onClick={async () => {
-                                if (scheduleToDelete) {
-                                    await useScheduleDataStore.getState().deleteSchedule(scheduleToDelete);
-                                    setScheduleToDelete(null);
+                                try {
+                                    for (const entry of schedulesToDelete) {
+                                        await scheduleEntriesService.deleteScheduleEntry(entry);
+                                    }
+                                    toast.success(`${schedulesToDelete.length} ${schedulesToDelete.length === 1 ? "entry" : "entries"} deleted`);
+                                    setSchedulesToDelete([]);
+                                    fetchData();
+                                } catch (error) {
+                                    console.error("Failed to delete:", error);
+                                    toast.error("Failed to delete entries");
                                 }
                             }}>
                             Delete

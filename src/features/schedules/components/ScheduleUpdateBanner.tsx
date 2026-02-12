@@ -10,7 +10,7 @@ export function ScheduleUpdateBanner() {
     const { latestPublished, checkForUpdates, loadPublishedSchedule, dismissUpdate } = useScheduleSyncStore();
     const { settings } = useSettings();
     const toastIdRef = useRef<string | number | null>(null);
-    const lastSeenIdRef = useRef<string | null>(null);
+    const lastSeenIdRef = useRef<string | null>(latestPublished?.id ?? null);
 
     // Verificar actualizaciones al montar
     useEffect(() => {

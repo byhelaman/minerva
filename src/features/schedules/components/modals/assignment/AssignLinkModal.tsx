@@ -385,6 +385,7 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
                             hideUpload
                             hideActions
                             hideOverlaps
+                            hideBulkCopy
                             disableRefresh={isExecuting}
                             initialPageSize={100}
                         />

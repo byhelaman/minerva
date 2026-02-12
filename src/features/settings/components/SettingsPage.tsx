@@ -111,7 +111,7 @@ export function SettingsPage() {
         <div className="flex flex-col h-full min-h-0">
             <div className="flex flex-col py-8 my-4 gap-1">
                 <h1 className="text-xl font-bold tracking-tight">{t("settings.title")}</h1>
-                <p className="text-muted-foreground">{t("settings.subtitle")}</p>
+                <p className="text-muted-foreground text-sm">{t("settings.subtitle")}</p>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2 flex-1 overflow-auto min-h-0 pb-6 pr-4">
@@ -464,7 +464,7 @@ export function SettingsPage() {
                                         Manage, view, and export your schedules with ease.
                                     </p>
                                 </div>
-                            </div>  
+                            </div>
 
                             <div className="grid grid-cols-2 gap-4 pt-4 border-t text-sm">
                                 <div className="flex flex-col">

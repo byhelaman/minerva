@@ -364,11 +364,12 @@ export const scheduleEntriesService = {
     /**
      * Delete a specific schedule entry.
      */
-    async deleteScheduleEntry(key: { date: string, program: string, start_time: string, instructor: string }) {
+    async deleteScheduleEntry(entry: { date: string, program: string, start_time: string, instructor: string }) {
+        const { date, program, start_time, instructor } = entry;
         const { error } = await supabase
             .from('schedule_entries')
             .delete()
-            .match(key);
+            .match({ date, program, start_time, instructor });
 
         if (error) throw error;
     },

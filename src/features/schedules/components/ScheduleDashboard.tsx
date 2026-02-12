@@ -26,6 +26,9 @@ import { ScheduleUpdateBanner } from "./ScheduleUpdateBanner";
 import { PublishToDbModal } from "./modals/PublishToDbModal";
 import { AddScheduleModal } from "./modals/AddScheduleModal";
 
+// Module-level flag: persists across mount/unmount (page navigation), unlike useRef
+let autosaveLoadedThisSession = false;
+
 export function ScheduleDashboard() {
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
@@ -61,9 +64,13 @@ export function ScheduleDashboard() {
     }, [refreshMsConfig]);
 
 
-    // Auto-load drafts on mount
+    // Auto-load drafts on mount (only once per app session)
     useEffect(() => {
-        if (hasLoadedAutosave.current) return;
+        if (autosaveLoadedThisSession) {
+            hasLoadedAutosave.current = true; // Enable auto-save on re-visits
+            return;
+        }
+        autosaveLoadedThisSession = true;
         hasLoadedAutosave.current = true;
 
         const loadAutosave = async () => {
@@ -238,6 +245,12 @@ export function ScheduleDashboard() {
         });
     };
 
+    const handleBulkDeleteSchedules = (rows: Schedule[]) => {
+        const keysToDelete = new Set(rows.map(getUniqueScheduleKey));
+        setBaseSchedules(baseSchedules.filter((s) => !keysToDelete.has(getUniqueScheduleKey(s))));
+        toast.success(`${rows.length} rows deleted`);
+    };
+
     const handleAddSchedule = (newSchedule: Schedule) => {
         // If it's the first schedule, set the active date
         if (baseSchedules.length === 0) {
@@ -328,6 +341,7 @@ export function ScheduleDashboard() {
             <ScheduleDataTable
                 columns={columns}
                 data={schedules}
+                onBulkDelete={(rows) => handleBulkDeleteSchedules(rows as Schedule[])}
                 onClearSchedule={schedules.length > 0 ? handleClearSchedule : undefined}
                 onUploadClick={() => setIsUploadModalOpen(true)}
                 showLiveMode={showLiveMode}

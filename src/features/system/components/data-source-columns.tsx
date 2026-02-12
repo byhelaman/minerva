@@ -176,12 +176,12 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, enableHtm
     },
     {
         accessorKey: "description",
-        size: 500,
+        size: 360,
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="description" />
         ),
         cell: ({ row }) => (
-            <div className="truncate max-w-[480px]">{row.getValue("description")}</div>
+            <div className="truncate max-w-80">{row.getValue("description")}</div>
         )
     },
     {

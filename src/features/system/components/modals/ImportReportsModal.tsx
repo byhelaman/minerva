@@ -52,8 +52,8 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error("Not authenticated");
 
-            // Persist to Supabase
-            await scheduleEntriesService.publishSchedules(data, user.id);
+            // Persist to Supabase (importSchedules includes incidence fields)
+            await scheduleEntriesService.importSchedules(data, user.id);
 
             toast.success("Data imported successfully", { id: toastId });
             onConfirm(); // Trigger parent refresh

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScheduleDataTable } from "@schedules/components/table/ScheduleDataTable";
 import { useZoomStore } from "@/features/matching/stores/useZoomStore";
@@ -129,6 +129,12 @@ const searchColumns: ColumnDef<MeetingRow>[] = [
                 toast.success("Details copied to clipboard");
             };
 
+            const handleCopyJoinUrl = async () => {
+                if (!meeting.join_url) return;
+                await navigator.clipboard.writeText(meeting.join_url);
+                toast.success("Join URL copied to clipboard");
+            };
+
             return (
                 <div className="flex justify-center">
                     <DropdownMenu>
@@ -144,6 +150,12 @@ const searchColumns: ColumnDef<MeetingRow>[] = [
                                 disabled={!hasJoinUrl}
                             >
                                 Copy details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onClick={handleCopyJoinUrl}
+                                disabled={!hasJoinUrl}
+                            >
+                                Copy join URL
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -194,6 +206,16 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
 
     const isLoading = isLoadingData || isRefreshing;
 
+    const handleBulkCopy = useCallback((rows: MeetingRow[]) => {
+        const details = rows.map(row => {
+            return row.join_url
+                ? `${row.topic}\n${row.join_url}`
+                : row.topic;
+        }).join("\n\n");
+        navigator.clipboard.writeText(details);
+        toast.success("Details of selected meetings copied to clipboard");
+    }, []);
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-5xl! max-h-[85vh] flex flex-col">
@@ -228,6 +250,7 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
                             hideOverlaps
                             enableRowSelection={false}
                             initialPageSize={100}
+                            onBulkCopy={handleBulkCopy}
                         />
                     )}
                 </div>
