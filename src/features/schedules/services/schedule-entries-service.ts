@@ -2,6 +2,11 @@ import { supabase } from "@/lib/supabase";
 import { Schedule, DailyIncidence } from "../types";
 import { ensureTimeFormat } from "../utils/time-utils";
 
+/** Trim + collapse internal whitespace for consistent key comparison */
+function normalizeField(val: string | undefined | null): string {
+    return (val || '').trim().replace(/\s+/g, ' ');
+}
+
 /**
  * Service to handle CRUD operations for schedule entries in Supabase.
  * Replaces the JSONB storage model.
@@ -108,34 +113,22 @@ export const scheduleEntriesService = {
 
     /**
      * Batch upsert schedules (Publish flow).
-     * This updates existing rows or inserts new ones.
-     * Preserves existing status/incidences if they are not explicitly touched?
-     * NO: The prompt says "UPSERT filas". Standard upsert overwrites unless we specify columns.
-     * BUT: If we republish the schedule, we generally WANT to update the base fields (time, code)
-     * but we probably DON'T want to wipe out the status/incidence if the row key matches?
-     * 
-     * STRATEGY: 
-     * On Publish, we are pushing the "Master" schedule.
-     * - If we use ON CONFLICT DO UPDATE, we can choose which columns to update.
-     * - We should update shift, branch, end_time, code, minutes, units.
-     * - We should NOT update status, substitute, type, etc. (Incidence data).
+     * Updates existing rows or inserts new ones.
+     * Incidence fields are excluded so existing incidence data is preserved on re-publish.
      */
     async publishSchedules(schedules: Schedule[], publishedBy: string) {
         if (schedules.length === 0) return;
 
-        // Prepare rows directly from Schedule objects
-        // Prepare rows directly from Schedule objects
         const uniqueKeys = new Set<string>();
         const rows: any[] = [];
 
         for (const s of schedules) {
             // Normalize composite key fields to prevent whitespace/format duplicates
-            const program = s.program.trim();
-            const instructor = s.instructor.trim();
+            const program = (s.program || '').trim();
+            const instructor = (s.instructor || '').trim();
             const start_time = ensureTimeFormat(s.start_time);
 
-            // Create composite key to detect duplicates in the INPUT array
-            // Supabase upsert fails if the BATCH contains duplicate keys for the conflict constraint
+            // Deduplicate within the batch
             const key = `${s.date}|${program}|${start_time}|${instructor}`;
 
             if (!uniqueKeys.has(key)) {
@@ -153,8 +146,7 @@ export const scheduleEntriesService = {
                     minutes: s.minutes,
                     units: s.units,
 
-                    // NOTE: Incidence fields (status, substitute, type, subtype, description,
-                    // department, feedback) are intentionally EXCLUDED from publish upsert.
+                    // NOTE: Incidence fields intentionally EXCLUDED from publish upsert.
                     // PostgREST upsert only updates columns present in the request body,
                     // so existing incidence data is preserved on re-publish.
 
@@ -176,75 +168,98 @@ export const scheduleEntriesService = {
 
     /**
      * Batch upsert schedules from Import/Pull flows.
-     * Incidence fields are only included when they have actual values,
-     * so existing incidence data in the DB is preserved when importing
-     * schedules without incidence information.
-     * Returns the count of unique rows sent to upsert.
+     * Normalizes all key fields (trim + time format) to prevent duplicates.
+     *
+     * IMPORTANT: PostgREST batch upsert uses the UNION of all columns across
+     * all rows. If even ONE row has an incidence field, ALL rows get that column
+     * with NULL for missing values — wiping existing incidence data on conflict.
+     * To prevent this, rows are split into two separate upserts:
+     *   1. Base-only rows (no incidence columns) → preserves existing incidences
+     *   2. Incidence rows (ALL incidence columns, uniform shape) → updates incidences
      */
     async importSchedules(schedules: Schedule[], publishedBy: string): Promise<{ upsertedCount: number; duplicatesSkipped: number }> {
         if (schedules.length === 0) return { upsertedCount: 0, duplicatesSkipped: 0 };
 
         const uniqueKeys = new Set<string>();
-        const rows: any[] = [];
+        const baseOnlyRows: any[] = [];
+        const incidenceRows: any[] = [];
         let duplicatesSkipped = 0;
 
         for (const s of schedules) {
-            // Normalize composite key fields to prevent whitespace/format duplicates
-            const program = s.program.trim();
-            const instructor = s.instructor.trim();
+            // Normalize ALL composite key fields consistently
+            const program = normalizeField(s.program);
+            const instructor = normalizeField(s.instructor);
             const start_time = ensureTimeFormat(s.start_time);
 
+            // Deduplicate within this import batch
             const key = `${s.date}|${program}|${start_time}|${instructor}`;
 
-            if (!uniqueKeys.has(key)) {
-                uniqueKeys.add(key);
-
-                const row: any = {
-                    // Composite key fields (normalized)
-                    date: s.date,
-                    program,
-                    start_time,
-                    instructor,
-
-                    // Base schedule fields
-                    shift: s.shift,
-                    branch: s.branch,
-                    end_time: ensureTimeFormat(s.end_time),
-                    code: s.code,
-                    minutes: s.minutes,
-                    units: s.units,
-
-                    published_by: publishedBy,
-                    synced_at: null
-                };
-
-                // Only include incidence fields when they have actual values.
-                // This prevents overwriting existing incidence data in the DB
-                // when importing schedules that don't carry incidence info.
-                if (s.status) row.status = s.status;
-                if (s.substitute) row.substitute = s.substitute;
-                if (s.type) row.type = s.type;
-                if (s.subtype) row.subtype = s.subtype;
-                if (s.description) row.description = s.description;
-                if (s.department) row.department = s.department;
-                if (s.feedback) row.feedback = s.feedback;
-
-                rows.push(row);
-            } else {
+            if (uniqueKeys.has(key)) {
                 duplicatesSkipped++;
+                continue;
+            }
+            uniqueKeys.add(key);
+
+            const baseRow: any = {
+                // Composite key fields (normalized)
+                date: s.date,
+                program,
+                start_time,
+                instructor,
+
+                // Base schedule fields
+                shift: s.shift,
+                branch: s.branch,
+                end_time: ensureTimeFormat(s.end_time),
+                code: s.code,
+                minutes: s.minutes,
+                units: s.units,
+
+                published_by: publishedBy,
+                synced_at: null
+            };
+
+            const hasIncidence = s.status || s.substitute || s.type || s.subtype
+                || s.description || s.department || s.feedback;
+
+            if (hasIncidence) {
+                // Include ALL incidence fields to ensure uniform column shape
+                incidenceRows.push({
+                    ...baseRow,
+                    status: s.status || null,
+                    substitute: s.substitute || null,
+                    type: s.type || null,
+                    subtype: s.subtype || null,
+                    description: s.description || null,
+                    department: s.department || null,
+                    feedback: s.feedback || null,
+                });
+            } else {
+                baseOnlyRows.push(baseRow);
             }
         }
 
-        const { error } = await supabase
-            .from('schedule_entries')
-            .upsert(rows, {
-                onConflict: 'date,program,start_time,instructor',
-                ignoreDuplicates: false
-            });
+        const upsertOpts = {
+            onConflict: 'date,program,start_time,instructor',
+            ignoreDuplicates: false
+        };
 
-        if (error) throw error;
+        // Two separate upserts to avoid mixed-column contamination
+        if (baseOnlyRows.length > 0) {
+            const { error } = await supabase
+                .from('schedule_entries')
+                .upsert(baseOnlyRows, upsertOpts);
+            if (error) throw error;
+        }
 
-        return { upsertedCount: rows.length, duplicatesSkipped };
+        if (incidenceRows.length > 0) {
+            const { error } = await supabase
+                .from('schedule_entries')
+                .upsert(incidenceRows, upsertOpts);
+            if (error) throw error;
+        }
+
+        return { upsertedCount: baseOnlyRows.length + incidenceRows.length, duplicatesSkipped };
     },
 
     /**
@@ -262,36 +277,24 @@ export const scheduleEntriesService = {
                 description: changes.description,
                 department: changes.department,
                 feedback: changes.feedback,
-                // Automatically triggers updated_at via database trigger
             })
             .match(key)
             .select();
 
         if (error) throw error;
 
-        // Return true if at least one row was updated
         return (data?.length ?? 0) > 0;
     },
 
     /**
      * For Sync: Get entries that need to be synced to Excel
-     * (synced_at is null OR updated_at > synced_at)
      */
     async getEntriesPendingSync(date: string) {
-        // Query logic needs to be careful. 
-        // We want entries for this date where synced_at is outdated.
         const { data, error } = await supabase
             .from('schedule_entries')
             .select('*')
             .eq('date', date)
-            .or('synced_at.is.null,updated_at.gt.synced_at'); // PostgREST syntax approximation? 
-
-        // Actually, client filters are safer if complex OR logic is hard in JS client
-        // But let's try strict filter:
-        // .filter('updated_at', 'gt', 'synced_at') wont work easily with nulls in one shot usually
-        // Better to just fetch all for the date (typically < 200 rows) and filter in JS for the "Sync" action logic?
-        // User requirement: "SELECT DISTINCT date WHERE ..." for finding pending DAYS.
-        // For a specific day sync, we just dump the whole day to Excel usually (replace-table-data).
+            .or('synced_at.is.null,updated_at.gt.synced_at');
 
         if (error) throw error;
         return data;
@@ -299,36 +302,27 @@ export const scheduleEntriesService = {
 
     /**
      * Find dates that look like they need syncing.
-     * This might be a heavy query if we scan everything.
-     * Ideally we use a distinct or RPC. For now, doing it simple.
      */
     async getPendingSyncDates(): Promise<string[]> {
-        // This is tricky efficiently without a specialized view or RPC.
-        // Option: Select distinct dates where synced_at is null or old.
-        // Since we don't have distinct select easily exposed in basic SDK sometimes:
         const { data, error } = await supabase
             .from('schedule_entries')
             .select('date')
             .is('synced_at', null)
-            .limit(100); // Just finding some candidates
-
-        // Re-query for updated_at > synced_at is hard to express in simple REST without RPC comparing columns.
-        // We will stick to basic implementation or assume the user syncs the current active date.
+            .limit(100);
 
         if (error) return [];
         return Array.from(new Set(data.map(d => d.date)));
     },
 
     /**
-     * Fetch all entries that have incidence data (status IS NOT NULL).
+     * Fetch all entries that have incidence data.
      * Used for the consolidated incidences Excel export.
-     * Only returns actual incidences, not all schedules.
      */
     async getAllIncidences(startDate?: string, endDate?: string): Promise<DailyIncidence[]> {
         let query = supabase
             .from('schedule_entries')
             .select('*')
-            .not('type', 'is', null) // Only real incidences (type is the reliable field)
+            .not('type', 'is', null)
             .order('date', { ascending: true })
             .order('start_time', { ascending: true });
 
@@ -353,7 +347,6 @@ export const scheduleEntriesService = {
             code: row.code,
             minutes: row.minutes,
             units: row.units,
-            // Include all fields even if null (for Excel sync)
             status: row.status || undefined,
             substitute: row.substitute || undefined,
             type: row.type || undefined,
@@ -394,17 +387,39 @@ export const scheduleEntriesService = {
      * Insert a single schedule entry.
      * Used for manually adding entries from Reports page.
      */
+    /**
+     * Fetch composite keys for existing entries on given dates.
+     * Lightweight: only selects key columns for overlap comparison.
+     */
+    async getExistingKeys(dates: string[]): Promise<Set<string>> {
+        if (dates.length === 0) return new Set();
+
+        const { data, error } = await supabase
+            .from('schedule_entries')
+            .select('date, program, start_time, instructor')
+            .in('date', dates);
+
+        if (error) throw error;
+
+        const keys = new Set<string>();
+        data?.forEach(row => {
+            const key = `${row.date}|${normalizeField(row.program)}|${ensureTimeFormat(row.start_time)}|${normalizeField(row.instructor)}`;
+            keys.add(key);
+        });
+        return keys;
+    },
+
     async addScheduleEntry(schedule: Schedule, publishedBy: string) {
         const { error } = await supabase
             .from('schedule_entries')
             .insert({
                 date: schedule.date,
-                program: schedule.program,
-                start_time: schedule.start_time,
-                instructor: schedule.instructor,
+                program: (schedule.program || '').trim(),
+                start_time: ensureTimeFormat(schedule.start_time),
+                instructor: (schedule.instructor || '').trim(),
                 shift: schedule.shift,
                 branch: schedule.branch,
-                end_time: schedule.end_time,
+                end_time: ensureTimeFormat(schedule.end_time),
                 code: schedule.code,
                 minutes: schedule.minutes,
                 units: schedule.units,

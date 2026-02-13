@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 import { Calendar } from "@/components/ui/calendar";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, AlertTriangle, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { type DateRange } from "react-day-picker";
@@ -26,6 +26,18 @@ import {
 } from "../../services/microsoft-import-service";
 import { supabase } from "@/lib/supabase";
 import type { Schedule } from "../../types";
+import { ensureTimeFormat } from "../../utils/time-utils";
+import { getScheduleKey } from "../../utils/overlap-utils";
+
+/** Trim + collapse internal whitespace for consistent comparison */
+function normalizeField(val: string | undefined | null): string {
+    return (val || '').trim().replace(/\s+/g, ' ');
+}
+
+/** Normalize composite key for a schedule — matches importSchedules logic */
+function normalizeKey(s: Schedule): string {
+    return `${s.date}|${normalizeField(s.program)}|${ensureTimeFormat(s.start_time)}|${normalizeField(s.instructor)}`;
+}
 
 type ModalStep = 'filter' | 'loading' | 'preview' | 'importing';
 
@@ -48,6 +60,8 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
     const [previewData, setPreviewData] = useState<Schedule[]>([]);
     const [errorMap, setErrorMap] = useState<Map<string, string[]>>(new Map());
 
+    const [showDuplicatesOnly, setShowDuplicatesOnly] = useState(false);
+
     const { msConfig } = useScheduleSyncStore();
 
     // Columns with delete handler
@@ -55,6 +69,63 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
 
     // Convert errorMap keys to Set for ScheduleDataTable
     const errorRowKeys = useMemo(() => new Set(errorMap.keys()), [errorMap]);
+
+    // Detect intra-file duplicates (same composite key appears more than once)
+    const { duplicateKeys, duplicateCount } = useMemo(() => {
+        const keyCounts = new Map<string, number>();
+        const keyToScheduleKeys = new Map<string, Set<string>>();
+
+        for (const s of previewData) {
+            const nk = normalizeKey(s);
+            keyCounts.set(nk, (keyCounts.get(nk) || 0) + 1);
+
+            if (!keyToScheduleKeys.has(nk)) keyToScheduleKeys.set(nk, new Set());
+            keyToScheduleKeys.get(nk)!.add(getScheduleKey(s));
+        }
+
+        const duplicateScheduleKeys = new Set<string>();
+        let count = 0;
+
+        for (const [nk, c] of keyCounts) {
+            if (c > 1) {
+                count += c;
+                const scheduleKeys = keyToScheduleKeys.get(nk);
+                if (scheduleKeys) {
+                    for (const sk of scheduleKeys) {
+                        duplicateScheduleKeys.add(sk);
+                    }
+                }
+            }
+        }
+
+        return { duplicateKeys: duplicateScheduleKeys, duplicateCount: count };
+    }, [previewData]);
+
+    // Merge error keys + duplicate keys for row highlighting
+    const allErrorKeys = useMemo(() => {
+        const merged = new Set(errorRowKeys);
+        for (const k of duplicateKeys) merged.add(k);
+        return merged;
+    }, [errorRowKeys, duplicateKeys]);
+
+    // Auto-reset filter when no more duplicates
+    useEffect(() => {
+        if (duplicateCount === 0 && showDuplicatesOnly) {
+            setShowDuplicatesOnly(false);
+        }
+    }, [duplicateCount, showDuplicatesOnly]);
+
+    // Filtered data for display
+    const displayData = useMemo(() => {
+        if (!showDuplicatesOnly) return previewData;
+
+        const keyCounts = new Map<string, number>();
+        for (const s of previewData) {
+            const nk = normalizeKey(s);
+            keyCounts.set(nk, (keyCounts.get(nk) || 0) + 1);
+        }
+        return previewData.filter(s => (keyCounts.get(normalizeKey(s)) || 0) > 1);
+    }, [previewData, showDuplicatesOnly]);
 
     // Counts
     const validCount = previewData.length - errorMap.size;
@@ -68,6 +139,7 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
             setDateRange({ from: now, to: now });
             setPreviewData([]);
             setErrorMap(new Map());
+            setShowDuplicatesOnly(false);
         }
     }, [open]);
 
@@ -147,7 +219,7 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
         }
     };
 
-    const canImport = previewData.length > 0 && errorMap.size === 0;
+    const canImport = previewData.length > 0 && errorMap.size === 0 && duplicateCount === 0;
 
     // Column visibility for preview
     const initialColumnVisibility = {
@@ -164,6 +236,34 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
         feedback: false,
     };
 
+    // "Duplicados" filter button — same style as overlaps filter
+    const duplicatesFilterButton = duplicateCount > 0 ? (
+        <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowDuplicatesOnly(!showDuplicatesOnly)}
+            className={cn(
+                "h-8 border-dashed border-destructive/50 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
+            )}
+        >
+            <AlertTriangle />
+            Duplicados
+            {showDuplicatesOnly && ` (${duplicateCount})`}
+        </Button>
+    ) : null;
+
+    // Reset button when duplicates filter is active
+    const resetFilterButton = showDuplicatesOnly ? (
+        <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowDuplicatesOnly(false)}
+        >
+            Reset
+            <X />
+        </Button>
+    ) : null;
+
     return (
         <Dialog open={open} onOpenChange={(val) => step !== 'importing' && onOpenChange(val)}>
             <DialogContent className={cn(
@@ -177,8 +277,8 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
                         {step === 'filter' && "Select the date range to import"}
                         {step === 'loading' && "Fetching data from Excel..."}
                         {step === 'preview' && (
-                            invalidCount > 0
-                                ? `Fix ${invalidCount} errors before importing`
+                            invalidCount > 0 || duplicateCount > 0
+                                ? `Fix ${invalidCount > 0 ? `${invalidCount} errors` : ''}${invalidCount > 0 && duplicateCount > 0 ? ' and ' : ''}${duplicateCount > 0 ? `${duplicateCount} duplicates` : ''} before importing`
                                 : `${validCount} schedules ready to import`
                         )}
                         {step === 'importing' && "Importing schedules..."}
@@ -218,11 +318,11 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
 
                 {/* Preview Table */}
                 {step === 'preview' && (
-                    <div className="flex-1 pr-2 overflow-auto">
+                    <div className="flex-1 flex flex-col min-h-0 overflow-hidden pr-2">
                         <ScheduleDataTable
                             columns={columns}
-                            data={previewData}
-                            errorRowKeys={errorRowKeys}
+                            data={displayData}
+                            errorRowKeys={allErrorKeys}
                             filterConfig={{
                                 showStatus: false,
                                 showIncidenceType: true,
@@ -234,6 +334,21 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
                             hideOverlaps
                             initialPageSize={100}
                             initialColumnVisibility={initialColumnVisibility}
+                            customFilterItems={<>{duplicatesFilterButton}{resetFilterButton}</>}
+                            hideBulkCopy
+                            onBulkDelete={(rows) => {
+                                const toRemove = new Set(rows);
+                                setPreviewData(prev => prev.filter(s => !toRemove.has(s)));
+                                // Also clean error map for removed rows
+                                setErrorMap(prev => {
+                                    const newMap = new Map(prev);
+                                    for (const s of rows as Schedule[]) {
+                                        newMap.delete(getRowKey(s));
+                                    }
+                                    return newMap;
+                                });
+                                toast.success(`${rows.length} row(s) removed`);
+                            }}
                         />
                     </div>
                 )}

@@ -22,7 +22,7 @@ interface ScheduleSyncState {
 
     // Core Actions
     publishToSupabase: (overwrite?: boolean) => Promise<{ success: boolean; error?: string; exists?: boolean }>;
-    syncToExcel: (date?: string) => Promise<void>;
+    syncToExcel: (date?: string, endDate?: string) => Promise<void>;
 
     // Supabase State (Published Schedules Table)
     latestPublished: PublishedSchedule | null;
@@ -162,7 +162,7 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
         }
     },
 
-    syncToExcel: async (date?: string) => {
+    syncToExcel: async (date?: string, endDateArg?: string) => {
         const targetDate = date || useScheduleUIStore.getState().activeDate;
         const { msConfig } = get();
 
@@ -188,12 +188,12 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
             // 2. Publish consolidated incidences file
             const { publishIncidencesToExcel } = await import('../services/microsoft-publisher');
             if (msConfig.incidencesFileId) {
-                // Calculate date range from loaded schedules to support multi-day sync
                 const { baseSchedules } = useScheduleDataStore.getState();
                 let startDate = targetDate;
-                let endDate: string | undefined = undefined;
+                let endDate: string | undefined = endDateArg;
 
-                if (baseSchedules.length > 0) {
+                // Only derive from baseSchedules if no explicit end date is provided
+                if (!endDate && baseSchedules.length > 0) {
                     const dates = baseSchedules.map(s => s.date).sort();
                     startDate = dates[0]; // Earliest
                     const last = dates[dates.length - 1];

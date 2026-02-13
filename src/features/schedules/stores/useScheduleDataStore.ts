@@ -97,7 +97,7 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
     deleteIncidence: async (incidence: DailyIncidence) => {
         const previousIncidences = get().incidences;
 
-        // Optimistic update: Remove from local state
+        // Optimistic update (local only, no version bump yet)
         set(state => ({
             incidences: state.incidences.filter(i =>
                 !(i.date === incidence.date &&
@@ -105,7 +105,6 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
                     i.start_time === incidence.start_time &&
                     i.instructor === incidence.instructor)
             ),
-            incidencesVersion: state.incidencesVersion + 1
         }));
 
         try {
@@ -126,11 +125,11 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
             } as any);
 
             if (!wasUpdated) {
-                // If row didn't exist in DB, it might be a local-only incidence?
-                // But generally incidences must be attached to a schedule.
-                // If it fails, maybe it wasn't published.
                 throw new Error('SCHEDULE_NOT_PUBLISHED');
             }
+
+            // DB write confirmed → notify cross-component listeners
+            set(state => ({ incidencesVersion: state.incidencesVersion + 1 }));
             toast.success("Incidence removed");
         } catch (error) {
             console.error("Failed to delete incidence:", error);
@@ -195,7 +194,7 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
         // Store previous state for potential rollback
         const previousIncidences = get().incidences;
 
-        // Optimistic update
+        // Optimistic update (local incidences only, no version bump yet)
         set(state => {
             const filtered = state.incidences.filter(i =>
                 !(i.date === newIncidence.date &&
@@ -203,10 +202,7 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
                     i.start_time === newIncidence.start_time &&
                     i.instructor === newIncidence.instructor)
             );
-            return {
-                incidences: [...filtered, newIncidence],
-                incidencesVersion: state.incidencesVersion + 1
-            };
+            return { incidences: [...filtered, newIncidence] };
         });
 
         // DB Update
@@ -219,13 +215,15 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
             }, newIncidence);
 
             if (!wasUpdated) {
-                // Revert optimistic update - schedule doesn't exist in DB
                 set(state => ({
                     incidences: previousIncidences,
                     incidencesVersion: state.incidencesVersion + 1
                 }));
                 throw new Error('SCHEDULE_NOT_PUBLISHED');
             }
+
+            // DB write confirmed → bump version to notify cross-component listeners (Reports)
+            set(state => ({ incidencesVersion: state.incidencesVersion + 1 }));
         } catch (error) {
             // Revert optimistic update on any error
             set(state => ({

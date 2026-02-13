@@ -8,7 +8,6 @@ import { writeTextFile, BaseDirectory } from "@tauri-apps/plugin-fs";
 
 import { Button } from "@/components/ui/button";
 import { useScheduleSyncStore } from "@/features/schedules/stores/useScheduleSyncStore";
-import { useScheduleUIStore } from "@/features/schedules/stores/useScheduleUIStore";
 import { formatDateForDisplay } from "@/lib/date-utils";
 
 import {
@@ -63,7 +62,6 @@ export function ToolbarActions<TData>({
     // Settings: Actions Respect Filters
     const { settings } = useSettings();
     const { getLatestCloudVersion, loadPublishedSchedule } = useScheduleSyncStore();
-    const { activeDate } = useScheduleUIStore();
 
     // State for Restore Confirmation
     const [showRestoreDialog, setShowRestoreDialog] = useState(false);
@@ -75,7 +73,7 @@ export function ToolbarActions<TData>({
         const toastId = toast.loading("Checking cloud version...");
 
         try {
-            const { exists, data, error } = await getLatestCloudVersion(activeDate);
+            const { exists, data, error } = await getLatestCloudVersion();
 
             if (error) {
                 toast.error("Error checking cloud: " + error, { id: toastId });

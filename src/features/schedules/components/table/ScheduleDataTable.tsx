@@ -401,7 +401,7 @@ export function ScheduleDataTable<TData, TValue>({
                                             key={row.id}
                                             data-state={row.getIsSelected() && "selected"}
                                             className={cn(
-                                                isConflict && "text-destructive",
+                                                isConflict && "bg-red-50 dark:bg-red-950/20 border-l-2 border-l-red-500",
                                                 isActive && "bg-green-50 dark:bg-green-950/20 border-l-2 border-l-green-500",
                                                 hasError && "bg-red-50 dark:bg-red-950/20 border-l-2 border-l-red-500"
                                             )}

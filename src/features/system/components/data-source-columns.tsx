@@ -103,7 +103,7 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, enableHtm
             <DataTableColumnHeader column={column} title="instructor" />
         ),
         cell: ({ row }) => (
-            <div className="truncate w-[180px]" title={row.getValue("instructor")}>{row.getValue("instructor")}</div>
+            <div className="truncate max-w-45" title={row.getValue("instructor")}>{row.getValue("instructor")}</div>
         ),
     },
     {
@@ -113,7 +113,7 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, enableHtm
             <DataTableColumnHeader column={column} title="program" />
         ),
         cell: ({ row }) => (
-            <div className="truncate max-w-[380px]" title={row.getValue("program")}>
+            <div className="truncate max-w-95" title={row.getValue("program")}>
                 {row.getValue("program")}
             </div>
         ),
@@ -153,7 +153,7 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, enableHtm
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="substitute" />
         ),
-        cell: ({ row }) => <div>{row.getValue("substitute")}</div>,
+        cell: ({ row }) => <div className="truncate max-w-30">{row.getValue("substitute")}</div>,
     },
     {
         accessorKey: "type",
@@ -161,7 +161,7 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, enableHtm
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="type" />
         ),
-        cell: ({ row }) => <div>{row.getValue("type")}</div>,
+        cell: ({ row }) => <div className="truncate max-w-25">{row.getValue("type")}</div>,
         filterFn: (row, id, value) => {
             return value.includes(row.getValue(id));
         },
@@ -172,16 +172,15 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, enableHtm
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="subtype" />
         ),
-        cell: ({ row }) => <div className="truncate max-w-[200px]">{row.getValue("subtype")}</div>,
+        cell: ({ row }) => <div className="truncate max-w-45">{row.getValue("subtype")}</div>,
     },
     {
         accessorKey: "description",
-        size: 360,
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="description" />
         ),
         cell: ({ row }) => (
-            <div className="truncate max-w-80">{row.getValue("description")}</div>
+            <div className="truncate max-w-60">{row.getValue("description")}</div>
         )
     },
     {

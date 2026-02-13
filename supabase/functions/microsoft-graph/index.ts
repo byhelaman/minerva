@@ -640,19 +640,19 @@ serve(async (req: Request) => {
             const headerRow = values[0] as string[]; // New headers
             const inputRows = values.slice(1);
 
-            // 1. Get table headers to know column order
-            const tableUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/tables/${tableId}`;
-            const tableRes = await fetch(tableUrl, {
+            // 1. Get actual table column headers
+            const colsUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/tables/${tableId}/columns?$select=name`;
+            const colsRes = await fetch(colsUrl, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
-            if (!tableRes.ok) {
-                const err = await tableRes.json().catch(() => ({}));
-                throw new Error(err.error?.message || 'Failed to read table info');
+            if (!colsRes.ok) {
+                const err = await colsRes.json().catch(() => ({}));
+                throw new Error(err.error?.message || 'Failed to read table columns');
             }
 
-            const tableData = await tableRes.json();
-            const tableHeaders = tableData.columns?.map((col: any) => col.name) || headerRow;
+            const colsData = await colsRes.json();
+            const tableHeaders: string[] = (colsData.value || []).map((col: any) => col.name);
 
             // 2. Get existing rows from table (with indices)
             const rowsUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/tables/${tableId}/rows`;

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Minerva v2 is a **Tauri 2 desktop app** (Rust + React 19 + Vite 7) for managing educational schedules with Zoom meeting matching and Microsoft OneDrive integration. Backend is Supabase (PostgreSQL + Deno Edge Functions). The app supports English, Spanish, and French (i18next with `src/locales/`).
 
-**Current version:** 0.2.0
+**Current version:** 0.2.1
 
 ## Commands
 
@@ -35,9 +35,9 @@ Detailed technical documentation lives in `docs/` (written in Spanish):
 | `docs/AUTH_SYSTEM.md` | Auth (Supabase + MSAL), JWT claims, session management, rate limiter |
 | `docs/EXCEL_SYSTEM.md` | Excel parser (2 formats), Zod schemas, validation, auto-save |
 | `docs/SUPABASE_BACKEND.md` | Edge Functions, DB schema (6 consolidated migrations), RLS, Vault, Realtime |
-| `docs/matching_logic.md` | Matching engine: normalizer, 3-tier search, 10 penalties, scorer |
+| `docs/MATCHING_LOGIC.md` | Matching engine: normalizer, 3-tier search, 10 penalties, scorer |
 | `docs/ZOOM_SETUP.md` | Zoom integration: OAuth, 4 Edge Functions, webhooks, batch ops, useZoomStore |
-| `docs/microsoft_setup.md` | Microsoft integration: OAuth, Graph API, OneDrive config, tokens |
+| `docs/MICROSOFT_SETUP.md` | Microsoft integration: OAuth, Graph API, OneDrive config, tokens |
 | `docs/release_guide.md` | Release process, CI/CD, signing, updater, troubleshooting |
 
 **Read the relevant doc before modifying a feature.** The docs are the source of truth for architecture decisions.
@@ -76,6 +76,7 @@ Defined in both `tsconfig.json` and `vite.config.ts`.
 - **matching/** — Zoom meeting matching engine with scoring/penalties, Web Worker
 - **auth/** — Login, signup, OTP verification, password reset
 - **system/** — Admin panel, roles management, reports, `GlobalSyncManager`, integrations UI
+- **statistics/** — Statistics page with Recharts charts (daily stats, incidence breakdowns)
 - **settings/** — User preferences
 - **profile/** — User profile page
 - **docs/** — In-app docs, bug report form
@@ -119,7 +120,7 @@ Components use `<RequirePermission>` for UI gates. Edge Functions verify permiss
 
 ### Matching Engine (`src/features/matching/`)
 
-Three-tier search (exact normalized → Fuse.js fuzzy → token set fallback) with 10 penalty functions and a scoring engine. Runs off main thread in a **Web Worker** (`match.worker.ts`). Config source of truth: `config/matching.config.json`. Worker lifecycle managed by `useZoomStore`: terminated and recreated when data changes. **Full docs: `docs/matching_logic.md`**
+Three-tier search (exact normalized → Fuse.js fuzzy → token set fallback) with 10 penalty functions and a scoring engine. Runs off main thread in a **Web Worker** (`match.worker.ts`). Config source of truth: `config/matching.config.json`. Worker lifecycle managed by `useZoomStore`: terminated and recreated when data changes. **Full docs: `docs/MATCHING_LOGIC.md`**
 
 ### Supabase Edge Functions (Deno, `supabase/functions/`)
 
@@ -127,7 +128,7 @@ Three-tier search (exact normalized → Fuse.js fuzzy → token set fallback) wi
 
 ### Database Migrations (`supabase/migrations/`)
 
-7 migration files (001–007). Run via Supabase SQL Editor in order. 001–006 are consolidated; 007 (`delete_account`) is standalone.
+8 migration files (001–008). Run via Supabase SQL Editor in order. 001–006 are consolidated; 007 (`delete_account`) and 008 (`statistics_rpc`) are standalone.
 
 Key tables: `profiles`, `roles`, `permissions`, `schedule_entries`, `published_schedules`, `zoom_users`, `zoom_meetings`, `zoom_account`, `microsoft_account`, `webhook_events`, `bug_reports`.
 

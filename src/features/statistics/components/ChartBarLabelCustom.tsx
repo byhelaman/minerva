@@ -1,4 +1,5 @@
 import * as React from "react"
+import { format } from "date-fns"
 import { Loader2 } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from "recharts"
 
@@ -51,8 +52,9 @@ export function ChartBarLabelCustom({ timeRange }: Props) {
 
                 const startDate = new Date(now)
                 startDate.setDate(startDate.getDate() - daysBack)
-                const startStr = startDate.toISOString().split("T")[0]
-                const endStr = now.toISOString().split("T")[0]
+
+                const startStr = format(startDate, 'yyyy-MM-dd')
+                const endStr = format(now, 'yyyy-MM-dd')
 
                 const { data, error } = await supabase.rpc("get_incidence_types", {
                     p_start_date: startStr,

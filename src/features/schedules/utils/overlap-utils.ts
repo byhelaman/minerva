@@ -113,3 +113,59 @@ export function detectOverlaps(schedules: Schedule[]): OverlapResult {
         overlapCount: allOverlaps.size,
     };
 }
+
+/**
+ * Analyze import data against existing DB keys.
+ * Returns categorization of each row in the import.
+ */
+export interface ImportOverlapResult {
+    /** Number of rows that are new (not in DB) */
+    newCount: number;
+    /** Number of rows that already exist in DB (will be updated) */
+    updateCount: number;
+    /** Number of intra-file duplicate rows (skipped) */
+    duplicateCount: number;
+    /** Set of composite keys that exist in DB (used for row highlighting) */
+    existingKeys: Set<string>;
+    /** Set of composite keys that are duplicated within the import file */
+    intraFileDuplicateKeys: Set<string>;
+}
+
+export function detectImportOverlaps(
+    importData: Schedule[],
+    existingKeys: Set<string>,
+    normalizeKey: (s: Schedule) => string
+): ImportOverlapResult {
+    const seenInFile = new Map<string, number>(); // key → first index
+    const intraFileDuplicateKeys = new Set<string>();
+    let newCount = 0;
+    let updateCount = 0;
+    let duplicateCount = 0;
+
+    for (const s of importData) {
+        const key = normalizeKey(s);
+
+        // Check intra-file duplicates
+        if (seenInFile.has(key)) {
+            duplicateCount++;
+            intraFileDuplicateKeys.add(key);
+            continue;
+        }
+        seenInFile.set(key, 1);
+
+        // Check against existing DB entries
+        if (existingKeys.has(key)) {
+            updateCount++;
+        } else {
+            newCount++;
+        }
+    }
+
+    return {
+        newCount,
+        updateCount,
+        duplicateCount,
+        existingKeys,
+        intraFileDuplicateKeys,
+    };
+}

@@ -1,6 +1,8 @@
 import * as React from "react"
+import { format } from "date-fns"
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
 import { Loader2 } from "lucide-react"
+import { formatChartDate } from "../utils/date-formatter"
 
 import {
     Card,
@@ -29,11 +31,11 @@ import { supabase } from "@/lib/supabase"
 const chartConfig = {
     schedules: {
         label: "Clases",
-        color: "hsl(210, 90%, 75%)",
+        color: "hsl(217, 91%, 60%)",
     },
     incidences: {
         label: "Incidencias",
-        color: "hsl(217, 91%, 60%)",
+        color: "hsl(210, 90%, 75%)",
     },
 } satisfies ChartConfig
 
@@ -62,8 +64,12 @@ export function ChartAreaInteractive({ timeRange, onTimeRangeChange }: Props) {
 
                 const startDate = new Date(now)
                 startDate.setDate(startDate.getDate() - daysBack)
-                const startStr = startDate.toISOString().split("T")[0]
-                const endStr = now.toISOString().split("T")[0]
+
+                // Use local date strings to match database dates exactly (YYYY-MM-DD)
+                const startStr = format(startDate, 'yyyy-MM-dd')
+                const endStr = format(now, 'yyyy-MM-dd')
+
+                console.log(`[ChartArea] Fetching from ${startStr} to ${endStr}`)
 
                 const { data, error } = await supabase.rpc("get_daily_stats", {
                     p_start_date: startStr,
@@ -72,11 +78,15 @@ export function ChartAreaInteractive({ timeRange, onTimeRangeChange }: Props) {
 
                 if (error) throw error
 
-                const result: DailyStats[] = (data || []).map((row: any) => ({
-                    date: row.date,
-                    schedules: Number(row.total_classes),
-                    incidences: Number(row.incidences),
-                }))
+                const result: DailyStats[] = (data || []).map((row: any) => {
+                    const total = Number(row.total_classes)
+                    const inc = Number(row.incidences)
+                    return {
+                        date: row.date,
+                        schedules: total,
+                        incidences: inc,
+                    }
+                })
 
                 setChartData(result)
             } catch (e) {
@@ -167,24 +177,13 @@ export function ChartAreaInteractive({ timeRange, onTimeRangeChange }: Props) {
                                 axisLine={false}
                                 tickMargin={8}
                                 minTickGap={32}
-                                tickFormatter={(value) => {
-                                    const date = new Date(value)
-                                    return date.toLocaleDateString("es", {
-                                        month: "short",
-                                        day: "numeric",
-                                    })
-                                }}
+                                tickFormatter={(value) => formatChartDate(value, "d MMM")}
                             />
                             <ChartTooltip
                                 cursor={false}
                                 content={
                                     <ChartTooltipContent
-                                        labelFormatter={(value) => {
-                                            return new Date(value).toLocaleDateString("es", {
-                                                month: "short",
-                                                day: "numeric",
-                                            })
-                                        }}
+                                        labelFormatter={(value) => formatChartDate(value, "d MMM yyyy")}
                                         indicator="dot"
                                     />
                                 }
@@ -194,14 +193,12 @@ export function ChartAreaInteractive({ timeRange, onTimeRangeChange }: Props) {
                                 type="natural"
                                 fill="url(#fillIncidences)"
                                 stroke="var(--color-incidences)"
-                                stackId="a"
                             />
                             <Area
                                 dataKey="schedules"
                                 type="natural"
                                 fill="url(#fillSchedules)"
                                 stroke="var(--color-schedules)"
-                                stackId="a"
                             />
                             <ChartLegend content={<ChartLegendContent />} />
                         </AreaChart>

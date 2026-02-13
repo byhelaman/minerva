@@ -1,6 +1,8 @@
 import * as React from "react"
+import { format } from "date-fns"
 import { Loader2 } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, XAxis, Cell } from "recharts"
+import { formatChartDate } from "../utils/date-formatter"
 
 import {
     Card,
@@ -52,8 +54,9 @@ export function ChartBarMultiple({ timeRange }: Props) {
 
                 const startDate = new Date(now)
                 startDate.setDate(startDate.getDate() - daysBack)
-                const startStr = startDate.toISOString().split("T")[0]
-                const endStr = now.toISOString().split("T")[0]
+
+                const startStr = format(startDate, 'yyyy-MM-dd')
+                const endStr = format(now, 'yyyy-MM-dd')
 
                 if (timeRange === "7d") {
                     // For 7 days, use daily stats instead of monthly
@@ -65,12 +68,11 @@ export function ChartBarMultiple({ timeRange }: Props) {
                     if (error) throw error
 
                     const result: MonthlyRate[] = (data || []).map((row: any) => {
-                        const d = new Date(row.date)
                         const total = Number(row.total_classes)
                         const incidences = Number(row.incidences)
                         const rate = total > 0 ? Math.round((incidences / total) * 100) : 0
                         return {
-                            month: d.toLocaleDateString("es", { day: "numeric", month: "short" }),
+                            month: row.date,
                             rate,
                             total,
                             incidences,
@@ -132,6 +134,13 @@ export function ChartBarMultiple({ timeRange }: Props) {
                                 tickLine={false}
                                 tickMargin={10}
                                 axisLine={false}
+                                tickFormatter={(value) => {
+                                    // If it's formatted like "12 feb", leave it. 
+                                    // If it's YYYY-MM-DD (daily view), format it.
+                                    return value.includes("-") && value.length > 5
+                                        ? formatChartDate(value, "d MMM")
+                                        : value
+                                }}
                             />
                             <ChartTooltip
                                 cursor={false}

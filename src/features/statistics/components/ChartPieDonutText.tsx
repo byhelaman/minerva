@@ -1,4 +1,5 @@
 import * as React from "react"
+import { format } from "date-fns"
 import { TrendingUp, TrendingDown, Minus, Loader2 } from "lucide-react"
 import { Label, Pie, PieChart } from "recharts"
 
@@ -50,22 +51,21 @@ export function ChartPieDonutText({ timeRange }: Props) {
                 const daysBack = daysMap[timeRange] || 90
 
                 // Current period
-                const curStart = new Date(now)
-                curStart.setDate(curStart.getDate() - daysBack)
-                const curStartStr = curStart.toISOString().split("T")[0]
-                const curEndStr = now.toISOString().split("T")[0]
+                const startDate = new Date(now)
+                startDate.setDate(startDate.getDate() - daysBack)
 
-                // Previous period (same length, right before current)
-                const prevEnd = new Date(curStart)
-                prevEnd.setDate(prevEnd.getDate() - 1)
-                const prevStart = new Date(prevEnd)
-                prevStart.setDate(prevStart.getDate() - daysBack)
-                const prevStartStr = prevStart.toISOString().split("T")[0]
-                const prevEndStr = prevEnd.toISOString().split("T")[0]
+                const prevStartDate = new Date(startDate)
+                prevStartDate.setDate(prevStartDate.getDate() - daysBack)
+
+                const startStr = format(startDate, 'yyyy-MM-dd')
+                const endStr = format(now, 'yyyy-MM-dd')
+
+                const prevStartStr = format(prevStartDate, 'yyyy-MM-dd')
+                const prevEndStr = format(startDate, 'yyyy-MM-dd') // Ends where current starts.setDate(prevStart.getDate() - daysBack)
 
                 const { data, error } = await supabase.rpc("get_period_comparison", {
-                    p_cur_start: curStartStr,
-                    p_cur_end: curEndStr,
+                    p_cur_start: startStr,
+                    p_cur_end: endStr,
                     p_prev_start: prevStartStr,
                     p_prev_end: prevEndStr,
                 })

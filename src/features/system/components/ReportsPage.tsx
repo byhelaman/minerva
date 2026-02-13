@@ -23,6 +23,7 @@ import { RequirePermission } from "@/components/RequirePermission";
 import { useAuth } from "@/components/auth-provider";
 
 import { useScheduleSyncStore } from "@/features/schedules/stores/useScheduleSyncStore";
+import { useScheduleDataStore } from "@/features/schedules/stores/useScheduleDataStore";
 import type { Schedule, DailyIncidence } from "@/features/schedules/types";
 import { mergeSchedulesWithIncidences } from "@/features/schedules/utils/merge-utils";
 import { ImportReportsModal } from "./modals/ImportReportsModal";
@@ -32,7 +33,6 @@ import { SyncFromExcelModal } from "@/features/schedules/components/modals/SyncF
 import { scheduleEntriesService } from "@/features/schedules/services/schedule-entries-service";
 import { secureSaveFile } from "@/lib/secure-export";
 import { utils, write } from "xlsx";
-import { formatTimeTo12Hour } from "@/features/schedules/utils/time-utils";
 import { useSettings } from "@/components/settings-provider";
 
 import { type DateRange } from "react-day-picker";
@@ -88,10 +88,21 @@ export function ReportsPage() {
     const { syncToExcel, refreshMsConfig } = useScheduleSyncStore();
     const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
 
+    // Subscribe to incidence changes from the shared store
+    // This ensures Reports refreshes when incidences are saved via modal
+    const incidencesVersion = useScheduleDataStore(s => s.incidencesVersion);
+
     // Load MS config on mount
     useEffect(() => {
         refreshMsConfig();
     }, [refreshMsConfig]);
+
+    // Re-fetch when incidences change in the shared store
+    useEffect(() => {
+        if (incidencesVersion > 0 && dateRange?.from) {
+            fetchData();
+        }
+    }, [incidencesVersion]);
 
     // Format date to YYYY-MM-DD for Supabase queries
 
@@ -145,11 +156,12 @@ export function ReportsPage() {
         (schedule) => setSchedulesToDelete([schedule]),
     );
 
-    // Handle sync (Single date only)
+    // Handle sync
     const handleSync = async () => {
         if (!dateRange?.from) return;
         const dateString = format(dateRange.from, "yyyy-MM-dd");
-        await syncToExcel(dateString);
+        const endDateString = dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : undefined;
+        await syncToExcel(dateString, endDateString);
     };
 
     const { user } = useAuth();
@@ -186,8 +198,8 @@ export function ReportsPage() {
                     instructor: sanitize(item.instructor) as string,
                     program: sanitize(item.program) as string,
                     branch: sanitize(item.branch) as string,
-                    start_time: formatTimeTo12Hour(item.start_time),
-                    end_time: formatTimeTo12Hour(item.end_time),
+                    start_time: item.start_time, // Keep 24h format for re-import compatibility
+                    end_time: item.end_time,     // Keep 24h format
                 };
             });
 
@@ -232,6 +244,7 @@ export function ReportsPage() {
                     <p className="text-muted-foreground text-sm">View and edit daily reports</p>
                 </div>
                 <div className="flex items-center gap-3">
+
 
 
                     {/* Date Picker Range */}
@@ -381,9 +394,9 @@ export function ReportsPage() {
                                 branch: false,
                                 end_time: false,
                                 code: false,
-                                instructor: false,
                                 minutes: false,
                                 units: false,
+                                status: false,
                                 subtype: false,
                                 department: false,
                                 feedback: false,
