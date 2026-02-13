@@ -88,19 +88,22 @@ export const scheduleEntriesService = {
      */
     async getSchedulesByDateRange(startDate: string, endDate: string) {
         const { data, error } = await supabase
-            .from('schedule_entries')
-            .select('*')
-            .gte('date', startDate)
-            .lte('date', endDate)
-            .order('date', { ascending: true })
-            .order('start_time', { ascending: true });
+            .rpc('get_schedules_report', {
+                p_start_date: startDate,
+                p_end_date: endDate
+            });
 
         if (error) throw error;
 
         const schedules: Schedule[] = [];
         const incidences: DailyIncidence[] = [];
 
-        data?.forEach(row => {
+        // RPC returns a JSON array directly (as a single object/array) due to json_agg check
+        // Supabase .rpc() with json return type usually returns the data directly.
+        // We cast to any[] just to be safe.
+        const rows = Array.isArray(data) ? data : (data as any) || [];
+
+        rows.forEach((row: any) => {
             schedules.push(mapEntryToSchedule(row));
             const incidence = mapEntryToIncidence(row);
             if (incidence) {

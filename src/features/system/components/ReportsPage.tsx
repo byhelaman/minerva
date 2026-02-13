@@ -344,17 +344,19 @@ export function ReportsPage() {
                             hideDefaultActions={true}
                             onBulkDelete={(rows) => setSchedulesToDelete(rows as Schedule[])}
                             customFilterItems={
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setShowOnlyIncidences(!showOnlyIncidences)}
-                                    className="border-dashed
-                                        border-amber-500/50 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 hover:text-amber-600 hover:border-amber-500/50 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20 dark:hover:text-amber-400"
-                                >
-                                    <AlertCircle />
-                                    Incidences
-                                    {showOnlyIncidences && ` (${reportIncidences.length})`}
-                                </Button>
+                                reportIncidences.length > 0 ? (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setShowOnlyIncidences(!showOnlyIncidences)}
+                                        className="border-dashed
+                                            border-amber-500/50 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 hover:text-amber-600 hover:border-amber-500/50 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20 dark:hover:text-amber-400"
+                                    >
+                                        <AlertCircle />
+                                        Incidences
+                                        {showOnlyIncidences && ` (${reportIncidences.length})`}
+                                    </Button>
+                                ) : undefined
                             }
                             customActionItems={
                                 <>

@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { ChartAreaInteractive } from "./ChartAreaInteractive"
 import { ChartBarMultiple } from "./ChartBarMultiple"
+import { ChartBarBranch } from "./ChartBarBranch"
 import { ChartBarLabelCustom } from "./ChartBarLabelCustom"
 import { ChartPieDonutText } from "./ChartPieDonutText"
 
@@ -23,6 +24,7 @@ export function StatisticsPage() {
                     <ChartBarMultiple timeRange={timeRange} />
                     <ChartPieDonutText timeRange={timeRange} />
                     <ChartBarLabelCustom timeRange={timeRange} />
+                    <ChartBarBranch timeRange={timeRange} />
                 </div>
             </div>
         </div>

@@ -31,11 +31,11 @@ import { supabase } from "@/lib/supabase"
 const chartConfig = {
     schedules: {
         label: "Clases",
-        color: "hsl(217, 91%, 60%)",
+        color: "hsl(210, 90%, 75%)",
     },
     incidences: {
         label: "Incidencias",
-        color: "hsl(210, 90%, 75%)",
+        color: "hsl(217, 91%, 60%)",
     },
 } satisfies ChartConfig
 

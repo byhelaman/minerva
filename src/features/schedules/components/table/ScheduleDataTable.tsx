@@ -222,6 +222,14 @@ export function ScheduleDataTable<TData, TValue>({
         getFacetedRowModel: getFacetedRowModel(),
         getFacetedUniqueValues: getFacetedUniqueValues(),
         autoResetPageIndex: true, // Resetear a página 1 cuando cambian filtros
+        globalFilterFn: (row, columnId, filterValue) => {
+            const value = row.getValue(columnId);
+            if (value == null) return false;
+            const cellValue = String(value).toLowerCase();
+            const terms = String(filterValue).split(',').map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
+            if (terms.length === 0) return true;
+            return terms.some(term => cellValue.includes(term));
+        },
     });
 
     // Guardar callback en ref para evitar re-ejecución por cambio de referencia
