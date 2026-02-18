@@ -10,7 +10,7 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, enableHtm
         id: "select",
         size: 36,
         header: ({ table }) => (
-            <div className="flex justify-center items-center mb-1">
+            <div className="flex justify-center items-center mb-1 w-8">
                 <Checkbox
                     checked={
                         table.getIsAllPageRowsSelected() ||
@@ -23,7 +23,7 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, enableHtm
             </div>
         ),
         cell: ({ row }) => (
-            <div className="flex justify-center">
+            <div className="flex justify-center w-8">
                 <Checkbox
                     checked={row.getIsSelected()}
                     onCheckedChange={(value) => row.toggleSelected(!!value)}
@@ -37,11 +37,10 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, enableHtm
     },
     {
         accessorKey: "date",
-        size: 120,
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="date" className="justify-center" />
         ),
-        cell: ({ row }) => <div className="w-[100px] text-center">
+        cell: ({ row }) => <div className="w-25 text-center">
             {formatDateForDisplay(row.getValue("date"))}
         </div>,
     },
@@ -70,12 +69,11 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, enableHtm
     },
     {
         accessorKey: "start_time",
-        size: 130,
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="time" className="justify-center" />
         ),
         cell: ({ row }) => (
-            <div className="w-[120px] mx-auto text-center">
+            <div className="w-25 mx-auto text-center">
                 {row.getValue("start_time")} - {row.original.end_time}
             </div>
         ),
@@ -98,22 +96,20 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, enableHtm
     },
     {
         accessorKey: "instructor",
-        size: 200,
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="instructor" />
         ),
         cell: ({ row }) => (
-            <div className="truncate max-w-45" title={row.getValue("instructor")}>{row.getValue("instructor")}</div>
+            <div className="truncate max-w-40" title={row.getValue("instructor")}>{row.getValue("instructor")}</div>
         ),
     },
     {
         accessorKey: "program",
-        size: 400,
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="program" />
         ),
         cell: ({ row }) => (
-            <div className="truncate max-w-95" title={row.getValue("program")}>
+            <div className="truncate max-w-90" title={row.getValue("program")}>
                 {row.getValue("program")}
             </div>
         ),

@@ -61,6 +61,7 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
     const [errorMap, setErrorMap] = useState<Map<string, string[]>>(new Map());
 
     const [showDuplicatesOnly, setShowDuplicatesOnly] = useState(false);
+    const [selectedForImport, setSelectedForImport] = useState<Schedule[]>([]);
 
     const { msConfig } = useScheduleSyncStore();
 
@@ -140,6 +141,7 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
             setPreviewData([]);
             setErrorMap(new Map());
             setShowDuplicatesOnly(false);
+            setSelectedForImport([]);
         }
     }, [open]);
 
@@ -195,7 +197,9 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
     };
 
     const handleImport = async () => {
-        if (errorMap.size > 0) return;
+        if (errorMap.size > 0 || selectedForImport.length === 0) return;
+
+        const dataToImport = selectedForImport;
 
         setStep('importing');
 
@@ -203,7 +207,7 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
             const { data: { user } } = await supabase.auth.getUser();
             const userId = user?.id || '';
 
-            const { upsertedCount, duplicatesSkipped } = await executeImport(previewData, userId);
+            const { upsertedCount, duplicatesSkipped } = await executeImport(dataToImport, userId);
 
             const description = duplicatesSkipped > 0
                 ? `${duplicatesSkipped} duplicate(s) were merged`
@@ -219,7 +223,7 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
         }
     };
 
-    const canImport = previewData.length > 0 && errorMap.size === 0 && duplicateCount === 0;
+    const canImport = selectedForImport.length > 0 && errorMap.size === 0 && duplicateCount === 0;
 
     // Column visibility for preview
     const initialColumnVisibility = {
@@ -279,7 +283,9 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
                         {step === 'preview' && (
                             invalidCount > 0 || duplicateCount > 0
                                 ? `Fix ${invalidCount > 0 ? `${invalidCount} errors` : ''}${invalidCount > 0 && duplicateCount > 0 ? ' and ' : ''}${duplicateCount > 0 ? `${duplicateCount} duplicates` : ''} before importing`
-                                : `${validCount} schedules ready to import`
+                                : selectedForImport.length > 0
+                                    ? `${selectedForImport.length} of ${validCount} rows selected`
+                                    : `${validCount} rows loaded — select the rows to import`
                         )}
                         {step === 'importing' && "Importing schedules..."}
                     </DialogDescription>
@@ -336,9 +342,11 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
                             initialColumnVisibility={initialColumnVisibility}
                             customFilterItems={<>{duplicatesFilterButton}{resetFilterButton}</>}
                             hideBulkCopy
+                            onSelectionChange={(rows) => setSelectedForImport(rows as Schedule[])}
                             onBulkDelete={(rows) => {
                                 const toRemove = new Set(rows);
                                 setPreviewData(prev => prev.filter(s => !toRemove.has(s)));
+                                setSelectedForImport(prev => prev.filter(s => !toRemove.has(s)));
                                 // Also clean error map for removed rows
                                 setErrorMap(prev => {
                                     const newMap = new Map(prev);
@@ -400,7 +408,7 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
                                     Back
                                 </Button>
                                 <Button onClick={handleImport} disabled={!canImport || step === 'loading'}>
-                                    Import {validCount > 0 && `(${validCount})`}
+                                    Import {selectedForImport.length > 0 && `(${selectedForImport.length})`}
                                 </Button>
                             </div>
                         </div>

@@ -23,7 +23,8 @@ const mapEntryToSchedule = (row: any): Schedule => ({
     end_time: ensureTimeFormat(row.end_time),
     code: row.code,
     minutes: row.minutes,
-    units: row.units
+    units: row.units,
+    status: row.status || undefined
 });
 
 // Helper to map DB row to DailyIncidence type (if type exists)
@@ -222,7 +223,7 @@ export const scheduleEntriesService = {
                 synced_at: null
             };
 
-            const hasIncidence = s.status || s.substitute || s.type || s.subtype
+            const hasIncidence = s.substitute || s.type || s.subtype
                 || s.description || s.department || s.feedback;
 
             if (hasIncidence) {

@@ -31,6 +31,7 @@ import type { Schedule } from "@schedules/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { formatDateForDisplay } from "@/lib/date-utils";
+import { useSettings } from "@/components/settings-provider";
 
 interface ScheduleDataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[] | ((addStatusFilter: (status: string) => void) => ColumnDef<TData, TValue>[]);
@@ -99,6 +100,9 @@ export function ScheduleDataTable<TData, TValue>({
     canPublish,
     ...props
 }: ScheduleDataTableProps<TData, TValue>) {
+    const { settings } = useSettings();
+    const disablePagination = settings.disablePagination;
+
     // Use controlled selection if provided, otherwise use internal state
     const [internalSelection, setInternalSelection] = React.useState({});
     const isControlled = props.controlledSelection !== undefined;
@@ -199,7 +203,7 @@ export function ScheduleDataTable<TData, TValue>({
         },
         initialState: {
             pagination: {
-                pageSize: props.initialPageSize || 25,
+                pageSize: disablePagination ? 100000 : (props.initialPageSize || 25),
             },
         },
         enableRowSelection: (() => {
@@ -237,13 +241,14 @@ export function ScheduleDataTable<TData, TValue>({
     onSelectionChangeRef.current = props.onSelectionChange;
 
     // Notificar al padre cuando cambia la selección
+    // Note: uses table.getSelectedRowModel() instead of filtering tableData by id,
+    // because Schedule rows may not have an 'id' field (rowId falls back to index string).
+    const tableRef = React.useRef(table);
+    tableRef.current = table;
     React.useEffect(() => {
         if (onSelectionChangeRef.current) {
-            const selectedIds = Object.keys(rowSelection).filter(k => rowSelection[k as keyof typeof rowSelection]);
-            const selectedRows = tableData.filter(row =>
-                selectedIds.includes((row as { id?: string }).id || '')
-            ) as TData[];
-            onSelectionChangeRef.current(selectedRows);
+            const selectedRows = tableRef.current.getSelectedRowModel().rows.map(r => r.original);
+            onSelectionChangeRef.current(selectedRows as TData[]);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [rowSelection]);
@@ -447,7 +452,8 @@ export function ScheduleDataTable<TData, TValue>({
                         props.onBulkCopy!(selectedRows);
                     } : handleBulkCopy)}
                     onDelete={props.onBulkDelete ? () => {
-                        const selectedRows = table.getFilteredSelectedRowModel().rows.map(r => r.original);
+                        // Use getSelectedRowModel (not filtered) so rows hidden by filters are also deleted
+                        const selectedRows = table.getSelectedRowModel().rows.map(r => r.original);
                         props.onBulkDelete!(selectedRows);
                         table.resetRowSelection();
                     } : undefined}
@@ -456,7 +462,7 @@ export function ScheduleDataTable<TData, TValue>({
             </div>
 
             {/* Pagination */}
-            <DataTablePagination table={table} />
+            {!disablePagination && <DataTablePagination table={table} />}
         </div>
     );
 }

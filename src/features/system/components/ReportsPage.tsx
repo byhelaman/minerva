@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { format } from "date-fns";
 import { ScheduleDataTable } from "@/features/schedules/components/table/ScheduleDataTable";
 import { getDataSourceColumns } from "./data-source-columns";
@@ -61,6 +61,7 @@ export function ReportsPage() {
     const hasCachedData = reportCache?.key === initialKey;
 
     const [dateRange, setDateRange] = useState<DateRange | undefined>(initialDateRange);
+    const [pendingRange, setPendingRange] = useState<DateRange | undefined>(initialDateRange);
     const [calendarOpen, setCalendarOpen] = useState(false);
 
     // Filter state
@@ -97,12 +98,7 @@ export function ReportsPage() {
         refreshMsConfig();
     }, [refreshMsConfig]);
 
-    // Re-fetch when incidences change in the shared store
-    useEffect(() => {
-        if (incidencesVersion > 0 && dateRange?.from) {
-            fetchData();
-        }
-    }, [incidencesVersion]);
+    // Re-fetch when incidences change in the shared store (effect defined below after fetchData)
 
     // Format date to YYYY-MM-DD for Supabase queries
 
@@ -148,6 +144,26 @@ export function ReportsPage() {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    // Keep a stable ref to the latest fetchData to avoid stale closure in the incidences effect
+    const fetchDataRef = useRef(fetchData);
+    useEffect(() => { fetchDataRef.current = fetchData; });
+
+    // Re-fetch when incidences change in the shared store
+    useEffect(() => {
+        if (incidencesVersion > 0) {
+            fetchDataRef.current();
+        }
+    }, [incidencesVersion]);
+
+    const handleDateSelect = (range: DateRange | undefined) => {
+        setPendingRange(range);
+    };
+
+    const handleApplyDateRange = () => {
+        setDateRange(pendingRange);
+        setCalendarOpen(false);
+    };
 
     // State for delete confirmation (supports single + bulk)
     const [schedulesToDelete, setSchedulesToDelete] = useState<Schedule[]>([]);
@@ -248,7 +264,10 @@ export function ReportsPage() {
 
 
                     {/* Date Picker Range */}
-                    <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                    <Popover open={calendarOpen} onOpenChange={(open) => {
+                        setCalendarOpen(open);
+                        if (open) setPendingRange(dateRange);
+                    }}>
                         <PopoverTrigger asChild>
                             <Button
                                 variant="outline"
@@ -277,12 +296,28 @@ export function ReportsPage() {
                         <PopoverContent className="w-auto p-0" align="end">
                             <Calendar
                                 mode="range"
-                                defaultMonth={dateRange?.from}
-                                selected={dateRange}
-                                onSelect={setDateRange}
+                                defaultMonth={pendingRange?.from}
+                                selected={pendingRange}
+                                onSelect={handleDateSelect}
                                 numberOfMonths={2}
                                 className="[--cell-size:--spacing(7.5)]"
                             />
+                            <div className="flex justify-end border-t p-3 gap-2">
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => setCalendarOpen(false)}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    disabled={!pendingRange?.from}
+                                    onClick={handleApplyDateRange}
+                                >
+                                    Apply
+                                </Button>
+                            </div>
                         </PopoverContent>
                     </Popover>
 
@@ -398,7 +433,6 @@ export function ReportsPage() {
                                 code: false,
                                 minutes: false,
                                 units: false,
-                                status: false,
                                 subtype: false,
                                 department: false,
                                 feedback: false,

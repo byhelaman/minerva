@@ -66,7 +66,7 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
     const form = useForm<IncidenceFormValues>({
         resolver: zodResolver(incidenceFormSchema),
         defaultValues: {
-            status: "Yes",
+            status: "",
             type: "",
             subtype: "",
             substitute: "",
@@ -109,7 +109,7 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
             } else {
                 // Priority 3: Use schedule's existing fields (from Excel/computed) or defaults
                 form.reset({
-                    status: schedule.status || "Yes",
+                    status: schedule.status || "",
                     type: schedule.type || "",
                     subtype: schedule.subtype || "",
                     substitute: schedule.substitute || "",

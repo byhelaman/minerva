@@ -37,7 +37,7 @@ export function SettingsPage() {
     const { t, i18n } = useTranslation();
     const { setTheme } = useTheme();
     const { settings, updateSetting } = useSettings();
-    const { checkForUpdates, update, isChecking, error: updateError } = useUpdater();
+    const { checkForUpdates, isChecking, error: updateError } = useUpdater();
 
     const [appVersion, setAppVersion] = useState<string>("");
     const [tauriVersion, setTauriVersion] = useState<string>("");
@@ -48,13 +48,15 @@ export function SettingsPage() {
     }, []);
 
     const handleCheckUpdates = async () => {
-        await checkForUpdates();
-
-        // Si no hay error y no hay update, estamos al día
-        if (!updateError && !update) {
-            toast.success(t("settings.system.up_to_date"), {
-                description: t("settings.system.up_to_date_desc", { version: appVersion }),
-            });
+        try {
+            const result = await checkForUpdates();
+            if (!result) {
+                toast.success(t("settings.system.up_to_date"), {
+                    description: t("settings.system.up_to_date_desc", { version: appVersion }),
+                });
+            }
+        } catch {
+            // Error toast is handled by the updateError useEffect
         }
     };
 
@@ -177,6 +179,20 @@ export function SettingsPage() {
                                     id="actions-respect-filters"
                                     checked={settings.actionsRespectFilters}
                                     onCheckedChange={(checked) => updateSetting("actionsRespectFilters", checked)}
+                                    className="h-5 w-9 [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
+                                />
+                            </div>
+                            <div className="flex items-center justify-between space-x-2">
+                                <Label htmlFor="disable-pagination" className="flex flex-col items-start">
+                                    <span>{t("settings.appearance.disable_pagination")}</span>
+                                    <span className="font-normal text-xs text-muted-foreground">
+                                        {t("settings.appearance.disable_pagination_desc")}
+                                    </span>
+                                </Label>
+                                <Switch
+                                    id="disable-pagination"
+                                    checked={settings.disablePagination}
+                                    onCheckedChange={(checked) => updateSetting("disablePagination", checked)}
                                     className="h-5 w-9 [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
                                 />
                             </div>

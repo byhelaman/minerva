@@ -39,6 +39,8 @@ interface ZoomState {
 
     _genericBatchAction: (schedules?: Schedule[]) => Promise<{ succeeded: number; failed: number; errors: string[] }>;
 
+    deleteMeeting: (meetingId: string) => Promise<{ success: boolean; error?: string }>;
+
     // Promesa de fetch activa para deduplicación
     _activeFetchPromise: Promise<void> | null;
 
@@ -514,7 +516,43 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
             set({ isExecuting: false });
             return { succeeded: 0, failed: updates.length, errors: [err instanceof Error ? err.message : 'Unknown error'] };
         }
-    }
+    },
+
+    deleteMeeting: async (meetingId: string) => {
+        try {
+            // 1. Delete from Zoom via Edge Function
+            const { error: fnError } = await supabase.functions.invoke('zoom-api', {
+                body: { action: 'delete-meeting', meeting_id: meetingId }
+            });
+
+            if (fnError) {
+                logger.warn('Zoom API delete failed, proceeding with DB deletion:', fnError);
+            }
+
+            // 2. Delete from DB
+            const { error: dbError } = await supabase
+                .from('zoom_meetings')
+                .delete()
+                .eq('meeting_id', meetingId);
+
+            if (dbError) throw dbError;
+
+            // 3. Update local state
+            set(state => ({
+                meetings: state.meetings.filter(m => m.meeting_id !== meetingId),
+                matchResults: state.matchResults.map(r =>
+                    r.meeting_id === meetingId
+                        ? { ...r, meeting_id: undefined, status: 'not_found' as const, reason: 'Meeting deleted' }
+                        : r
+                )
+            }));
+
+            return { success: true };
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : 'Unknown error';
+            return { success: false, error: message };
+        }
+    },
 }));
 
 // ========== Utilidades ==========

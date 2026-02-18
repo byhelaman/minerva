@@ -5,8 +5,9 @@
 -- Avoids the default 1000-row pagination limit of PostgREST.
 -- Depends on 006_schedules_realtime.sql (schedule_entries table).
 --
--- NOTA: Se usa "type IS NOT NULL" como indicador de incidencia,
--- ya que toda incidencia siempre tiene un tipo asignado.
+-- NOTA: Se usa NULLIF(TRIM(type), '') para contar incidencias,
+-- ignorando tanto NULL como strings vacíos ''.
+-- Toda incidencia real siempre tiene un tipo asignado (no vacío).
 -- ACCESO: Requiere permiso 'reports.view'.
 
 -- =============================================
@@ -29,7 +30,7 @@ BEGIN
     SELECT
         se.date,
         COUNT(*)::BIGINT AS total_classes,
-        COUNT(se.type)::BIGINT AS incidences
+        COUNT(NULLIF(TRIM(se.type), ''))::BIGINT AS incidences
     FROM public.schedule_entries se
     WHERE se.date >= p_start_date
       AND se.date <= p_end_date
@@ -60,10 +61,10 @@ BEGIN
     SELECT
         TO_CHAR(TO_DATE(se.date, 'YYYY-MM-DD'), 'YYYY-MM') AS month,
         COUNT(*)::BIGINT AS total,
-        COUNT(se.type)::BIGINT AS incidences,
+        COUNT(NULLIF(TRIM(se.type), ''))::BIGINT AS incidences,
         ROUND(
             CASE WHEN COUNT(*) > 0
-                THEN (COUNT(se.type)::NUMERIC / COUNT(*)::NUMERIC) * 100
+                THEN (COUNT(NULLIF(TRIM(se.type), ''))::NUMERIC / COUNT(*)::NUMERIC) * 100
                 ELSE 0
             END, 1
         ) AS rate
@@ -100,7 +101,7 @@ BEGIN
     FROM public.schedule_entries se
     WHERE se.date >= p_start_date
       AND se.date <= p_end_date
-      AND se.type IS NOT NULL
+      AND NULLIF(TRIM(se.type), '') IS NOT NULL
     GROUP BY TRIM(se.type)
     ORDER BY count DESC;
 END;
@@ -129,10 +130,10 @@ BEGIN
     RETURN QUERY
     SELECT 'current' AS period,
         COUNT(*)::BIGINT AS total,
-        COUNT(se.type)::BIGINT AS incidences,
+        COUNT(NULLIF(TRIM(se.type), ''))::BIGINT AS incidences,
         ROUND(
             CASE WHEN COUNT(*) > 0
-                THEN (COUNT(se.type)::NUMERIC / COUNT(*)::NUMERIC) * 100
+                THEN (COUNT(NULLIF(TRIM(se.type), ''))::NUMERIC / COUNT(*)::NUMERIC) * 100
                 ELSE 0
             END, 1
         ) AS rate
@@ -143,10 +144,10 @@ BEGIN
 
     SELECT 'previous' AS period,
         COUNT(*)::BIGINT AS total,
-        COUNT(se.type)::BIGINT AS incidences,
+        COUNT(NULLIF(TRIM(se.type), ''))::BIGINT AS incidences,
         ROUND(
             CASE WHEN COUNT(*) > 0
-                THEN (COUNT(se.type)::NUMERIC / COUNT(*)::NUMERIC) * 100
+                THEN (COUNT(NULLIF(TRIM(se.type), ''))::NUMERIC / COUNT(*)::NUMERIC) * 100
                 ELSE 0
             END, 1
         ) AS rate
@@ -183,7 +184,7 @@ BEGIN
             ELSE UPPER(TRIM(se.branch))
         END AS branch,
         COUNT(*)::BIGINT AS total_classes,
-        COUNT(se.type)::BIGINT AS incidences
+        COUNT(NULLIF(TRIM(se.type), ''))::BIGINT AS incidences
     FROM public.schedule_entries se
     WHERE se.date >= p_start_date
       AND se.date <= p_end_date

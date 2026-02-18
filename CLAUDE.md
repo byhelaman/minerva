@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Minerva v2 is a **Tauri 2 desktop app** (Rust + React 19 + Vite 7) for managing educational schedules with Zoom meeting matching and Microsoft OneDrive integration. Backend is Supabase (PostgreSQL + Deno Edge Functions). The app supports English, Spanish, and French (i18next with `src/locales/`).
 
-**Current version:** 0.2.1
+**Current version:** 0.2.3
 
 ## Commands
 
@@ -128,7 +128,7 @@ Three-tier search (exact normalized → Fuse.js fuzzy → token set fallback) wi
 
 ### Database Migrations (`supabase/migrations/`)
 
-8 migration files (001–008). Run via Supabase SQL Editor in order. 001–006 are consolidated; 007 (`delete_account`) and 008 (`statistics_rpc`) are standalone.
+9 migration files (001–009). Run via Supabase SQL Editor in order. 001–006 are consolidated; 007 (`delete_account`), 008 (`statistics_rpc`), and 009 (`reports_rpc`) are standalone.
 
 Key tables: `profiles`, `roles`, `permissions`, `schedule_entries`, `published_schedules`, `zoom_users`, `zoom_meetings`, `zoom_account`, `microsoft_account`, `webhook_events`, `bug_reports`.
 

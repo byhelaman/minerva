@@ -1,14 +1,18 @@
 import { type ColumnDef } from "@tanstack/react-table";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import type { Schedule } from "@schedules/types";
 import { DataTableColumnHeader } from "./data-table-column-header";
 import { DataTableRowActions } from "./data-table-row-actions";
 import { formatDateForDisplay } from "@/lib/date-utils";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle } from "lucide-react";
+import { toast } from "sonner";
+import { useScheduleDataStore } from "@/features/schedules/stores/useScheduleDataStore";
 
 export const getScheduleColumns = (
-    onDelete?: (s: Schedule) => void
+    onDelete?: (s: Schedule) => void,
+    canManage: boolean = false,
 ): ColumnDef<Schedule>[] => [
         {
             id: "select",
@@ -130,6 +134,47 @@ export const getScheduleColumns = (
                 <DataTableColumnHeader column={column} title="Units" className="justify-center" />
             ),
             cell: ({ row }) => <div className="w-12.5 mx-auto text-center">{row.getValue("units")}</div>,
+        },
+        {
+            id: "status",
+            size: 70,
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title="Status" className="justify-center" />
+            ),
+            cell: ({ row }) => {
+                const schedule = row.original;
+                const isYes = schedule.status === "Yes";
+
+                const handleToggle = async (checked: boolean) => {
+                    const { updateIncidence } = useScheduleDataStore.getState();
+                    try {
+                        await updateIncidence({
+                            ...schedule,
+                            status: checked ? "Yes" : "No",
+                        });
+                    } catch (error: unknown) {
+                        const msg = error instanceof Error ? error.message : "";
+                        if (msg === "SCHEDULE_NOT_PUBLISHED") {
+                            toast.error("Schedule not in database", { description: "Publish the schedule first to mark class status" });
+                        } else {
+                            toast.error("Failed to update status");
+                        }
+                    }
+                };
+
+                return (
+                    <div className="flex justify-center">
+                        <Switch
+                            checked={isYes}
+                            onCheckedChange={handleToggle}
+                            disabled={!canManage}
+                            className="h-5 w-9 [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
+                        />
+                    </div>
+                );
+            },
+            enableSorting: false,
+            enableHiding: true,
         },
         {
             id: "actions",

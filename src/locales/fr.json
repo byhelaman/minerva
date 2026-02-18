@@ -65,7 +65,9 @@
             "theme_dark": "Sombre",
             "theme_system": "Système",
             "respect_filters": "Les actions respectent les filtres",
-            "respect_filters_desc": "Appliquer les actions (Exporter, Copier) uniquement aux données filtrées."
+            "respect_filters_desc": "Appliquer les actions (Exporter, Copier) uniquement aux données filtrées.",
+            "disable_pagination": "Afficher toutes les lignes",
+            "disable_pagination_desc": "Désactiver la pagination et afficher toutes les lignes d'un coup."
         },
         "notifications": {
             "title": "Notifications",

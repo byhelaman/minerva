@@ -8,7 +8,7 @@ interface UpdateProgress {
 }
 
 interface UseUpdaterReturn {
-    checkForUpdates: () => Promise<void>;
+    checkForUpdates: () => Promise<Update | null>;
     downloadAndInstall: () => Promise<void>;
     closeUpdateDialog: () => void;
     update: Update | null;
@@ -25,15 +25,18 @@ export function useUpdater(): UseUpdaterReturn {
     const [progress, setProgress] = useState<UpdateProgress | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const checkForUpdates = useCallback(async () => {
+    const checkForUpdates = useCallback(async (): Promise<Update | null> => {
         setIsChecking(true);
         setError(null);
         try {
             const result = await check();
             setUpdate(result);
+            return result;
         } catch (err) {
             console.error('Error checking for updates:', err);
-            setError(err instanceof Error ? err.message : 'Error checking for updates');
+            const msg = err instanceof Error ? err.message : 'Error checking for updates';
+            setError(msg);
+            throw new Error(msg);
         } finally {
             setIsChecking(false);
         }

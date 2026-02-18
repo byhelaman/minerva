@@ -38,6 +38,7 @@ interface ScheduleSyncState {
     resetCurrentVersion: () => Promise<void>;
     resetSyncState: () => void;
     getLatestCloudVersion: (date?: string | null) => Promise<{ exists: boolean; data?: PublishedSchedule; error?: string }>;
+    getCloudVersions: () => Promise<{ data: PublishedSchedule[]; error?: string }>;
 }
 
 // Helper to get initial state
@@ -342,6 +343,22 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
             isPublishing: false,
             isSyncing: false
         });
+    },
+
+    getCloudVersions: async () => {
+        try {
+            const { data, error } = await supabase
+                .from('published_schedules')
+                .select('id, schedule_date, updated_at, entries_count, published_by')
+                .order('schedule_date', { ascending: false })
+                .limit(50);
+
+            if (error) throw error;
+            return { data: (data ?? []) as PublishedSchedule[] };
+        } catch (e: any) {
+            console.error("Error fetching cloud versions:", e);
+            return { data: [], error: e.message };
+        }
     },
 
     getLatestCloudVersion: async (date?: string | null) => {

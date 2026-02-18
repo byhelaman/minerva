@@ -43,7 +43,7 @@ export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: Incid
         form.clearErrors();
         // Toggle: if clicking the same preset, clear it
         if (selectedPreset === preset.label) {
-            form.setValue("status", "Yes", { shouldValidate: true });
+            form.setValue("status", "", { shouldValidate: true });
             form.setValue("type", "", { shouldValidate: true });
             form.setValue("subtype", "", { shouldValidate: true });
             form.setValue("description", "", { shouldValidate: true });
@@ -80,7 +80,7 @@ export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: Incid
                                         }}
                                         className="h-[20px] w-[36px] [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
                                     />
-                                    <span className="text-sm">{field.value || "No"}</span>
+                                    <span className="text-sm text-muted-foreground">{field.value}</span>
                                 </div>
                             </FormControl>
                         </FormItem>

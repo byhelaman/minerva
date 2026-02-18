@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { secureSaveFile } from "@/lib/secure-export";
 import { type Table } from "@tanstack/react-table";
-import { ChevronDown, User, CalendarCheck, Download, Save, Trash2, CloudUpload, CloudDownload, Loader2 } from "lucide-react";
+import { ChevronDown, User, CalendarCheck, Download, Save, Trash2, CloudUpload, CloudDownload, Loader2, Check } from "lucide-react";
 import { utils, write } from "xlsx";
 import { toast } from "sonner";
 import { writeTextFile, BaseDirectory } from "@tauri-apps/plugin-fs";
@@ -27,6 +27,15 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { formatTimeTo12Hour } from "@schedules/utils/time-utils";
 import type { Schedule } from "@schedules/types";
 import { PublishedSchedule } from "@/features/schedules/types";
@@ -61,33 +70,35 @@ export function ToolbarActions<TData>({
 
     // Settings: Actions Respect Filters
     const { settings } = useSettings();
-    const { getLatestCloudVersion, loadPublishedSchedule } = useScheduleSyncStore();
+    const { getCloudVersions, loadPublishedSchedule } = useScheduleSyncStore();
 
-    // State for Restore Confirmation
-    const [showRestoreDialog, setShowRestoreDialog] = useState(false);
-    const [pendingRestoreData, setPendingRestoreData] = useState<PublishedSchedule | null>(null);
+    // State for version picker dialog
+    const [showVersionsDialog, setShowVersionsDialog] = useState(false);
+    const [cloudVersions, setCloudVersions] = useState<PublishedSchedule[]>([]);
+    const [selectedVersion, setSelectedVersion] = useState<PublishedSchedule | null>(null);
     const [isCheckingCloud, setIsCheckingCloud] = useState(false);
 
     const handleCheckCloud = async () => {
         setIsCheckingCloud(true);
-        const toastId = toast.loading("Checking cloud version...");
+        const toastId = toast.loading("Checking cloud versions...");
 
         try {
-            const { exists, data, error } = await getLatestCloudVersion();
+            const { data, error } = await getCloudVersions();
 
             if (error) {
                 toast.error("Error checking cloud: " + error, { id: toastId });
                 return;
             }
 
-            if (!exists || !data) {
-                toast.error("No published version found", { id: toastId });
+            if (data.length === 0) {
+                toast.error("No published versions found", { id: toastId });
                 return;
             }
 
             toast.dismiss(toastId);
-            setPendingRestoreData(data);
-            setShowRestoreDialog(true);
+            setCloudVersions(data);
+            setSelectedVersion(data[0]); // pre-select the most recent
+            setShowVersionsDialog(true);
 
         } catch (e) {
             console.error(e);
@@ -98,9 +109,10 @@ export function ToolbarActions<TData>({
     };
 
     const handleConfirmRestore = () => {
-        if (pendingRestoreData) {
-            loadPublishedSchedule(pendingRestoreData);
-            setShowRestoreDialog(false);
+        if (selectedVersion) {
+            loadPublishedSchedule(selectedVersion);
+            setShowVersionsDialog(false);
+            setSelectedVersion(null);
         }
     };
 
@@ -301,27 +313,46 @@ export function ToolbarActions<TData>({
                 </AlertDialogContent>
             </AlertDialog>
 
-            <AlertDialog open={showRestoreDialog} onOpenChange={setShowRestoreDialog}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Restore Schedule from Cloud?</AlertDialogTitle>
-                        <AlertDialogDescription asChild className="space-y-2">
-                            <div>
-                                <div>A saved schedule with a date was found. {formatDateForDisplay(pendingRestoreData?.schedule_date)}. <br />
-                                    Includes {pendingRestoreData?.entries_count} elements.
+            <Dialog open={showVersionsDialog} onOpenChange={setShowVersionsDialog}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Select Cloud Version</DialogTitle>
+                        <DialogDescription>
+                            Choose a published schedule to load. This will replace your current table content.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex flex-col gap-1 max-h-72 overflow-y-auto py-1 pr-1">
+                        {cloudVersions.map((version) => (
+                            <button
+                                key={version.id}
+                                onClick={() => setSelectedVersion(version)}
+                                className={cn(
+                                    "flex items-center justify-between rounded-md border px-3 py-2.5 text-sm text-left transition-colors",
+                                    selectedVersion?.id === version.id
+                                        ? "border-primary bg-primary/5"
+                                        : "border-border hover:bg-muted/50"
+                                )}
+                            >
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="font-medium">{formatDateForDisplay(version.schedule_date)}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                        {version.entries_count} entries · updated {new Date(version.updated_at).toLocaleString()}
+                                    </span>
                                 </div>
-                                <span>This will replace your current table content.</span>
-                            </div>
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleConfirmRestore}>
+                                {selectedVersion?.id === version.id && (
+                                    <Check className="h-4 w-4 text-primary shrink-0" />
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowVersionsDialog(false)}>Cancel</Button>
+                        <Button onClick={handleConfirmRestore} disabled={!selectedVersion}>
                             Download & Replace
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }

@@ -17,6 +17,7 @@ import { CreateLinkModal } from "./modals/creation/CreateLinkModal";
 import { AssignLinkModal } from "./modals/assignment/AssignLinkModal";
 import { useZoomStore } from "@/features/matching/stores/useZoomStore";
 import { MatchingService } from "@/features/matching/services/matcher";
+import { useAuth } from "@/components/auth-provider";
 // Atomic Stores
 import { useScheduleDataStore } from "@/features/schedules/stores/useScheduleDataStore";
 import { useScheduleUIStore } from "@/features/schedules/stores/useScheduleUIStore";
@@ -36,6 +37,10 @@ export function ScheduleDashboard() {
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
     const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+    // Auth
+    const { profile } = useAuth();
+    const canManage = (profile?.hierarchy_level ?? 0) >= 80;
 
     // Store Access
     const { baseSchedules, setBaseSchedules, incidences, getComputedSchedules } = useScheduleDataStore();
@@ -186,6 +191,14 @@ export function ScheduleDashboard() {
             }
 
             setActivePrograms(matchedPrograms);
+
+            // Auto-mark matched classes as "Yes" only if status is currently null
+            const { updateIncidence } = useScheduleDataStore.getState();
+            for (const s of filteredSchedules) {
+                if (matchedPrograms.has(s.program) && !s.status) {
+                    updateIncidence({ ...s, status: "Yes" }).catch(() => { /* not published yet */ });
+                }
+            }
         } catch (error) {
             console.error("Error in live mode:", error);
             toast.error("Failed to fetch live meetings");
@@ -193,6 +206,51 @@ export function ScheduleDashboard() {
             setIsLiveLoading(false);
         }
     }, [meetings, users, schedules, fetchActiveMeetings]);
+
+    // Live auto-refresh: every minute update time filter and re-run local matching
+    useEffect(() => {
+        if (!showLiveMode) return;
+
+        const tick = () => {
+            const now = new Date();
+            const currentHour = now.getHours().toString().padStart(2, '0');
+            const currentDate = formatDateToISO(now);
+
+            setLiveTimeFilter(currentHour);
+            setLiveDateFilter(currentDate);
+
+            // Re-run matching with cached data (no API call)
+            const { activeMeetingIds, meetings: cachedMeetings, users: cachedUsers } = useZoomStore.getState();
+            if (activeMeetingIds.length === 0) { setActivePrograms(new Set()); return; }
+
+            const activeMeetings = cachedMeetings.filter(m => activeMeetingIds.includes(m.meeting_id));
+            if (activeMeetings.length === 0) { setActivePrograms(new Set()); return; }
+
+            const currentSchedules = useScheduleDataStore.getState().getComputedSchedules();
+            const filtered = currentSchedules.filter(s =>
+                s.date === currentDate && s.start_time?.substring(0, 2) === currentHour
+            );
+
+            const matcher = new MatchingService(activeMeetings, cachedUsers);
+            const matched = new Set<string>();
+            for (const s of filtered) {
+                const result = matcher.findMatchByTopic(s.program, { ignoreLevelMismatch: true });
+                if (result.status !== 'not_found' && result.matchedCandidate) matched.add(s.program);
+            }
+            setActivePrograms(matched);
+
+            // Auto-mark matched classes as "Yes" only if status is currently null
+            const { updateIncidence } = useScheduleDataStore.getState();
+            for (const s of filtered) {
+                if (matched.has(s.program) && !s.status) {
+                    updateIncidence({ ...s, status: "Yes" }).catch(() => { /* not published yet */ });
+                }
+            }
+        };
+
+        const interval = setInterval(tick, 60_000);
+        return () => clearInterval(interval);
+    }, [showLiveMode]);
 
     const handleUploadComplete = (newData: Schedule[]) => {
         const internalKeys = new Set<string>();
@@ -285,8 +343,8 @@ export function ScheduleDashboard() {
     };
 
     const columns = useMemo(
-        () => getScheduleColumns(handleDeleteSchedule),
-        [baseSchedules],
+        () => getScheduleColumns(handleDeleteSchedule, canManage),
+        [baseSchedules, canManage],
     );
 
     return (
