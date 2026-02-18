@@ -82,6 +82,7 @@ interface ScheduleDataTableProps<TData, TValue> {
     customActionItems?: React.ReactNode;
     customFilterItems?: React.ReactNode;
     hideDefaultActions?: boolean;
+    customExportFn?: (data: TData[]) => Promise<void>;
     onAddRow?: () => void;
     onBulkDelete?: (rows: TData[]) => void;
     onBulkCopy?: (rows: TData[]) => void;
@@ -122,6 +123,19 @@ export function ScheduleDataTable<TData, TValue>({
     const [sorting, setSorting] = React.useState<SortingState>([]);
     const [globalFilter, setGlobalFilter] = React.useState("");
     const [showOverlapsOnly, setShowOverlapsOnly] = React.useState(false);
+
+    // Controlled pagination state — reacts to disablePagination setting changes
+    const [pagination, setPagination] = React.useState({
+        pageIndex: 0,
+        pageSize: disablePagination ? data.length || 1 : (props.initialPageSize || 25),
+    });
+
+    React.useEffect(() => {
+        setPagination(prev => ({
+            ...prev,
+            pageSize: disablePagination ? data.length || 1 : (props.initialPageSize || 25),
+        }));
+    }, [disablePagination, data.length, props.initialPageSize]);
 
     // Aplicar/quitar filtros de tiempo y fecha cuando Live mode cambia
     React.useEffect(() => {
@@ -195,16 +209,12 @@ export function ScheduleDataTable<TData, TValue>({
         // Usar ID único por fila para row selection (recomendación oficial de TanStack)
         getRowId: (row) => (row as { id?: string }).id || String(tableData.indexOf(row)),
         state: {
+            pagination,
             sorting,
             columnVisibility,
             rowSelection,
             columnFilters,
             globalFilter,
-        },
-        initialState: {
-            pagination: {
-                pageSize: disablePagination ? 100000 : (props.initialPageSize || 25),
-            },
         },
         enableRowSelection: (() => {
             const selectionProp = props.enableRowSelection;
@@ -215,6 +225,7 @@ export function ScheduleDataTable<TData, TValue>({
             return selectionProp;
         })(),
         onRowSelectionChange: setRowSelection,
+        onPaginationChange: setPagination,
         onSortingChange: setSorting,
         onColumnFiltersChange: setColumnFilters,
         onColumnVisibilityChange: setColumnVisibility,
@@ -361,6 +372,7 @@ export function ScheduleDataTable<TData, TValue>({
                 customActionItems={props.customActionItems}
                 customFilterItems={props.customFilterItems}
                 hideDefaultActions={props.hideDefaultActions}
+                customExportFn={props.customExportFn}
                 onAddRow={props.onAddRow}
             />
 

@@ -327,6 +327,7 @@ export const scheduleEntriesService = {
             .from('schedule_entries')
             .select('*')
             .not('type', 'is', null)
+            .neq('type', '')
             .order('date', { ascending: true })
             .order('start_time', { ascending: true });
 

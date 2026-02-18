@@ -36,6 +36,7 @@ interface DataTableToolbarProps<TData> {
     showTime?: boolean;
     customFilterItems?: React.ReactNode;
     onAddRow?: () => void;
+    customExportFn?: (data: TData[]) => Promise<void>;
 }
 
 export function DataTableToolbar<TData>({
@@ -67,6 +68,7 @@ export function DataTableToolbar<TData>({
     showTime,
     customFilterItems,
     onAddRow,
+    customExportFn,
 }: DataTableToolbarProps<TData>) {
 
     return (
@@ -155,6 +157,7 @@ export function DataTableToolbar<TData>({
                             canPublish={canPublish}
                             customActionItems={customActionItems}
                             hideDefaultActions={hideDefaultActions}
+                            customExportFn={customExportFn}
                         />
                     )}
                 </div>

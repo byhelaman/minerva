@@ -5,7 +5,7 @@ import { getDataSourceColumns } from "./data-source-columns";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Loader2, CloudUpload, RefreshCcw, ChevronDown, CalendarIcon, AlertCircle, CloudDownload, Download } from "lucide-react";
+import { Loader2, CloudUpload, ChevronDown, CalendarIcon, AlertCircle, FileInput, FileOutput } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -194,11 +194,10 @@ export function ReportsPage() {
         }
     };
 
-    const hasData = tableData.length > 0;
-    const hasSchedules = hasData;
     const { settings } = useSettings();
 
-    const onExportExcel = async () => {
+    // Custom export: receives data already filtered by getActionData() (respects actionsRespectFilters)
+    const handleExportData = async (data: Schedule[]) => {
         try {
             // Helper to prevent CSV Injection
             const sanitize = (val: unknown): unknown => {
@@ -208,7 +207,7 @@ export function ReportsPage() {
                 return val;
             };
 
-            const dataToExport = tableData.map((item) => {
+            const dataToExport = data.map((item) => {
                 return {
                     ...item,
                     instructor: sanitize(item.instructor) as string,
@@ -260,9 +259,6 @@ export function ReportsPage() {
                     <p className="text-muted-foreground text-sm">View and edit daily reports</p>
                 </div>
                 <div className="flex items-center gap-3">
-
-
-
                     {/* Date Picker Range */}
                     <Popover open={calendarOpen} onOpenChange={(open) => {
                         setCalendarOpen(open);
@@ -373,10 +369,16 @@ export function ReportsPage() {
                         <ScheduleDataTable
                             columns={columns}
                             data={tableData}
+                            onRefresh={() => {
+                                reportCache = null;
+                                fetchData();
+                            }}
+                            disableRefresh={isLoading}
                             hideFilters={true}
                             hideUpload={true}
                             hideOverlaps={true}
                             hideDefaultActions={true}
+                            customExportFn={handleExportData as (data: unknown[]) => Promise<void>}
                             onBulkDelete={(rows) => setSchedulesToDelete(rows as Schedule[])}
                             customFilterItems={
                                 reportIncidences.length > 0 ? (
@@ -401,29 +403,19 @@ export function ReportsPage() {
                                             Import Data
                                         </DropdownMenuItem>
                                     </RequirePermission>
-                                    <DropdownMenuItem onClick={onExportExcel} disabled={!hasSchedules}>
-                                        <Download />
-                                        Export Data
-                                    </DropdownMenuItem>
                                     <RequirePermission permission="reports.manage">
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem onClick={() => setConfirmSyncOpen(true)}>
-                                            <CloudUpload />
+                                            <FileInput />
                                             Push to Excel
                                         </DropdownMenuItem>
                                         <DropdownMenuItem onClick={() => setSyncFromExcelModalOpen(true)}>
-                                            <CloudDownload />
+                                            <FileOutput />
                                             Pull from Excel
                                         </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
                                     </RequirePermission>
 
-                                    <RequirePermission permission="reports.manage">
-                                        <DropdownMenuItem onClick={() => { reportCache = null; fetchData(); }} disabled={isLoading}>
-                                            <RefreshCcw className={cn(isLoading && "animate-spin")} />
-                                            Refresh Table
-                                        </DropdownMenuItem>
-                                    </RequirePermission>
+
                                 </>
                             }
                             initialColumnVisibility={{

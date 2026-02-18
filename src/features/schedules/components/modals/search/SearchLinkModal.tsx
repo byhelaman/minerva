@@ -31,27 +31,39 @@ interface MeetingRow {
 
 
 export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
-    const { meetings, users, isLoadingData, fetchZoomData, deleteMeeting } = useZoomStore();
-    const { profile } = useAuth();
+    const { meetings, users, isLoadingData, fetchZoomData, deleteMeeting, deleteMeetings } = useZoomStore();
+    const { hasPermission } = useAuth();
     const [isRefreshing, setIsRefreshing] = useState(false);
-    const [meetingToDelete, setMeetingToDelete] = useState<MeetingRow | null>(null);
+    const [meetingsToDelete, setMeetingsToDelete] = useState<MeetingRow[]>([]);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    const canDelete = (profile?.hierarchy_level ?? 0) >= 80;
+    const canDelete = hasPermission('meetings.delete');
 
     const handleConfirmDelete = async () => {
-        if (!meetingToDelete) return;
+        if (meetingsToDelete.length === 0) return;
         setIsDeleting(true);
         try {
-            const { success, error } = await deleteMeeting(meetingToDelete.meeting_id);
-            if (success) {
-                toast.success("Meeting deleted");
+            if (meetingsToDelete.length === 1) {
+                // Single delete — use original function
+                const { success, error } = await deleteMeeting(meetingsToDelete[0].meeting_id);
+                if (success) {
+                    toast.success("Meeting deleted");
+                } else {
+                    toast.error("Failed to delete meeting", { description: error });
+                }
             } else {
-                toast.error("Failed to delete meeting", { description: error });
+                // Batch delete
+                const ids = meetingsToDelete.map(m => m.meeting_id);
+                const { succeeded, failed } = await deleteMeetings(ids);
+                if (failed === 0) {
+                    toast.success(`${succeeded} meetings deleted`);
+                } else {
+                    toast.warning(`${succeeded} deleted, ${failed} failed`);
+                }
             }
         } finally {
             setIsDeleting(false);
-            setMeetingToDelete(null);
+            setMeetingsToDelete([]);
         }
     };
 
@@ -60,14 +72,27 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
         {
             id: "select",
             size: 36,
-            header: () => (
+            header: ({ table }) => (
                 <div className="flex justify-center items-center mb-1">
-                    <Checkbox disabled aria-label="Select all" className="translate-y-0.5" />
+                    <Checkbox
+                        checked={
+                            table.getIsAllPageRowsSelected() ||
+                            (table.getIsSomePageRowsSelected() && "indeterminate")
+                        }
+                        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+                        aria-label="Select all"
+                        className="translate-y-0.5"
+                    />
                 </div>
             ),
-            cell: () => (
+            cell: ({ row }) => (
                 <div className="flex justify-center">
-                    <Checkbox disabled aria-label="Select row" className="translate-y-0.5 mb-1" />
+                    <Checkbox
+                        checked={row.getIsSelected()}
+                        onCheckedChange={(value) => row.toggleSelected(!!value)}
+                        aria-label="Select row"
+                        className="translate-y-0.5 mb-1"
+                    />
                 </div>
             ),
             enableSorting: false,
@@ -158,7 +183,7 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem
                                             variant="destructive"
-                                            onClick={() => setMeetingToDelete(meeting)}
+                                            onClick={() => setMeetingsToDelete([meeting])}
                                         >
                                             Delete
                                         </DropdownMenuItem>
@@ -252,9 +277,10 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
                                 hideUpload
                                 hideActions
                                 hideOverlaps
-                                enableRowSelection={false}
+
                                 initialPageSize={100}
                                 onBulkCopy={handleBulkCopy}
+                                onBulkDelete={canDelete ? (rows) => setMeetingsToDelete(rows as MeetingRow[]) : undefined}
                             />
                         )}
                     </div>
@@ -265,17 +291,23 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
                 </DialogContent>
             </Dialog>
 
-            {/* Delete Meeting Confirmation */}
-            <AlertDialog open={!!meetingToDelete} onOpenChange={(open) => !open && setMeetingToDelete(null)}>
+            {/* Delete Meeting Confirmation (single + bulk) */}
+            <AlertDialog open={meetingsToDelete.length > 0} onOpenChange={(open) => !open && setMeetingsToDelete([])}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Meeting?</AlertDialogTitle>
+                        <AlertDialogTitle>
+                            {meetingsToDelete.length === 1 ? "Delete Meeting?" : `Delete ${meetingsToDelete.length} meetings?`}
+                        </AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will permanently delete the meeting{" "}
-                            <span className="font-semibold text-foreground">
-                                {meetingToDelete?.topic}
-                            </span>{" "}
-                            from Zoom and from the database. This action cannot be undone.
+                            {meetingsToDelete.length === 1 ? (
+                                <>This will permanently delete the meeting{" "}
+                                    <span className="font-semibold text-foreground">
+                                        {meetingsToDelete[0]?.topic}
+                                    </span>{" "}
+                                    from Zoom and from the database. This action cannot be undone.</>
+                            ) : (
+                                <>This will permanently delete {meetingsToDelete.length} meetings from Zoom and from the database. This action cannot be undone.</>
+                            )}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

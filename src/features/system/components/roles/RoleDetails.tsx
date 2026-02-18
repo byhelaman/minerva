@@ -59,12 +59,12 @@ export function RoleDetails({
                     PERMISSIONS ({rolePermissions.length})
                 </p>
                 {isLoadingPerms ? (
-                    <div className="flex items-center justify-center py-4 h-[300px]">
+                    <div className="flex items-center justify-center py-4 h-75">
                         <Loader2 className="size-4 animate-spin text-muted-foreground" />
                     </div>
                 ) : canEditPermissions ? (
                     <ScrollArea>
-                        <div className="grid grid-cols-2 gap-1 h-[300px]">
+                        <div className="grid grid-cols-2 gap-1 h-75 pr-4">
                             {permissions.map((perm) => {
                                 const hasPerm = rolePermissions.includes(perm.name);
                                 const isSaving = isSavingPerm === perm.name;
@@ -95,7 +95,7 @@ export function RoleDetails({
                     </ScrollArea>
                 ) : (
                     <ScrollArea>
-                        <div className="space-y-2 h-[300px]">
+                        <div className="space-y-2 h-75 pr-4">
                             {rolePermissions.map((permName) => {
                                 const perm = permissions.find(p => p.name === permName);
                                 return (

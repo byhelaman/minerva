@@ -94,6 +94,8 @@ export function SettingsPage() {
             updateSetting("openAfterExport", true);
             updateSetting("clearScheduleOnLoad", false);
             updateSetting("realtimeNotifications", true);
+            updateSetting("autoSaveInterval", 3000);
+            updateSetting("disablePagination", false);
             setTheme("system"); // Aplicar reinicio de tema
 
             if (filesDeleted > 0) {

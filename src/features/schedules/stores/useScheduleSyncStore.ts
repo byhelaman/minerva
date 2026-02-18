@@ -189,19 +189,8 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
             // 2. Publish consolidated incidences file
             const { publishIncidencesToExcel } = await import('../services/microsoft-publisher');
             if (msConfig.incidencesFileId) {
-                const { baseSchedules } = useScheduleDataStore.getState();
-                let startDate = targetDate;
-                let endDate: string | undefined = endDateArg;
-
-                // Only derive from baseSchedules if no explicit end date is provided
-                if (!endDate && baseSchedules.length > 0) {
-                    const dates = baseSchedules.map(s => s.date).sort();
-                    startDate = dates[0]; // Earliest
-                    const last = dates[dates.length - 1];
-                    if (last !== startDate) {
-                        endDate = last; // Latest
-                    }
-                }
+                const startDate = targetDate;
+                const endDate: string | undefined = endDateArg;
 
                 await publishIncidencesToExcel(
                     msConfig,

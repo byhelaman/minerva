@@ -40,6 +40,7 @@ interface ZoomState {
     _genericBatchAction: (schedules?: Schedule[]) => Promise<{ succeeded: number; failed: number; errors: string[] }>;
 
     deleteMeeting: (meetingId: string) => Promise<{ success: boolean; error?: string }>;
+    deleteMeetings: (meetingIds: string[]) => Promise<{ succeeded: number; failed: number; errors: string[] }>;
 
     // Promesa de fetch activa para deduplicación
     _activeFetchPromise: Promise<void> | null;
@@ -520,24 +521,20 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
 
     deleteMeeting: async (meetingId: string) => {
         try {
-            // 1. Delete from Zoom via Edge Function
-            const { error: fnError } = await supabase.functions.invoke('zoom-api', {
+            // Delete from Zoom + DB via Edge Function (service role bypasses RLS)
+            const { data, error: fnError } = await supabase.functions.invoke('zoom-api', {
                 body: { action: 'delete-meeting', meeting_id: meetingId }
             });
 
             if (fnError) {
-                logger.warn('Zoom API delete failed, proceeding with DB deletion:', fnError);
+                throw new Error(fnError.message || 'Edge function error');
             }
 
-            // 2. Delete from DB
-            const { error: dbError } = await supabase
-                .from('zoom_meetings')
-                .delete()
-                .eq('meeting_id', meetingId);
+            if (data && !data.success) {
+                throw new Error(data.error || 'Delete failed');
+            }
 
-            if (dbError) throw dbError;
-
-            // 3. Update local state
+            // Update local state
             set(state => ({
                 meetings: state.meetings.filter(m => m.meeting_id !== meetingId),
                 matchResults: state.matchResults.map(r =>
@@ -551,6 +548,43 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
         } catch (e: unknown) {
             const message = e instanceof Error ? e.message : 'Unknown error';
             return { success: false, error: message };
+        }
+    },
+
+    deleteMeetings: async (meetingIds: string[]) => {
+        if (meetingIds.length === 0) {
+            return { succeeded: 0, failed: 0, errors: [] };
+        }
+
+        try {
+            // Batch delete from Zoom + DB via edge function (service role bypasses RLS)
+            const requests = meetingIds.map(id => ({
+                action: 'delete' as const,
+                meeting_id: id,
+                schedule_for: '',
+            }));
+
+            const result = await processBatchChunks(requests);
+
+            // Update local state with succeeded deletions
+            const succeededIds = result.results
+                .filter(r => r.success)
+                .map(r => r.meeting_id);
+
+            const deletedSet = new Set(succeededIds);
+            set(state => ({
+                meetings: state.meetings.filter(m => !deletedSet.has(m.meeting_id)),
+                matchResults: state.matchResults.map(r =>
+                    r.meeting_id && deletedSet.has(r.meeting_id)
+                        ? { ...r, meeting_id: undefined, status: 'not_found' as const, reason: 'Meeting deleted' }
+                        : r
+                )
+            }));
+
+            return { succeeded: result.succeeded, failed: result.failed, errors: result.errors };
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : 'Unknown error';
+            return { succeeded: 0, failed: meetingIds.length, errors: [message] };
         }
     },
 }));

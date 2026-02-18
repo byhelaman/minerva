@@ -51,6 +51,7 @@ interface ToolbarActionsProps<TData> {
     canPublish?: boolean;
     customActionItems?: React.ReactNode;
     hideDefaultActions?: boolean;
+    customExportFn?: (data: TData[]) => Promise<void>;
 }
 
 export function ToolbarActions<TData>({
@@ -62,6 +63,7 @@ export function ToolbarActions<TData>({
     canPublish = false,
     customActionItems,
     hideDefaultActions = false,
+    customExportFn,
 }: ToolbarActionsProps<TData>) {
     const hasSchedules = table.getFilteredRowModel().rows.length > 0;
 
@@ -164,9 +166,14 @@ export function ToolbarActions<TData>({
     };
 
     const onExportExcel = async () => {
-        try {
-            const data = getActionData();
+        const data = getActionData();
 
+        // If a custom export function is provided, delegate to it
+        if (customExportFn) {
+            return customExportFn(data as TData[]);
+        }
+
+        try {
             // Helper to prevent CSV Injection
             const sanitize = (val: unknown): unknown => {
                 if (typeof val === 'string' && /^[=+\-@]/.test(val)) {
@@ -211,8 +218,6 @@ export function ToolbarActions<TData>({
             if (saved) {
                 toast.success("Schedule exported to Excel successfully");
             }
-
-
         } catch (error) {
             console.error(error);
             toast.error("Failed to export Excel");
@@ -244,6 +249,17 @@ export function ToolbarActions<TData>({
                 <DropdownMenuContent align="end">
                     {customActionItems}
                     {customActionItems && !hideDefaultActions && <DropdownMenuSeparator />}
+
+                    {/* When hideDefaultActions but customExportFn provided, show only Export */}
+                    {hideDefaultActions && customExportFn && (
+                        <>
+                            {customActionItems && <DropdownMenuSeparator />}
+                            <DropdownMenuItem onClick={onExportExcel} disabled={!hasSchedules}>
+                                <Download />
+                                Export to Excel
+                            </DropdownMenuItem>
+                        </>
+                    )}
 
                     {!hideDefaultActions && (
                         <>
