@@ -10,25 +10,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const ZOOM_WEBHOOK_SECRET = Deno.env.get('ZOOM_WEBHOOK_SECRET')!
+const ZOOM_WEBHOOK_SECRET = Deno.env.get('ZOOM_WEBHOOK_SECRET') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-const ALLOWED_ORIGINS = [
-    'http://localhost:1420',
-    'tauri://localhost',
-    'http://tauri.localhost',
-]
-
-function getCorsHeaders(req: Request) {
-    const origin = req.headers.get('origin') || ''
-    const isAllowed = ALLOWED_ORIGINS.includes(origin)
-    return {
-        'Access-Control-Allow-Origin': isAllowed ? origin : 'null',
-        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-zm-signature, x-zm-request-timestamp',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    }
-}
+import { getCorsHeaders } from '../_shared/cors-utils.ts'
 
 // =============================================
 // Web Crypto HMAC (reemplaza Node.js createHmac)
@@ -92,6 +78,12 @@ serve(async (req) => {
         return new Response('ok', { headers: corsHeaders })
     }
 
+    // Validate secret is configured
+    if (!ZOOM_WEBHOOK_SECRET) {
+        console.error('Webhook: ZOOM_WEBHOOK_SECRET is not configured')
+        return new Response('Server configuration error', { status: 500 })
+    }
+
     try {
         const body = await req.text()
         const signature = req.headers.get('x-zm-signature')
@@ -121,16 +113,18 @@ serve(async (req) => {
         // Almacenar evento en base de datos
         const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-        await supabase
+        const { data: insertedEvent } = await supabase
             .from('webhook_events')
             .insert({
                 event_type: event.event,
                 payload: event.payload,
                 processed: false
             })
+            .select('id')
+            .single()
 
         // Procesar evento según tipo
-        await processEvent(supabase, event)
+        await processEvent(supabase, event, insertedEvent?.id)
 
         return new Response('OK', { status: 200 })
 
@@ -151,7 +145,7 @@ interface ZoomWebhookEvent {
     time_stamp?: number
 }
 
-async function processEvent(supabase: SupabaseClient, event: ZoomWebhookEvent): Promise<void> {
+async function processEvent(supabase: SupabaseClient, event: ZoomWebhookEvent, eventId?: string): Promise<void> {
     const eventType = event.event
     const payload = event.payload
 
@@ -188,16 +182,16 @@ async function processEvent(supabase: SupabaseClient, event: ZoomWebhookEvent): 
                 console.log('Event type not handled:', eventType)
         }
 
-        // Marcar evento como procesado
-        await supabase
-            .from('webhook_events')
-            .update({
-                processed: true,
-                processed_at: new Date().toISOString()
-            })
-            .eq('event_type', eventType)
-            .order('created_at', { ascending: false })
-            .limit(1)
+        // Marcar evento como procesado using its specific ID
+        if (eventId) {
+            await supabase
+                .from('webhook_events')
+                .update({
+                    processed: true,
+                    processed_at: new Date().toISOString()
+                })
+                .eq('id', eventId)
+        }
 
     } catch (error: unknown) {
         console.error('Event processing failed:', error instanceof Error ? error.message : 'Unknown error')

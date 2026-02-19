@@ -15,21 +15,7 @@ const ZOOM_API_BASE = 'https://api.zoom.us/v2'
 
 // SEGURIDAD: Restringir orígenes CORS
 // Alineado con zoom-auth
-const ALLOWED_ORIGINS = [
-  'http://localhost:1420',
-  'tauri://localhost',
-  'http://tauri.localhost',
-]
-
-function getCorsHeaders(req: Request) {
-  const origin = req.headers.get('origin') || ''
-  const isAllowed = ALLOWED_ORIGINS.includes(origin)
-  return {
-    'Access-Control-Allow-Origin': isAllowed ? origin : 'null',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-internal-key, x-app-name, x-app-version',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  }
-}
+import { getCorsHeaders } from '../_shared/cors-utils.ts'
 
 serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req)

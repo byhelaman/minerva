@@ -16,23 +16,7 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
 const ZOOM_API_BASE = 'https://api.zoom.us/v2'
 const MAX_BATCH_SIZE = 50
 
-// CORS: Orígenes permitidos (Tauri + desarrollo)
-const ALLOWED_ORIGINS = [
-    'http://localhost:1420',
-    'tauri://localhost',
-    'http://tauri.localhost',
-]
-
-function getCorsHeaders(req: Request) {
-    const origin = req.headers.get('origin') || ''
-    const isAllowed = ALLOWED_ORIGINS.includes(origin)
-    return {
-        'Access-Control-Allow-Origin': isAllowed ? origin : 'null',
-        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-name, x-app-version',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    }
-}
-
+import { getCorsHeaders } from '../_shared/cors-utils.ts'
 
 // Tipos
 interface UpdateRequest {

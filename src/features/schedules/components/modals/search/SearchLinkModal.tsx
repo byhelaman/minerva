@@ -36,24 +36,28 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [meetingsToDelete, setMeetingsToDelete] = useState<MeetingRow[]>([]);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
 
     const canDelete = hasPermission('meetings.delete');
 
     const handleConfirmDelete = async () => {
         if (meetingsToDelete.length === 0) return;
+
+        // Optimistic: hide rows immediately
+        const ids = meetingsToDelete.map(m => m.meeting_id);
+        setPendingDeleteIds(new Set(ids));
+        setMeetingsToDelete([]); // Close dialog
         setIsDeleting(true);
+
         try {
-            if (meetingsToDelete.length === 1) {
-                // Single delete — use original function
-                const { success, error } = await deleteMeeting(meetingsToDelete[0].meeting_id);
+            if (ids.length === 1) {
+                const { success, error } = await deleteMeeting(ids[0]);
                 if (success) {
                     toast.success("Meeting deleted");
                 } else {
                     toast.error("Failed to delete meeting", { description: error });
                 }
             } else {
-                // Batch delete
-                const ids = meetingsToDelete.map(m => m.meeting_id);
                 const { succeeded, failed } = await deleteMeetings(ids);
                 if (failed === 0) {
                     toast.success(`${succeeded} meetings deleted`);
@@ -63,7 +67,7 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
             }
         } finally {
             setIsDeleting(false);
-            setMeetingsToDelete([]);
+            setPendingDeleteIds(new Set());
         }
     };
 
@@ -206,21 +210,23 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
         return map;
     }, [users]);
 
-    // Transformar meetings a filas de tabla
+    // Transformar meetings a filas de tabla (excluir pending deletes)
     const tableData: MeetingRow[] = useMemo(() => {
-        return meetings.map(meeting => {
-            const host = userMap.get(meeting.host_id);
-            return {
-                id: meeting.meeting_id,
-                meeting_id: meeting.meeting_id,
-                topic: meeting.topic,
-                host_email: host?.email || 'Unknown',
-                host_name: host?.display_name || 'Unknown',
-                created_at: meeting.created_at || meeting.start_time,
-                join_url: meeting.join_url,
-            };
-        });
-    }, [meetings, userMap]);
+        return meetings
+            .filter(m => !pendingDeleteIds.has(m.meeting_id))
+            .map(meeting => {
+                const host = userMap.get(meeting.host_id);
+                return {
+                    id: meeting.meeting_id,
+                    meeting_id: meeting.meeting_id,
+                    topic: meeting.topic,
+                    host_email: host?.email || 'Unknown',
+                    host_name: host?.display_name || 'Unknown',
+                    created_at: meeting.created_at || meeting.start_time,
+                    join_url: meeting.join_url,
+                };
+            });
+    }, [meetings, userMap, pendingDeleteIds]);
 
     // Handler para refresh
     const handleRefresh = async () => {

@@ -11,7 +11,6 @@ interface AppSettings {
     openAfterExport: boolean;
     clearScheduleOnLoad: boolean;
     realtimeNotifications: boolean;
-    disablePagination: boolean;
 }
 
 interface SettingsContextType {
@@ -28,7 +27,6 @@ const defaultSettings: AppSettings = {
     openAfterExport: true,
     clearScheduleOnLoad: false,
     realtimeNotifications: true,
-    disablePagination: false,
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);

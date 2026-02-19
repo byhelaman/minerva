@@ -65,9 +65,7 @@
             "theme_dark": "Oscuro",
             "theme_system": "Sistema",
             "respect_filters": "Acciones Respetan Filtros",
-            "respect_filters_desc": "Aplicar acciones (Exportar, Copiar) solo a los datos filtrados actualmente.",
-            "disable_pagination": "Mostrar Todas las Filas",
-            "disable_pagination_desc": "Desactiva la paginación y muestra todas las filas de la tabla a la vez."
+            "respect_filters_desc": "Aplicar acciones (Exportar, Copiar) solo a los datos filtrados actualmente."
         },
         "notifications": {
             "title": "Notificaciones",

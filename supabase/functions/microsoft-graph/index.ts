@@ -10,20 +10,68 @@ const MS_CLIENT_SECRET = Deno.env.get('MS_CLIENT_SECRET') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
-const ALLOWED_ORIGINS = [
-    'http://localhost:1420',
-    'tauri://localhost',
-    'http://tauri.localhost',
-]
+import { getCorsHeaders } from '../_shared/cors-utils.ts'
 
-function getCorsHeaders(req: Request) {
-    const origin = req.headers.get('origin') || ''
-    const isAllowed = ALLOWED_ORIGINS.includes(origin)
-    return {
-        'Access-Control-Allow-Origin': isAllowed ? origin : 'null',
-        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-name, x-app-version',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+// =============================================
+// Shared Helpers (Excel / Graph data normalization)
+// =============================================
+
+function getColumnLetter(index: number): string {
+    let letter = ""
+    while (index >= 0) {
+        letter = String.fromCharCode((index % 26) + 65) + letter
+        index = Math.floor(index / 26) - 1
     }
+    return letter
+}
+
+function parseCell(cell: string): { col: number; row: number } {
+    const match = cell.match(/^([A-Z]+)([0-9]+)$/i)
+    if (!match) return { col: 0, row: 1 }
+    const colStr = match[1].toUpperCase()
+    const row = parseInt(match[2], 10)
+    let col = 0
+    for (let i = 0; i < colStr.length; i++) col = col * 26 + (colStr.charCodeAt(i) - 64)
+    return { col: col - 1, row }
+}
+
+function normalizeDate(value: any): string {
+    if (!value) return '';
+    const str = String(value).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.substring(0, 10);
+    const ddmmyyyyMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (ddmmyyyyMatch) {
+        const [, day, month, year] = ddmmyyyyMatch;
+        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+    const num = Number(value);
+    if (!isNaN(num) && num > 25000 && num < 60000) {
+        const excelEpoch = new Date(1900, 0, 1);
+        const date = new Date(excelEpoch.getTime() + (num - 2) * 86400000);
+        return date.toISOString().substring(0, 10);
+    }
+    return str;
+}
+
+function normalizeTime(value: any): string {
+    if (!value && value !== 0) return '';
+    const num = Number(value);
+    if (!isNaN(num) && num >= 0 && num < 1) {
+        const totalMinutes = Math.round(num * 24 * 60);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    }
+    const str = String(value).trim();
+    if (/^\d{2}:\d{2}$/.test(str)) return str;
+    if (/^\d{2}:\d{2}:\d{2}/.test(str)) return str.substring(0, 5);
+    if (/^\d{1}:\d{2}/.test(str)) return '0' + str.substring(0, 4);
+    return str;
+}
+
+function normalizeText(value: any): string {
+    if (!value) return '';
+    return String(value).trim().replace(/\s+/g, ' ').replace(/[\u200B-\u200D\uFEFF]/g, '');
 }
 
 async function getAccessToken(supabase: ReturnType<typeof createClient>) {
@@ -446,24 +494,6 @@ serve(async (req: Request) => {
             const numCols = values[0].length
             const startCell = range || 'B2'
 
-            const getColumnLetter = (index: number) => {
-                let letter = ""
-                while (index >= 0) {
-                    letter = String.fromCharCode((index % 26) + 65) + letter
-                    index = Math.floor(index / 26) - 1
-                }
-                return letter
-            }
-
-            const parseCell = (cell: string) => {
-                const match = cell.match(/^([A-Z]+)([0-9]+)$/i)
-                if (!match) return { col: 0, row: 1 }
-                const colStr = match[1].toUpperCase()
-                const row = parseInt(match[2], 10)
-                let col = 0
-                for (let i = 0; i < colStr.length; i++) col = col * 26 + (colStr.charCodeAt(i) - 64)
-                return { col: col - 1, row }
-            }
 
             const { col: startCol, row: startRow } = parseCell(startCell)
             const endColLetter = getColumnLetter(startCol + numCols - 1)
@@ -526,45 +556,6 @@ serve(async (req: Request) => {
             if (!fileId || !tableId) throw new Error('File ID and Table ID are required')
             const token = await getAccessToken(supabase)
 
-            // Helper functions for normalization (reused from upsert-rows-by-key)
-            const normalizeDate = (value: any): string => {
-                if (!value) return '';
-                const str = String(value).trim();
-                if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.substring(0, 10);
-                const ddmmyyyyMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-                if (ddmmyyyyMatch) {
-                    const [, day, month, year] = ddmmyyyyMatch;
-                    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-                }
-                const num = Number(value);
-                if (!isNaN(num) && num > 25000 && num < 60000) {
-                    const excelEpoch = new Date(1900, 0, 1);
-                    const date = new Date(excelEpoch.getTime() + (num - 2) * 86400000);
-                    return date.toISOString().substring(0, 10);
-                }
-                return str;
-            };
-
-            const normalizeTime = (value: any): string => {
-                if (!value && value !== 0) return '';
-                const num = Number(value);
-                if (!isNaN(num) && num >= 0 && num < 1) {
-                    const totalMinutes = Math.round(num * 24 * 60);
-                    const hours = Math.floor(totalMinutes / 60);
-                    const minutes = totalMinutes % 60;
-                    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-                }
-                const str = String(value).trim();
-                if (/^\d{2}:\d{2}$/.test(str)) return str;
-                if (/^\d{2}:\d{2}:\d{2}/.test(str)) return str.substring(0, 5);
-                if (/^\d{1}:\d{2}/.test(str)) return '0' + str.substring(0, 4);
-                return str;
-            };
-
-            const normalizeText = (value: any): string => {
-                if (!value) return '';
-                return String(value).trim().replace(/\s+/g, ' ').replace(/[\u200B-\u200D\uFEFF]/g, '');
-            };
 
             // 1. Get table rows
             const rowsUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/tables/${tableId}/rows`;
@@ -671,49 +662,6 @@ serve(async (req: Request) => {
                 }
             }
 
-            // Helper functions for normalization
-            const normalizeDate = (value: any): string => {
-                if (!value) return '';
-                const str = String(value).trim();
-                if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.substring(0, 10);
-                const ddmmyyyyMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-                if (ddmmyyyyMatch) {
-                    const [, day, month, year] = ddmmyyyyMatch;
-                    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-                }
-                const num = Number(value);
-                if (!isNaN(num) && num > 25000 && num < 60000) {
-                    const excelEpoch = new Date(1900, 0, 1);
-                    const date = new Date(excelEpoch.getTime() + (num - 2) * 86400000);
-                    return date.toISOString().substring(0, 10);
-                }
-                return str;
-            };
-
-            const normalizeTime = (value: any): string => {
-                if (!value && value !== 0) return '';
-
-                // Handle Excel decimal time format (0.333333 = 8:00 AM)
-                const num = Number(value);
-                if (!isNaN(num) && num >= 0 && num < 1) {
-                    const totalMinutes = Math.round(num * 24 * 60);
-                    const hours = Math.floor(totalMinutes / 60);
-                    const minutes = totalMinutes % 60;
-                    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-                }
-
-                // Handle string time formats
-                const str = String(value).trim();
-                if (/^\d{2}:\d{2}$/.test(str)) return str;
-                if (/^\d{2}:\d{2}:\d{2}/.test(str)) return str.substring(0, 5);
-                if (/^\d{1}:\d{2}/.test(str)) return '0' + str.substring(0, 4);
-                return str;
-            };
-
-            const normalizeText = (value: any): string => {
-                if (!value) return '';
-                return String(value).trim().replace(/\s+/g, ' ').replace(/[\u200B-\u200D\uFEFF]/g, '');
-            };
 
             const getKey = (row: any[], headers: string[]) => {
                 return keyColumns.map((col: string) => {

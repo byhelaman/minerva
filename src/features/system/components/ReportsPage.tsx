@@ -102,14 +102,16 @@ export function ReportsPage() {
 
     // Format date to YYYY-MM-DD for Supabase queries
 
-    // Compute table data from local state
+    // Optimistic delete — keys of rows currently being deleted
+    const [pendingDeleteKeys, setPendingDeleteKeys] = useState<Set<string>>(new Set());
+
+    // Compute table data from local state (exclude pending deletes)
     const tableData = useMemo(() => {
         const merged = mergeSchedulesWithIncidences(reportSchedules, reportIncidences);
-        if (showOnlyIncidences) {
-            return merged.filter(row => !!row.type);
-        }
-        return merged;
-    }, [reportSchedules, reportIncidences, showOnlyIncidences]);
+        const filtered = showOnlyIncidences ? merged.filter(row => !!row.type) : merged;
+        if (pendingDeleteKeys.size === 0) return filtered;
+        return filtered.filter(row => !pendingDeleteKeys.has(`${row.date}|${row.program}|${row.start_time}|${row.instructor}`));
+    }, [reportSchedules, reportIncidences, showOnlyIncidences, pendingDeleteKeys]);
 
     // Fetch data when date range changes (into local state, not shared store)
     const fetchData = useCallback(async () => {
@@ -482,16 +484,25 @@ export function ReportsPage() {
                         <AlertDialogAction
                             className="border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
                             onClick={async () => {
+                                // Optimistic: hide rows immediately
+                                const keys = new Set(schedulesToDelete.map(s => `${s.date}|${s.program}|${s.start_time}|${s.instructor}`));
+                                const entriesToDelete = [...schedulesToDelete];
+                                setPendingDeleteKeys(keys);
+                                setSchedulesToDelete([]); // Close dialog
+
                                 try {
-                                    for (const entry of schedulesToDelete) {
-                                        await scheduleEntriesService.deleteScheduleEntry(entry);
+                                    if (entriesToDelete.length === 1) {
+                                        await scheduleEntriesService.deleteScheduleEntry(entriesToDelete[0]);
+                                    } else {
+                                        await scheduleEntriesService.batchDeleteScheduleEntries(entriesToDelete);
                                     }
-                                    toast.success(`${schedulesToDelete.length} ${schedulesToDelete.length === 1 ? "entry" : "entries"} deleted`);
-                                    setSchedulesToDelete([]);
+                                    toast.success(`${entriesToDelete.length} ${entriesToDelete.length === 1 ? "entry" : "entries"} deleted`);
                                     fetchData();
                                 } catch (error) {
                                     console.error("Failed to delete:", error);
                                     toast.error("Failed to delete entries");
+                                } finally {
+                                    setPendingDeleteKeys(new Set());
                                 }
                             }}>
                             Delete

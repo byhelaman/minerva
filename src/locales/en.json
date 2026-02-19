@@ -65,9 +65,7 @@
             "theme_dark": "Dark",
             "theme_system": "System",
             "respect_filters": "Actions Respect Filters",
-            "respect_filters_desc": "Apply actions (Export, Copy) only to the currently filtered data.",
-            "disable_pagination": "Show All Rows",
-            "disable_pagination_desc": "Disable table pagination and show all rows at once."
+            "respect_filters_desc": "Apply actions (Export, Copy) only to the currently filtered data."
         },
         "notifications": {
             "title": "Notifications",

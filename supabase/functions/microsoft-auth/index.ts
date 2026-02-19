@@ -12,21 +12,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
 // SECURITY: Restrict CORS origins
-const ALLOWED_ORIGINS = [
-    'http://localhost:1420',
-    'tauri://localhost',
-    'http://tauri.localhost',
-]
-
-function getCorsHeaders(req: Request) {
-    const origin = req.headers.get('origin') || ''
-    const isAllowed = ALLOWED_ORIGINS.includes(origin)
-    return {
-        'Access-Control-Allow-Origin': isAllowed ? origin : 'null',
-        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-name, x-app-version',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    }
-}
+import { getCorsHeaders } from '../_shared/cors-utils.ts'
 
 serve(async (req: Request) => {
     const url = new URL(req.url)

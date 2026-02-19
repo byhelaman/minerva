@@ -31,7 +31,6 @@ import type { Schedule } from "@schedules/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { formatDateForDisplay } from "@/lib/date-utils";
-import { useSettings } from "@/components/settings-provider";
 
 interface ScheduleDataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[] | ((addStatusFilter: (status: string) => void) => ColumnDef<TData, TValue>[]);
@@ -101,8 +100,6 @@ export function ScheduleDataTable<TData, TValue>({
     canPublish,
     ...props
 }: ScheduleDataTableProps<TData, TValue>) {
-    const { settings } = useSettings();
-    const disablePagination = settings.disablePagination;
 
     // Use controlled selection if provided, otherwise use internal state
     const [internalSelection, setInternalSelection] = React.useState({});
@@ -124,18 +121,10 @@ export function ScheduleDataTable<TData, TValue>({
     const [globalFilter, setGlobalFilter] = React.useState("");
     const [showOverlapsOnly, setShowOverlapsOnly] = React.useState(false);
 
-    // Controlled pagination state — reacts to disablePagination setting changes
     const [pagination, setPagination] = React.useState({
         pageIndex: 0,
-        pageSize: disablePagination ? data.length || 1 : (props.initialPageSize || 25),
+        pageSize: props.initialPageSize || 25,
     });
-
-    React.useEffect(() => {
-        setPagination(prev => ({
-            ...prev,
-            pageSize: disablePagination ? data.length || 1 : (props.initialPageSize || 25),
-        }));
-    }, [disablePagination, data.length, props.initialPageSize]);
 
     // Aplicar/quitar filtros de tiempo y fecha cuando Live mode cambia
     React.useEffect(() => {
@@ -474,7 +463,7 @@ export function ScheduleDataTable<TData, TValue>({
             </div>
 
             {/* Pagination */}
-            {!disablePagination && <DataTablePagination table={table} />}
+            <DataTablePagination table={table} />
         </div>
     );
 }

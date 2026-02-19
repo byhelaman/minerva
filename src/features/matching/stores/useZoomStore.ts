@@ -693,8 +693,8 @@ function getZoomWeekday(dateStr: string): number {
 
 // Helper para procesar batch chunks común
 async function processBatchChunks(allRequests: any[]): Promise<{ succeeded: number; failed: number; errors: string[]; results: any[] }> {
-    const CHUNK_SIZE = 30;
-    const DELAY_BETWEEN_CHUNKS_MS = 3500;
+    const CHUNK_SIZE = 50;
+    const DELAY_BETWEEN_CHUNKS_MS = 1500;
     const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
     let totalSucceeded = 0;

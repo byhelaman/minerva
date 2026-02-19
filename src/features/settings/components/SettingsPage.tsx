@@ -95,7 +95,6 @@ export function SettingsPage() {
             updateSetting("clearScheduleOnLoad", false);
             updateSetting("realtimeNotifications", true);
             updateSetting("autoSaveInterval", 3000);
-            updateSetting("disablePagination", false);
             setTheme("system"); // Aplicar reinicio de tema
 
             if (filesDeleted > 0) {
@@ -181,20 +180,6 @@ export function SettingsPage() {
                                     id="actions-respect-filters"
                                     checked={settings.actionsRespectFilters}
                                     onCheckedChange={(checked) => updateSetting("actionsRespectFilters", checked)}
-                                    className="h-5 w-9 [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
-                                />
-                            </div>
-                            <div className="flex items-center justify-between space-x-2">
-                                <Label htmlFor="disable-pagination" className="flex flex-col items-start">
-                                    <span>{t("settings.appearance.disable_pagination")}</span>
-                                    <span className="font-normal text-xs text-muted-foreground">
-                                        {t("settings.appearance.disable_pagination_desc")}
-                                    </span>
-                                </Label>
-                                <Switch
-                                    id="disable-pagination"
-                                    checked={settings.disablePagination}
-                                    onCheckedChange={(checked) => updateSetting("disablePagination", checked)}
                                     className="h-5 w-9 [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
                                 />
                             </div>

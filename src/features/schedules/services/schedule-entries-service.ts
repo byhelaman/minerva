@@ -376,6 +376,28 @@ export const scheduleEntriesService = {
     },
 
     /**
+     * Batch delete multiple schedule entries in a single RPC call.
+     * Much faster than sequential individual deletes.
+     */
+    async batchDeleteScheduleEntries(entries: { date: string, program: string, start_time: string, instructor: string }[]): Promise<number> {
+        if (entries.length === 0) return 0;
+
+        const keys = entries.map(e => ({
+            date: e.date,
+            program: e.program,
+            start_time: ensureTimeFormat(e.start_time),
+            instructor: e.instructor,
+        }));
+
+        const { data, error } = await supabase.rpc('batch_delete_schedule_entries', {
+            p_keys: keys,
+        });
+
+        if (error) throw error;
+        return data as number;
+    },
+
+    /**
      * Delete a specific schedule entry.
      */
     async deleteScheduleEntry(entry: { date: string, program: string, start_time: string, instructor: string }) {
