@@ -9,7 +9,7 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Progress } from '@/components/ui/progress';
-import { useUpdater } from '@/hooks/use-updater';
+import { useUpdaterContext } from '@/components/updater-context';
 
 import { useEffect, useState } from 'react';
 
@@ -23,7 +23,7 @@ export function UpdateDialog() {
         isDownloading,
         progress,
         error,
-    } = useUpdater();
+    } = useUpdaterContext();
 
     const [lastKnownUpdate, setLastKnownUpdate] = useState<typeof update>(null);
 

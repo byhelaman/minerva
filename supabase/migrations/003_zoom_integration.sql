@@ -240,3 +240,30 @@ CREATE POLICY "zoom_meetings_select" ON public.zoom_meetings
 CREATE POLICY "zoom_meetings_service_role" ON public.zoom_meetings
     FOR ALL TO service_role
     USING (true) WITH CHECK (true);
+
+-- =============================================
+-- ZOOM MEETINGS USER RLS (Client Access)
+-- =============================================
+-- 1. INSERT: Requiere permiso 'meetings.create'
+CREATE POLICY "zoom_meetings_insert" ON public.zoom_meetings
+    FOR INSERT TO authenticated
+    WITH CHECK (
+        ((SELECT auth.jwt()) -> 'permissions')::jsonb ? 'meetings.create'
+    );
+
+-- 2. UPDATE: Requiere permiso 'meetings.create'
+CREATE POLICY "zoom_meetings_update" ON public.zoom_meetings
+    FOR UPDATE TO authenticated
+    USING (
+        ((SELECT auth.jwt()) -> 'permissions')::jsonb ? 'meetings.create'
+    )
+    WITH CHECK (
+        ((SELECT auth.jwt()) -> 'permissions')::jsonb ? 'meetings.create'
+    );
+
+-- 3. DELETE: Requiere permiso 'meetings.delete'
+CREATE POLICY "zoom_meetings_delete" ON public.zoom_meetings
+    FOR DELETE TO authenticated
+    USING (
+        ((SELECT auth.jwt()) -> 'permissions')::jsonb ? 'meetings.delete'
+    );

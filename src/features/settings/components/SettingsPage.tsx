@@ -28,7 +28,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
 import { STORAGE_FILES } from "@/lib/constants";
 import { useTranslation } from "react-i18next";
-import { useUpdater } from "@/hooks/use-updater";
+import { useUpdaterContext } from "@/components/updater-context";
 import { getVersion, getTauriVersion } from "@tauri-apps/api/app";
 import { useState, useEffect } from "react";
 
@@ -37,7 +37,7 @@ export function SettingsPage() {
     const { t, i18n } = useTranslation();
     const { setTheme } = useTheme();
     const { settings, updateSetting } = useSettings();
-    const { checkForUpdates, isChecking, error: updateError } = useUpdater();
+    const { checkForUpdates, isChecking, error: updateError } = useUpdaterContext();
 
     const [appVersion, setAppVersion] = useState<string>("");
     const [tauriVersion, setTauriVersion] = useState<string>("");

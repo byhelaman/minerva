@@ -1,4 +1,4 @@
-import { useState, ComponentPropsWithoutRef } from "react";
+import { useState, useRef, ComponentPropsWithoutRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -13,6 +13,8 @@ interface InstructorSelectorProps extends Omit<ComponentPropsWithoutRef<typeof B
     disabled?: boolean;
     className?: string;
     popoverClassName?: string;
+    /** When true, allows typing a custom name that's not in the list. */
+    allowFreeText?: boolean;
 }
 
 export function InstructorSelector({
@@ -22,12 +24,36 @@ export function InstructorSelector({
     disabled,
     className,
     popoverClassName,
+    allowFreeText = false,
     ...props
 }: InstructorSelectorProps) {
     const [open, setOpen] = useState(false);
+    const [inputValue, setInputValue] = useState("");
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const handleSelect = (displayName: string, email: string, id: string) => {
+        onChange(displayName, email, id);
+        setInputValue("");
+        setOpen(false);
+    };
+
+    const handleUseFreeText = () => {
+        const trimmed = inputValue.trim();
+        if (trimmed) {
+            onChange(trimmed, "", "");
+            setInputValue("");
+            setOpen(false);
+        }
+    };
+
+    // Check if the typed text matches any instructor exactly (case-insensitive)
+    const hasPerfectMatch = instructors.some(
+        (i) => i.display_name.toLowerCase() === inputValue.trim().toLowerCase()
+    );
+    const showFreeTextOption = allowFreeText && inputValue.trim().length > 0 && !hasPerfectMatch;
 
     return (
-        <Popover open={open} onOpenChange={setOpen} modal={true}>
+        <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setInputValue(""); }} modal={true}>
             <PopoverTrigger asChild>
                 <Button
                     variant="outline"
@@ -51,18 +77,32 @@ export function InstructorSelector({
                 align="start"
             >
                 <Command>
-                    <CommandInput placeholder="Search instructor..." />
+                    <CommandInput
+                        ref={inputRef}
+                        placeholder="Search instructor..."
+                        value={inputValue}
+                        onValueChange={setInputValue}
+                    />
                     <CommandList className="max-h-[300px] overflow-y-auto overflow-x-hidden">
+                        {showFreeTextOption && (
+                            <CommandGroup heading="Custom">
+                                <CommandItem
+                                    value={`__freetext__${inputValue}`}
+                                    onSelect={handleUseFreeText}
+                                    className="text-sm"
+                                >
+                                    <Check className="opacity-0" />
+                                    <span className="truncate">Use &ldquo;{inputValue.trim()}&rdquo;</span>
+                                </CommandItem>
+                            </CommandGroup>
+                        )}
                         <CommandEmpty>No instructor found.</CommandEmpty>
                         <CommandGroup>
                             {instructors.map((inst) => (
                                 <CommandItem
                                     key={inst.email}
                                     value={inst.display_name}
-                                    onSelect={() => {
-                                        onChange(inst.display_name, inst.email, inst.id);
-                                        setOpen(false);
-                                    }}
+                                    onSelect={() => handleSelect(inst.display_name, inst.email, inst.id)}
                                 >
                                     <Check
                                         className={

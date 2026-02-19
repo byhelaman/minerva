@@ -31,45 +31,48 @@ function Layout() {
 }
 
 import { UpdateDialog } from "@/components/update-dialog";
+import { UpdaterProvider } from "@/components/updater-context";
 import { GlobalSyncManager } from "@/components/GlobalSyncManager";
 
 function App() {
   return (
-    <ErrorBoundary>
-      <UpdateDialog />
-      <Routes>
-        {/* Ruta pública - Login (signup se hace desde el dialog) */}
-        <Route path="/login" element={<LoginPage />} />
+    <UpdaterProvider>
+      <ErrorBoundary>
+        <UpdateDialog />
+        <Routes>
+          {/* Ruta pública - Login (signup se hace desde el dialog) */}
+          <Route path="/login" element={<LoginPage />} />
 
-        {/* Rutas protegidas */}
-        <Route
-          element={
-            <ProtectedRoute>
-              <GlobalSyncManager />
-              <Layout />
-            </ProtectedRoute>
-          }
-        >
-          <Route path="/" element={<ErrorBoundary><ScheduleDashboard /></ErrorBoundary>} />
-          <Route path="/settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
-          <Route path="/profile" element={<ErrorBoundary><ProfilePage /></ErrorBoundary>} />
-          <Route path="/docs" element={<ErrorBoundary><DocsPage /></ErrorBoundary>} />
-          <Route path="/statistics" element={<ErrorBoundary><StatisticsPage /></ErrorBoundary>} />
+          {/* Rutas protegidas */}
+          <Route
+            element={
+              <ProtectedRoute>
+                <GlobalSyncManager />
+                <Layout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/" element={<ErrorBoundary><ScheduleDashboard /></ErrorBoundary>} />
+            <Route path="/settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
+            <Route path="/profile" element={<ErrorBoundary><ProfilePage /></ErrorBoundary>} />
+            <Route path="/docs" element={<ErrorBoundary><DocsPage /></ErrorBoundary>} />
+            <Route path="/statistics" element={<ErrorBoundary><StatisticsPage /></ErrorBoundary>} />
 
-          <Route path="/system" element={
-            <AdminRoute>
-              <ErrorBoundary><SystemPage /></ErrorBoundary>
-            </AdminRoute>
-          } />
+            <Route path="/system" element={
+              <AdminRoute>
+                <ErrorBoundary><SystemPage /></ErrorBoundary>
+              </AdminRoute>
+            } />
 
-          <Route path="/reports" element={
-            <ProtectedRoute requiredPermission="reports.view">
-              <ErrorBoundary><ReportsPage /></ErrorBoundary>
-            </ProtectedRoute>
-          } />
-        </Route>
-      </Routes>
-    </ErrorBoundary>
+            <Route path="/reports" element={
+              <ProtectedRoute requiredPermission="reports.view">
+                <ErrorBoundary><ReportsPage /></ErrorBoundary>
+              </ProtectedRoute>
+            } />
+          </Route>
+        </Routes>
+      </ErrorBoundary>
+    </UpdaterProvider>
   );
 }
 

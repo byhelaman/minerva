@@ -155,6 +155,7 @@ export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: Incid
                                     <div className="flex gap-1 items-center w-full">
                                         <InstructorSelector
                                             disabled={!canEdit}
+                                            allowFreeText
                                             value={field.value || ""}
                                             onChange={(value, _email, _id) => field.onChange(value)}
                                             instructors={uniqueInstructors}

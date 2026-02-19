@@ -464,6 +464,13 @@ export const getCreateLinkColumns = (
                     toast.success("Join URL copied to clipboard");
                 };
 
+                const handleCopyDetails = async () => {
+                    const topic = result.matchedTopic || result.inputName;
+                    const details = result.join_url ? `${topic}\n${result.join_url}` : topic;
+                    await navigator.clipboard.writeText(details);
+                    toast.success("Details copied to clipboard");
+                };
+
                 return (
                     <div className="flex justify-center">
                         <DropdownMenu>
@@ -474,6 +481,9 @@ export const getCreateLinkColumns = (
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={handleCopyDetails} disabled={!hasJoinUrl}>
+                                    Copy details
+                                </DropdownMenuItem>
                                 <DropdownMenuItem
                                     onClick={handleCopyJoinUrl}
                                     disabled={!hasJoinUrl}
