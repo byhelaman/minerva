@@ -2,16 +2,8 @@
 // Funciones compartidas de autenticación y autorización para Edge Functions
 
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { timingSafeEqual } from 'https://deno.land/std@0.168.0/crypto/timing_safe_equal.ts'
 
-// =============================================
-// Constantes de roles
-// =============================================
-export const ROLES = {
-    SUPER_ADMIN_ONLY: ['super_admin'],
-    ADMIN_AND_ABOVE: ['super_admin', 'admin'],
-} as const
-
-type RoleSet = (typeof ROLES)[keyof typeof ROLES]
 
 // =============================================
 // Comparación timing-safe para strings
@@ -22,49 +14,7 @@ export function constantTimeEqual(a: string, b: string): boolean {
     const bufB = encoder.encode(b)
 
     if (bufA.byteLength !== bufB.byteLength) return false
-
-    let result = 0
-    for (let i = 0; i < bufA.byteLength; i++) {
-        result |= bufA[i] ^ bufB[i]
-    }
-    return result === 0
-}
-
-// =============================================
-// Verificación por rol (Role-based)
-// =============================================
-export async function verifyUserRole(
-    req: Request,
-    supabase: SupabaseClient,
-    allowedRoles: RoleSet = ROLES.ADMIN_AND_ABOVE
-) {
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-        throw new Error('Unauthorized: Missing Authorization header')
-    }
-
-    const token = authHeader.replace('Bearer ', '')
-    const { data: { user }, error } = await supabase.auth.getUser(token)
-
-    if (error || !user) {
-        throw new Error('Unauthorized: Invalid token')
-    }
-
-    const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-
-    if (profileError || !profile) {
-        throw new Error('Unauthorized: Profile not found')
-    }
-
-    if (!allowedRoles.includes(profile.role)) {
-        throw new Error('Unauthorized: Insufficient permissions')
-    }
-
-    return user
+    return timingSafeEqual(bufA, bufB)
 }
 
 // =============================================

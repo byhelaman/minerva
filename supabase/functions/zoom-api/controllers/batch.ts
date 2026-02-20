@@ -1,9 +1,9 @@
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { verifyPermission } from '../../_shared/auth-utils.ts'
-import { BatchRequest, buildZoomCreateBody, buildZoomPatchBody, jsonResponse } from '../utils/zoom-utils.ts'
+import { jsonResponse } from '../../_shared/error-utils.ts'
+import { BatchRequest, buildZoomCreateBody, buildZoomPatchBody, ZOOM_API_BASE } from '../utils/zoom-utils.ts'
 import { syncMeetingToSupabase } from '../utils/db-sync.ts'
 
-const ZOOM_API_BASE = 'https://api.zoom.us/v2'
 const MAX_BATCH_SIZE = 50
 
 export async function handleBatchRequest(
@@ -108,6 +108,7 @@ export async function handleBatchRequest(
                     method = 'POST'
                     apiBody = buildZoomCreateBody(request)
                 } else {
+
                     url = `${ZOOM_API_BASE}/meetings/${request.meeting_id}`
                     method = 'PATCH'
                     apiBody = buildZoomPatchBody(request)
@@ -123,13 +124,15 @@ export async function handleBatchRequest(
                 })
 
                 if (zoomResponse.status === 201 || zoomResponse.status === 204 || zoomResponse.ok) {
-                    let resultData: any = {}
+                    let resultData: Record<string, unknown> = {}
                     let finalMeetingId = request.meeting_id
 
                     if (action === 'create') {
                         try {
                             resultData = await zoomResponse.json()
-                            finalMeetingId = resultData.id.toString()
+                            if (resultData.id) {
+                                finalMeetingId = String(resultData.id)
+                            }
                         } catch { }
                     }
 

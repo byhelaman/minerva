@@ -1,12 +1,12 @@
 // Supabase Edge Function: microsoft-auth
 // Handles authentication flow (Server-to-Server OAuth) for Microsoft
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+
 import { getCorsHeaders } from '../_shared/cors-utils.ts'
 import { handleEdgeError } from '../_shared/error-utils.ts'
 import * as authControllers from './controllers/auth.ts'
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
     const url = new URL(req.url)
     const path = url.pathname.split('/').pop()
     const corsHeaders = getCorsHeaders(req)

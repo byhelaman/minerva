@@ -26,3 +26,10 @@ export function handleEdgeError(error: unknown, corsHeaders: Record<string, stri
         }
     });
 }
+
+export function jsonResponse(data: unknown, status = 200, corsHeaders: Record<string, string> = {}): Response {
+    return new Response(JSON.stringify(data), {
+        status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+}

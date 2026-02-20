@@ -30,3 +30,17 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/zoom-webhook/index.ts"
 
+# microsoft-auth: Maneja OAuth flow con Microsoft y config de OneDrive
+# Verificación: verifyAccess() interno
+[functions.microsoft-auth]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/microsoft-auth/index.ts"
+
+# microsoft-graph: Proxy para API de Microsoft Graph / OneDrive
+# Verificación: verifyAccess() interno
+[functions.microsoft-graph]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/microsoft-graph/index.ts"
+

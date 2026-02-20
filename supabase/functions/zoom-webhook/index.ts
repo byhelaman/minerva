@@ -7,12 +7,18 @@
 // FIX: Comparación timing-safe para firmas
 // FIX: Tipos estrictos (unknown en lugar de any)
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const ZOOM_WEBHOOK_SECRET = Deno.env.get('ZOOM_WEBHOOK_SECRET') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+// Declaración para uso del objeto global EdgeRuntime disponible en Supabase
+declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void } | undefined;
+
+// Única instancia a nivel de módulo (reutilizada entre ejecuciones en el mismo contexto)
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 import { getCorsHeaders } from '../_shared/cors-utils.ts'
 
@@ -63,7 +69,7 @@ async function verifySignature(body: string, signature: string | null, timestamp
 // =============================================
 // Main Handler
 // =============================================
-serve(async (req) => {
+Deno.serve(async (req) => {
     const corsHeaders = getCorsHeaders(req)
 
     if (req.method === 'OPTIONS') {
@@ -102,22 +108,37 @@ serve(async (req) => {
             })
         }
 
-        // Almacenar evento en base de datos
-        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        // =============================================
+        // Desacoplar procesamiento asíncrono en Background
+        // =============================================
+        const backgroundTask = async () => {
+            try {
+                const { data: insertedEvent } = await supabase
+                    .from('webhook_events')
+                    .insert({
+                        event_type: event.event,
+                        payload: event.payload,
+                        processed: false
+                    })
+                    .select('id')
+                    .single()
 
-        const { data: insertedEvent } = await supabase
-            .from('webhook_events')
-            .insert({
-                event_type: event.event,
-                payload: event.payload,
-                processed: false
-            })
-            .select('id')
-            .single()
+                await processEvent(supabase, event, insertedEvent?.id)
+            } catch (err) {
+                console.error('[Background Task Error]', err)
+            }
+        };
 
-        // Procesar evento según tipo
-        await processEvent(supabase, event, insertedEvent?.id)
+        // Utilizar EdgeRuntime.waitUntil para que la Request Edge no muera 
+        // cuando devolvamos el 'OK' 200 inmediatamente a Zoom.
+        if (typeof EdgeRuntime !== 'undefined' && typeof EdgeRuntime.waitUntil === 'function') {
+            EdgeRuntime.waitUntil(backgroundTask());
+        } else {
+            // Local dev fallback
+            backgroundTask();
+        }
 
+        // Responder INMEDIATAMENTE a Zoom en < 3s para prevenir retries innecesarios
         return new Response('OK', { status: 200 })
 
     } catch (error: unknown) {
@@ -147,7 +168,7 @@ async function processEvent(supabase: SupabaseClient, event: ZoomWebhookEvent, e
         switch (eventType) {
             case 'user.created':
             case 'user.updated':
-                await upsertUser(supabase, payload.object as ZoomUserPayload)
+                await upsertUser(supabase, payload.object as unknown as ZoomUserPayload)
                 break
 
             case 'user.deleted':
@@ -157,7 +178,7 @@ async function processEvent(supabase: SupabaseClient, event: ZoomWebhookEvent, e
 
             case 'meeting.created':
             case 'meeting.updated':
-                await upsertMeeting(supabase, payload.object as ZoomMeetingPayload, event.time_stamp)
+                await upsertMeeting(supabase, payload.object as unknown as ZoomMeetingPayload, event.time_stamp)
                 break
 
             case 'meeting.deleted':

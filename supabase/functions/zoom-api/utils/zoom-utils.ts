@@ -1,3 +1,7 @@
+
+
+export const ZOOM_API_BASE = 'https://api.zoom.us/v2'
+
 export interface UpdateRequest {
     meeting_id: string
     schedule_for: string
@@ -85,9 +89,3 @@ export function buildZoomCreateBody(req: RequestItem): Record<string, unknown> {
     return body
 }
 
-export function jsonResponse(data: unknown, status = 200, corsHeaders: Record<string, string> = {}): Response {
-    return new Response(JSON.stringify(data), {
-        status,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
-}

@@ -29,7 +29,7 @@ export function parseCell(cell: string): { col: number; row: number } {
 /**
  * Normaliza variaciones de fechas o fechas seriales de Excel al formato YYYY-MM-DD.
  */
-export function normalizeDate(value: any): string {
+export function normalizeDate(value: unknown): string {
     if (!value) return '';
     const str = String(value).trim();
     if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.substring(0, 10);
@@ -50,7 +50,7 @@ export function normalizeDate(value: any): string {
 /**
  * Normaliza variaciones de horas o fracciones de hora de Excel al formato HH:MM.
  */
-export function normalizeTime(value: any): string {
+export function normalizeTime(value: unknown): string {
     if (!value && value !== 0) return '';
     const num = Number(value);
     if (!isNaN(num) && num >= 0 && num < 1) {
@@ -69,7 +69,7 @@ export function normalizeTime(value: any): string {
 /**
  * Normaliza líneas de texto, eliminando espacios en blanco finales y límites Unicode invisibles.
  */
-export function normalizeText(value: any): string {
+export function normalizeText(value: unknown): string {
     if (!value) return '';
     return String(value).trim().replace(/\s+/g, ' ').replace(/[\u200B-\u200D\uFEFF]/g, '');
 }

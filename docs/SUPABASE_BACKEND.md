@@ -159,6 +159,19 @@ Proxy para la API de Microsoft Graph — operaciones con OneDrive/Excel.
 | `constantTimeEqual(a, b)` | (Interna) Comparación de strings resistente a ataques de timing via XOR byte a byte. |
 | `ROLES` | Constante: `SUPER_ADMIN_ONLY`, `ADMIN_AND_ABOVE` |
 
+### error-utils.ts
+
+| Exportación | Descripción |
+|-------------|-------------|
+| `handleEdgeError(error, corsHeaders)` | Estandariza la respuesta de error para todas las Edge Functions. Retorna 401 si el mensaje de error es "Unauthorized", y 500 para el resto (ocultando detalles internos por seguridad). Siempre incluye los headers CORS. |
+
+### oauth-utils.ts
+
+| Exportación | Descripción |
+|-------------|-------------|
+| `createOAuthState(supabase, userId)` | Emplea el RPC `create_oauth_state` para generar y retornar un string seguro de estado (state) al inicializar un flujo OAuth. |
+| `validateOAuthState(supabase, state)` | Emplea el RPC `validate_oauth_state` para verificar un estado durante el callback de OAuth, devolviendo el `userId` si es válido y no expirado. |
+
 ### zoom-token-utils.ts
 
 | Exportación | Descripción |
@@ -294,16 +307,21 @@ Proxy para la API de Microsoft Graph — operaciones con OneDrive/Excel.
 
 ### 3.4 Migraciones
 
-6 archivos consolidados (anteriormente 13 archivos: 001-006, 008-009, 012-016).
+### 3.4 Migraciones
+
+9 archivos en la carpeta `supabase/migrations/`:
 
 | Migración | Contenido |
 |-----------|-----------|
-| `001_core_access` | Tablas `roles`, `permissions`, `role_permissions`, `profiles`. Seeds de roles y permisos (incluye `reports.manage`). Función `handle_updated_at()` genérica. Hook JWT, triggers de perfil. RPCs base: `has_permission`, `get_my_profile`, `check_email_exists`, `update_my_display_name`, `verify_user_password`. Triggers de seguridad: `prevent_email_modification`, `prevent_role_self_update`. Índices FK en `role_permissions`. |
-| `002_user_management` | Funciones RPC para gestión de usuarios y roles. `delete_role` protege los 6 roles del sistema (incluye `moderator` y `guest`). `assign/remove_role_permission` también protegen roles del sistema. |
-| `003_zoom_integration` | Tablas `zoom_account`, `oauth_states`, `zoom_users`, `zoom_meetings`. Vista `zoom_credentials_decrypted`. RPCs: `store_zoom_credentials` (`search_path=''`), `delete_zoom_secrets`, `create_oauth_state`, `validate_oauth_state`. REVOKE/GRANT en todas las funciones de credenciales. Índices FK: `host_id`, `user_id`. |
-| `004_webhooks_bug_reports` | Tablas `webhook_events`, `bug_reports`. Bug reports: INSERT solo `authenticated` (no anon). Índice parcial en eventos no procesados. Funciones: `cleanup_old_webhook_events`, `get_active_meetings`. |
-| `005_microsoft_integration` | Tabla `microsoft_account`. Vista `microsoft_credentials_decrypted` (incluye `microsoft_name`). RPCs: `store_microsoft_credentials` (`search_path=''`), `update_microsoft_config` (`search_path=''`), `delete_microsoft_secrets`. REVOKE/GRANT en todas las funciones. |
-| `006_schedules_realtime` | Tablas `published_schedules`, `schedule_entries`. CHECK constraints en fechas (`YYYY-MM-DD`) y horas (`HH:mm`). Índices FK en `published_by`. Índice parcial `idx_schedule_entries_unsynced`. Habilitación Realtime. `REPLICA IDENTITY FULL` en `profiles`. |
+| `001_core_access` | Tablas `roles`, `permissions`, `role_permissions`, `profiles`. Seeds de roles y permisos (incluye `reports.manage`). Función `handle_updated_at()` genérica. Hook JWT, triggers de perfil. RPCs base: `has_permission`, `get_my_profile`, `check_email_exists`, `update_my_display_name`, `verify_user_password`. Triggers de seguridad. |
+| `002_user_management` | Funciones RPC para gestión de usuarios y roles. `delete_role` protege los roles del sistema. `assign/remove_role_permission` también protegen roles del sistema. |
+| `003_zoom_integration` | Tablas `zoom_account`, `oauth_states`, `zoom_users`, `zoom_meetings`. Vista `zoom_credentials_decrypted`. RPCs: `store_zoom_credentials`, `delete_zoom_secrets`, `create_oauth_state`, `validate_oauth_state`. REVOKE/GRANT en funciones. Índices FK. |
+| `004_webhooks_bug_reports` | Tablas `webhook_events`, `bug_reports`. Funciones: `cleanup_old_webhook_events`, `get_active_meetings`. Índice parcial en eventos no procesados. |
+| `005_microsoft_integration` | Tabla `microsoft_account`. Vista `microsoft_credentials_decrypted` (incluye `microsoft_name`). RPCs: `store_microsoft_credentials`, `update_microsoft_config`, `delete_microsoft_secrets`. REVOKE/GRANT en todas las funciones. |
+| `006_schedules_realtime` | Tablas `published_schedules`, `schedule_entries`. CHECK constraints en fechas y horas. Índices FK. Habilitación Realtime. `REPLICA IDENTITY FULL` en `profiles`. |
+| `007_delete_account` | Introduce la RPC `delete_my_account()` que permite a un usuario eliminar su propia cuenta saltándose suposiciones restrictivas de RLS en las tablas public. |
+| `008_statistics_rpc` | Introduce la RPC `get_system_statistics()` que permite al Frontend recuperar información estadística condensada para el Dashboard general (número de usuarios, horarios, incidencias, etc). |
+| `009_reports_rpc` | Introduce las RPCs `get_schedules_report()` y `batch_delete_schedules()` para reportes eficientes evitando traer data pesada no usada y eliminación en N+1 requests. |
 
 ### 3.5 Índices
 

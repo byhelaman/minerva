@@ -1,14 +1,13 @@
 // Supabase Edge Function: zoom-api
 // Actualiza reuniones de Zoom (host, fecha, hora, recurrence)
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getValidAccessToken } from '../_shared/zoom-token-utils.ts'
 import { verifyPermission } from '../_shared/auth-utils.ts'
 import { getCorsHeaders } from '../_shared/cors-utils.ts'
-import { handleEdgeError } from '../_shared/error-utils.ts'
+import { handleEdgeError, jsonResponse } from '../_shared/error-utils.ts'
 
-import { isBatchRequest, jsonResponse, RequestBody } from './utils/zoom-utils.ts'
+import { isBatchRequest, RequestBody } from './utils/zoom-utils.ts'
 import { handleBatchRequest } from './controllers/batch.ts'
 import { handleSingleRequest } from './controllers/single.ts'
 
@@ -16,7 +15,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
     const corsHeaders = getCorsHeaders(req)
 
     if (req.method === 'OPTIONS') {

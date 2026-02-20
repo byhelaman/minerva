@@ -42,7 +42,7 @@ pnpm tsc --noEmit       # Type-check (no hay script de lint)
 
 ### 2. Ejecutar Migraciones (en orden)
 
-Ejecutar cada archivo en el **SQL Editor** de Supabase (6 archivos consolidados):
+Ejecutar cada archivo en el **SQL Editor** de Supabase en estricto orden (9 archivos):
 
 | Orden | Archivo | Descripción |
 |-------|---------|-------------|
@@ -52,6 +52,9 @@ Ejecutar cada archivo en el **SQL Editor** de Supabase (6 archivos consolidados)
 | 4 | `004_webhooks_bug_reports.sql` | Webhooks, reportes de bugs, función de limpieza |
 | 5 | `005_microsoft_integration.sql` | Integración Microsoft (OneDrive, Vault, vista de credenciales) |
 | 6 | `006_schedules_realtime.sql` | Horarios publicados, schedule entries, Realtime, REPLICA IDENTITY |
+| 7 | `007_delete_account.sql` | RPC `delete_my_account` para la eliminación segura de cuenta |
+| 8 | `008_statistics_rpc.sql` | RPC `get_system_statistics` para el Dashboard de Admin |
+| 9 | `009_reports_rpc.sql` | RPC `get_schedules_report` para exportación y borrado en lote |
 
 ### 3. Habilitar Auth Hook
 

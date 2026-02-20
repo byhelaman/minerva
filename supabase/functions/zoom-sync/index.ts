@@ -4,19 +4,19 @@
 // POST / - Inicia sincronización completa
 // Retorna: { users_synced, meetings_synced }
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getValidAccessToken } from '../_shared/zoom-token-utils.ts'
 import { verifyAccess } from '../_shared/auth-utils.ts'
 import { getCorsHeaders } from '../_shared/cors-utils.ts'
-import { handleEdgeError } from '../_shared/error-utils.ts'
-import { deduplicateMeetings, filterZoomUsers, formatUserForDb, jsonResponse, ZoomUser, ZoomMeeting } from './utils/zoom-sync-helpers.ts'
+import { handleEdgeError, jsonResponse } from '../_shared/error-utils.ts'
+import { deduplicateMeetings, filterZoomUsers, formatUserForDb, ZoomUser, ZoomMeeting } from './utils/zoom-sync-helpers.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const ZOOM_API_BASE = 'https://api.zoom.us/v2'
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req)
 
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -82,8 +82,8 @@ serve(async (req: Request) => {
             if (!response.ok) return []
 
             const data = await response.json()
-            return (data.meetings || []).map((m: any) => ({
-              meeting_id: m.id.toString(),
+            return (data.meetings || []).map((m: Record<string, unknown>) => ({
+              meeting_id: m.id ? String(m.id) : '',
               uuid: m.uuid,
               host_id: m.host_id || user.id,
               topic: m.topic,

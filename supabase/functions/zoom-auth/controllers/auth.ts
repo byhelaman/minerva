@@ -10,9 +10,10 @@ const ZOOM_REDIRECT_URI = Deno.env.get('ZOOM_REDIRECT_URI') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
 // === INIT ===
 export async function handleInit(req: Request, corsHeaders: Record<string, string>): Promise<Response> {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
     // Verificación RBAC (Permiso: system.manage)
     const user = await verifyPermission(req, supabase, 'system.manage')
@@ -40,7 +41,6 @@ export async function handleCallback(url: URL, corsHeaders: Record<string, strin
     if (error) return new Response(`Error: ${error}`, { status: 400 })
     if (!code || !state) return new Response('Falta código o estado', { status: 400 })
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
     // Validar Estado usando utilidad compartida
     const userId = await validateOAuthState(supabase, state)
@@ -101,7 +101,6 @@ export async function handleCallback(url: URL, corsHeaders: Record<string, strin
 
 // === STATUS ===
 export async function handleStatus(req: Request, corsHeaders: Record<string, string>): Promise<Response> {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
     // Verificación RBAC (Permiso: system.manage)
     await verifyPermission(req, supabase, 'system.manage')
@@ -133,7 +132,6 @@ export async function handleStatus(req: Request, corsHeaders: Record<string, str
 
 // === DISCONNECT ===
 export async function handleDisconnect(req: Request, corsHeaders: Record<string, string>): Promise<Response> {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
     // Verificación RBAC (Permiso: system.manage)
     await verifyPermission(req, supabase, 'system.manage')

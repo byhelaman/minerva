@@ -120,7 +120,9 @@ supabase/functions/
 ├── microsoft-auth/index.ts    # OAuth: init, callback, status, disconnect, update-config
 ├── microsoft-graph/index.ts   # Graph API: CRUD archivos Excel, OneDrive
 └── _shared/
-    └── auth-utils.ts          # getUserFromToken(), verificación de permisos
+    ├── auth-utils.ts          # getUserFromToken(), verificación de permisos
+    ├── error-utils.ts         # estandarización de logs y respuestas de error
+    └── oauth-utils.ts         # helpers para state management en OAuth
 ```
 
 Ambas funciones se despliegan con `--no-verify-jwt` y manejan autenticación interna via `auth-utils.ts`.

@@ -1,7 +1,6 @@
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const ZOOM_API_BASE = 'https://api.zoom.us/v2'
-
+import { ZOOM_API_BASE } from './zoom-utils.ts'
 export async function syncMeetingToSupabase(meetingId: string, accessToken: string, supabaseUser: SupabaseClient): Promise<{ success: boolean; error?: string }> {
     try {
         // 1. Obtener datos frescos de Zoom

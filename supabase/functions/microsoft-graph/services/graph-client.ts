@@ -63,10 +63,40 @@ export async function getAccessToken(supabase: SupabaseClient): Promise<string> 
 }
 
 /**
+ * Función interna para ejecutar peticiones a Graph con manejo de Rate-Limiting (HTTP 429).
+ * Respeta el header Retry-After sugerido por Microsoft Graph o aplica un backoff simple.
+ */
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
+    let retries = 0;
+    
+    while (true) {
+        const response = await fetch(url, options);
+
+        if (response.status === 429 && retries < maxRetries) {
+            retries++;
+            // Graph suele sugerir el tiempo exacto en segundos
+            const retryAfterStr = response.headers.get('Retry-After');
+            const retryAfterSecs = retryAfterStr ? parseInt(retryAfterStr, 10) : null;
+            
+            // Usar el tiempo sugerido, o un backoff exponencial: 2s, 4s, 8s
+            const delayMs = retryAfterSecs && !isNaN(retryAfterSecs) 
+                ? retryAfterSecs * 1000 
+                : Math.pow(2, retries) * 1000;
+
+            console.warn(`[Graph API] Rate limited (429). Retrying ${retries}/${maxRetries} in ${delayMs}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+            continue;
+        }
+
+        return response;
+    }
+}
+
+/**
  * Wrapper estándar GET para llamadas HTTP a Microsoft Graph.
  */
-export async function graphGet(endpoint: string, token: string): Promise<any> {
-    const response = await fetch(`https://graph.microsoft.com/v1.0${endpoint}`, {
+export async function graphGet(endpoint: string, token: string): Promise<unknown> {
+    const response = await fetchWithRetry(`https://graph.microsoft.com/v1.0${endpoint}`, {
         headers: { 'Authorization': `Bearer ${token}` }
     });
 
@@ -81,8 +111,8 @@ export async function graphGet(endpoint: string, token: string): Promise<any> {
 /**
  * Wrapper estándar POST para llamadas HTTP a Microsoft Graph.
  */
-export async function graphPost(endpoint: string, token: string, body?: any): Promise<any> {
-    const response = await fetch(`https://graph.microsoft.com/v1.0${endpoint}`, {
+export async function graphPost(endpoint: string, token: string, body?: unknown): Promise<unknown> {
+    const response = await fetchWithRetry(`https://graph.microsoft.com/v1.0${endpoint}`, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${token}`,
@@ -104,8 +134,8 @@ export async function graphPost(endpoint: string, token: string, body?: any): Pr
 /**
  * Wrapper estándar PATCH para llamadas HTTP a Microsoft Graph.
  */
-export async function graphPatch(endpoint: string, token: string, body: any): Promise<any> {
-    const response = await fetch(`https://graph.microsoft.com/v1.0${endpoint}`, {
+export async function graphPatch(endpoint: string, token: string, body: unknown): Promise<unknown> {
+    const response = await fetchWithRetry(`https://graph.microsoft.com/v1.0${endpoint}`, {
         method: 'PATCH',
         headers: {
             'Authorization': `Bearer ${token}`,

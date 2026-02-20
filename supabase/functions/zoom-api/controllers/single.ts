@@ -1,9 +1,9 @@
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { verifyPermission } from '../../_shared/auth-utils.ts'
-import { buildZoomPatchBody, jsonResponse, RequestItem } from '../utils/zoom-utils.ts'
+import { jsonResponse } from '../../_shared/error-utils.ts'
+import { buildZoomPatchBody, RequestItem, ZOOM_API_BASE } from '../utils/zoom-utils.ts'
 import { syncMeetingToSupabase } from '../utils/db-sync.ts'
 
-const ZOOM_API_BASE = 'https://api.zoom.us/v2'
 
 export async function handleSingleRequest(
     req: Request,

@@ -1,6 +1,7 @@
 // Controladores para operaciones de escritura
 import { graphPost, graphPatch } from '../services/graph-client.ts'
 import { parseCell, getColumnLetter } from '../utils/excel-helpers.ts'
+import { decode } from 'https://deno.land/std@0.168.0/encoding/base64.ts'
 
 export async function handleCreateWorksheet(token: string, fileId: string, name: string) {
     if (!fileId || !name) throw new Error('File ID and Name are required')
@@ -9,16 +10,16 @@ export async function handleCreateWorksheet(token: string, fileId: string, name:
 
     try {
         return await graphPost(endpoint, token, { name })
-    } catch (err: any) {
+    } catch (err: unknown) {
         // Fallback para ItemAlreadyExists (el elemento ya existe)
-        const msg = err.message || '';
+        const msg = err instanceof Error ? err.message : String(err);
         if (msg.includes('AlreadyExists') || msg.includes('exist')) {
             const sheetsRes = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/worksheets`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             })
             if (sheetsRes.ok) {
                 const sheets = await sheetsRes.json()
-                const existing = sheets.value.find((s: any) => s.name === name)
+                const existing = sheets.value.find((s: Record<string, unknown>) => s.name === name)
                 if (existing) return existing
             }
         }
@@ -26,7 +27,7 @@ export async function handleCreateWorksheet(token: string, fileId: string, name:
     }
 }
 
-export async function handleUpdateRange(token: string, fileId: string, sheetId: string, values: any[][], range?: string) {
+export async function handleUpdateRange(token: string, fileId: string, sheetId: string, values: unknown[][], range?: string) {
     if (!fileId || !sheetId || !values) throw new Error('File ID, Sheet ID and Values are required')
     if (!Array.isArray(values) || values.length === 0 || !Array.isArray(values[0])) {
         throw new Error('Values must be a non-empty 2D array');
@@ -49,13 +50,10 @@ export async function handleUpdateRange(token: string, fileId: string, sheetId: 
 export async function handleUploadFile(token: string, folderId: string, name: string, base64Values: string) {
     if (!folderId || !name || !base64Values) throw new Error('Folder ID, Name and Content (values) are required')
 
-    const binaryString = atob(base64Values);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-    }
-
     const targetId = folderId === 'root' ? 'root' : folderId;
+
+    // Optimizando rendimiento con decodificación nativa
+    const bytes = decode(base64Values);
     const graphUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${targetId}:/${name}:/content`
 
     const response = await fetch(graphUrl, {
@@ -82,8 +80,8 @@ export async function handleCreateTable(token: string, fileId: string, sheetId: 
 
     try {
         return await graphPost(endpoint, token, { address: range, hasHeaders: true })
-    } catch (err: any) {
-        const msg = err.message || '';
+    } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
         if (msg.includes('AlreadyExists') || msg.includes('exist')) {
             try {
                 const tablesRes = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/worksheets/${sheetId}/tables?$select=id,name`, {
@@ -94,7 +92,7 @@ export async function handleCreateTable(token: string, fileId: string, sheetId: 
                     const existing = tables.value?.[0];
                     if (existing) return existing;
                 }
-            } catch (e) {
+            } catch {
                 // Ignorar errores de fetch durante el fallback
             }
             throw new Error('Table may already exist but could not be retrieved')
@@ -125,7 +123,7 @@ export async function handleFormatColumns(token: string, fileId: string, sheetId
     return { success: true }
 }
 
-export async function handleFormatFont(token: string, fileId: string, sheetId: string, tableId: string, range: string, font: any) {
+export async function handleFormatFont(token: string, fileId: string, sheetId: string, tableId: string, range: string, font: Record<string, unknown>) {
     if (!fileId || !font) throw new Error('File ID and Font Config required')
 
     let endpoint = ''
@@ -141,7 +139,7 @@ export async function handleFormatFont(token: string, fileId: string, sheetId: s
     return { success: true }
 }
 
-export async function handleUpdateTableStyle(token: string, fileId: string, tableId: string, style: any) {
+export async function handleUpdateTableStyle(token: string, fileId: string, tableId: string, style: string) {
     if (!fileId || !tableId || !style) throw new Error('File ID, Table ID and Style required')
 
     const endpoint = `/me/drive/items/${fileId}/workbook/tables/${tableId}`

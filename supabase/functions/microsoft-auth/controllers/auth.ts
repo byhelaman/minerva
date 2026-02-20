@@ -10,9 +10,11 @@ const MS_REDIRECT_URI = Deno.env.get('MS_REDIRECT_URI') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
 // === INIT ===
 export async function handleInit(req: Request, corsHeaders: Record<string, string>): Promise<Response> {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
     const user = await verifyPermission(req, supabase, 'system.manage')
 
     const state = await createOAuthState(supabase, user.id)
@@ -39,7 +41,6 @@ export async function handleCallback(url: URL, corsHeaders: Record<string, strin
     if (error) return new Response(`Error: ${error}`, { status: 400 })
     if (!code || !state) return new Response('Missing code or state', { status: 400 })
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
     const userId = await validateOAuthState(supabase, state)
 
     if (!userId) return new Response('Invalid or expired state', { status: 400 })
@@ -88,7 +89,6 @@ export async function handleCallback(url: URL, corsHeaders: Record<string, strin
 
 // === STATUS ===
 export async function handleStatus(req: Request, corsHeaders: Record<string, string>): Promise<Response> {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
     await verifyPermission(req, supabase, ['reports.manage', 'system.manage'])
 
     const { data: account, error } = await supabase
@@ -131,7 +131,6 @@ export interface UpdateConfigBody {
 }
 
 export async function handleUpdateConfig(req: Request, body: UpdateConfigBody, corsHeaders: Record<string, string>): Promise<Response> {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
     await verifyPermission(req, supabase, 'system.manage')
 
     const { type, id, name, worksheet_id, worksheet_name, table_id, table_name } = body
@@ -165,7 +164,6 @@ export async function handleUpdateConfig(req: Request, body: UpdateConfigBody, c
 
 // === DISCONNECT ===
 export async function handleDisconnect(req: Request, corsHeaders: Record<string, string>): Promise<Response> {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
     await verifyPermission(req, supabase, 'system.manage')
 
     try {

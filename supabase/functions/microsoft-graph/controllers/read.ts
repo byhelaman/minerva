@@ -24,8 +24,8 @@ export async function handleListWorksheetsAndTables(token: string, fileId: strin
     ])
 
     const combined = [
-        ...sheetsData.value.map((s: any) => ({ ...s, type: 'sheet' })),
-        ...(tablesData.value || []).map((t: any) => ({ ...t, type: 'table' }))
+        ...((sheetsData as Record<string, unknown>).value as Record<string, unknown>[] || []).map((s) => ({ ...s, type: 'sheet' })),
+        ...((tablesData as Record<string, unknown>).value as Record<string, unknown>[] || []).map((t) => ({ ...t, type: 'table' }))
     ]
 
     return { value: combined }
@@ -56,8 +56,9 @@ export async function handleReadTableRows(token: string, fileId: string, sheetId
     const headerData = await graphGet(headerEndpoint, token)
 
     // Graph devuelve los valores en un array 2D, usualmente una sola fila para los encabezados
-    const rawHeaders = headerData.values && headerData.values.length > 0 ? headerData.values[0] : []
-    const headers = rawHeaders.map((h: any) => normalizeText(h).toLowerCase())
+    const headerRecord = headerData as { values?: unknown[][] };
+    const rawHeaders = headerRecord.values && headerRecord.values.length > 0 ? headerRecord.values[0] : []
+    const headers = rawHeaders.map((h) => normalizeText(String(h)).toLowerCase())
 
     const dateColIndex = headers.findIndex((h: string) => h === 'date' || h === 'fecha')
 
@@ -66,19 +67,20 @@ export async function handleReadTableRows(token: string, fileId: string, sheetId
     let bodyData;
     try {
         bodyData = await graphGet(bodyEndpoint, token)
-    } catch (e: any) {
+    } catch (e: unknown) {
         // Las tablas vacías a menudo lanzan ItemNotFound para dataBodyRange
-        if (e.message && e.message.includes('ItemNotFound')) {
+        if (e instanceof Error && e.message && e.message.includes('ItemNotFound')) {
             return { headers, rows: [] }
         }
         throw e
     }
 
-    const rows = bodyData.values || []
+    const bodyRecord = bodyData as { values?: unknown[][] };
+    const rows = bodyRecord?.values || []
 
     // 3. Mapear y normalizar cada celda basándose en su encabezado de columna
-    let normalizedRows = rows.map((row: any[]) => {
-        return row.map((cell: any, index: number) => {
+    let normalizedRows = rows.map((row: unknown[]) => {
+        return row.map((cell: unknown, index: number) => {
             const header = headers[index] || ''
             if (header === 'date' || header === 'fecha') return normalizeDate(cell)
             if (header.includes('time') || header === 'hora') return normalizeTime(cell)
@@ -88,7 +90,7 @@ export async function handleReadTableRows(token: string, fileId: string, sheetId
 
     // 4. Aplicar filtro de formato de fecha si se proporciona
     if (dateFilter && dateColIndex !== -1) {
-        normalizedRows = normalizedRows.filter((row: any[]) => {
+        normalizedRows = normalizedRows.filter((row: unknown[]) => {
             return row[dateColIndex] === dateFilter
         })
     }

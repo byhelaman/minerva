@@ -1,7 +1,7 @@
 // Supabase Edge Function: microsoft-graph
 // Interactúa con Microsoft Graph API (OneDrive)
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { verifyPermission } from '../_shared/auth-utils.ts'
 import { getCorsHeaders } from '../_shared/cors-utils.ts'
@@ -15,7 +15,7 @@ import * as syncControllers from './controllers/sync.ts'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
     const corsHeaders = getCorsHeaders(req)
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -38,7 +38,7 @@ serve(async (req: Request) => {
         }
 
         const token = await getAccessToken(supabase)
-        let result: any = null
+        let result: unknown = null
 
         switch (action) {
             // === READ ACTIONS ===
