@@ -11,13 +11,12 @@ export const ROLES = {
     ADMIN_AND_ABOVE: ['super_admin', 'admin'],
 } as const
 
-type RoleSet = typeof ROLES[keyof typeof ROLES]
+type RoleSet = (typeof ROLES)[keyof typeof ROLES]
 
 // =============================================
 // Comparación timing-safe para strings
 // =============================================
-// FIX: Evita ataques de timing en comparaciones de tokens/claves
-function constantTimeEqual(a: string, b: string): boolean {
+export function constantTimeEqual(a: string, b: string): boolean {
     const encoder = new TextEncoder()
     const bufA = encoder.encode(a)
     const bufB = encoder.encode(b)
@@ -96,7 +95,7 @@ export async function verifyAccess(
             await verifyPermission(req, supabase, requiredPermission)
             return true
         } catch {
-            // Continuar con verificación de clave interna
+            // Continuar con la verificación de clave interna
         }
     }
 

@@ -1,8 +1,8 @@
 // =============================================
-// Shared CORS Utility for Edge Functions
+// Utilidad CORS compartida para Edge Functions
 // =============================================
-// Centralizes origin validation and CORS headers.
-// Supports ALLOWED_ORIGINS env var override.
+// Centraliza la validación de dominios permitidos (origins) y cabeceras CORS.
+// Permite anulación mediante la variable de entorno ALLOWED_ORIGINS.
 
 const DEFAULT_ORIGINS = [
     'http://localhost:1420',
@@ -19,9 +19,9 @@ const ALLOWED_ORIGINS: string[] = (() => {
 })()
 
 /**
- * Generate CORS headers for a request.
- * Validates the request origin against the allowed list.
- * Includes a superset of all headers/methods used across the project.
+ * Genera cabeceras CORS para una petición.
+ * Valida el domain origen de la petición frente a la lista permitida.
+ * Incluye un conjunto de todas las cabeceras/métodos utilizados a lo largo del proyecto.
  */
 export function getCorsHeaders(req: Request): Record<string, string> {
     const origin = req.headers.get('origin') || ''

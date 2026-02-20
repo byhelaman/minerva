@@ -8,36 +8,25 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getValidAccessToken } from '../_shared/zoom-token-utils.ts'
 import { verifyAccess } from '../_shared/auth-utils.ts'
+import { getCorsHeaders } from '../_shared/cors-utils.ts'
+import { handleEdgeError } from '../_shared/error-utils.ts'
+import { deduplicateMeetings, filterZoomUsers, formatUserForDb, jsonResponse, ZoomUser, ZoomMeeting } from './utils/zoom-sync-helpers.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const ZOOM_API_BASE = 'https://api.zoom.us/v2'
 
-// SEGURIDAD: Restringir orígenes CORS
-// Alineado con zoom-auth
-import { getCorsHeaders } from '../_shared/cors-utils.ts'
-
 serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req)
 
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-
-  // Verificación de acceso: usuario con system.manage O clave interna
   const isAuthorized = await verifyAccess(req, supabase, 'system.manage')
 
-  if (!isAuthorized) {
-    return new Response(
-      JSON.stringify({ error: 'Unauthorized' }),
-      { status: 401, headers: corsHeaders }
-    )
-  }
+  if (!isAuthorized) return jsonResponse({ error: 'Unauthorized' }, 401, corsHeaders)
 
   try {
-    // Obtener Token Válido (Auto-Refresh si es necesario)
     let accessToken: string
     try {
       accessToken = await getValidAccessToken(supabase)
@@ -45,16 +34,14 @@ serve(async (req: Request) => {
       return jsonResponse({ error: authError instanceof Error ? authError.message : 'Auth error' }, 401, corsHeaders)
     }
 
-    // 1. Sincronizar Usuarios (con paginación)
+    // 1. Obtener Usuarios
     console.log('Starting user sync')
-    let allUsers: any[] = []
+    const allUsers: ZoomUser[] = []
     let nextPageToken = ''
 
     do {
       const pageUrl = `${ZOOM_API_BASE}/users?page_size=300${nextPageToken ? `&next_page_token=${nextPageToken}` : ''}`
-      const usersResponse = await fetch(pageUrl, {
-        headers: { 'Authorization': `Bearer ${accessToken}` }
-      })
+      const usersResponse = await fetch(pageUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } })
 
       if (!usersResponse.ok) {
         const error = await usersResponse.json()
@@ -66,84 +53,19 @@ serve(async (req: Request) => {
       nextPageToken = usersData.next_page_token || ''
     } while (nextPageToken)
 
-    // Filtro: Excluir roles admin/owner, pero siempre incluir emails en lista blanca
-    // MEJORA: Usar Variable de Entorno para Lista Blanca
     const whitelistEnv = Deno.env.get('ZOOM_WHITELIST_EMAILS') || ''
-    const WHITELIST_EMAILS = whitelistEnv.split(',').map(e => e.trim().toLowerCase()).filter(e => e.length > 0)
+    const EXCLUDED_ROLE_IDS = ['0', '1']
+    const users = filterZoomUsers(allUsers, whitelistEnv, EXCLUDED_ROLE_IDS)
 
-    // Zoom role_id: "0" = Owner, "1" = Admin, "2" = Member
-    const EXCLUDED_ROLE_IDS = ['0', '1']  // Excluir Owner y Admin
-
-    interface ZoomUser {
-      id: string
-      email: string
-      role_id?: string
-      first_name?: string
-      last_name?: string
-      display_name?: string
-      created_at: string
-    }
-
-    const users = (allUsers as ZoomUser[]).filter((user) => {
-      // Siempre incluir emails en lista blanca
-      if (WHITELIST_EMAILS.includes(user.email?.toLowerCase())) {
-        return true
-      }
-
-      if (!user.role_id) return false
-
-      // Excluir por role_id
-      return !EXCLUDED_ROLE_IDS.includes(user.role_id)
-    })
-
-    console.log('Users filtered')
-
-    // Upsert (Insertar/Actualizar) usuarios en lote
     if (users.length > 0) {
-      const userRecords = users.map((user) => ({
-        id: user.id,
-        email: user.email,
-        first_name: user.first_name || '',
-        last_name: user.last_name || '',
-        display_name: user.display_name || `${user.first_name} ${user.last_name}`.trim(),
-        created_at: user.created_at,
-        synced_at: new Date().toISOString()
-      }))
-
-      const { error: usersError } = await supabase
-        .from('zoom_users')
-        .upsert(userRecords, {
-          onConflict: 'id',
-          ignoreDuplicates: false
-        })
-
-      if (usersError) {
-        console.error('User sync failed:', usersError.message)
-        // FIX: No swallow silenciosamente — reportar en respuesta
-      }
+      const userRecords = users.map(formatUserForDb)
+      const { error: usersError } = await supabase.from('zoom_users').upsert(userRecords, { onConflict: 'id' })
+      if (usersError) console.error('User sync failed:', usersError.message)
     }
 
-    console.log('Users synced')
-
-    // 2. Sincronizar Reuniones - PARALELO para velocidad
+    // 2. Obtener Reuniones
     console.log('Starting meeting sync')
-
-    // Obtener reuniones en paralelo (max 10 concurrentes por lote)
     const BATCH_SIZE = 10
-    let totalMeetings = 0
-    interface ZoomMeeting {
-      meeting_id: string
-      uuid: string
-      host_id: string
-      topic: string
-      type: number
-      start_time: string
-      duration: number
-      timezone: string
-      join_url: string
-      created_at: string
-      synced_at: string
-    }
     const allMeetings: ZoomMeeting[] = []
 
     for (let i = 0; i < users.length; i += BATCH_SIZE) {
@@ -161,9 +83,9 @@ serve(async (req: Request) => {
 
             const data = await response.json()
             return (data.meetings || []).map((m: any) => ({
-              meeting_id: m.id,
+              meeting_id: m.id.toString(),
               uuid: m.uuid,
-              host_id: m.host_id || user.id, // USAR ID real del host reportado por Zoom (manejo de co-hosts)
+              host_id: m.host_id || user.id,
               topic: m.topic,
               type: m.type,
               start_time: m.start_time,
@@ -182,44 +104,20 @@ serve(async (req: Request) => {
       batchResults.forEach(meetings => allMeetings.push(...meetings))
     }
 
-    // Deduplicar reuniones por meeting_id (la misma reunión puede aparecer para múltiples usuarios anfitriones/alternativos)
-    const uniqueMeetings = Array.from(
-      new Map(allMeetings.map(m => [m.meeting_id, m])).values()
-    )
+    const uniqueMeetings = deduplicateMeetings(allMeetings)
 
-    // Upsert de todas las reuniones en un solo lote
     if (uniqueMeetings.length > 0) {
-      const { error: meetingsError } = await supabase
-        .from('zoom_meetings')
-        .upsert(uniqueMeetings, {
-          onConflict: 'meeting_id',
-          ignoreDuplicates: false
-        })
-
-      if (meetingsError) {
-        console.error('Meeting sync failed:', meetingsError.message)
-      }
-      totalMeetings = uniqueMeetings.length
+      const { error: meetingsError } = await supabase.from('zoom_meetings').upsert(uniqueMeetings, { onConflict: 'meeting_id' })
+      if (meetingsError) console.error('Meeting sync failed:', meetingsError.message)
     }
-
-    console.log('Meetings synced')
 
     return jsonResponse({
       success: true,
       users_synced: users.length,
-      meetings_synced: totalMeetings
+      meetings_synced: uniqueMeetings.length
     }, 200, corsHeaders)
 
   } catch (error: unknown) {
-    console.error('Sync operation failed')
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    return jsonResponse({ error: message }, 500, corsHeaders)
+    return handleEdgeError(error, corsHeaders)
   }
 })
-
-function jsonResponse(data: unknown, status = 200, corsHeaders: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-  })
-}

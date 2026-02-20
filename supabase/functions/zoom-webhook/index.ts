@@ -34,15 +34,7 @@ async function computeHmacHex(key: string, data: string): Promise<string> {
         .join('')
 }
 
-// Comparación timing-safe para strings de longitud fija
-function constantTimeEqual(a: string, b: string): boolean {
-    if (a.length !== b.length) return false
-    let result = 0
-    for (let i = 0; i < a.length; i++) {
-        result |= a.charCodeAt(i) ^ b.charCodeAt(i)
-    }
-    return result === 0
-}
+import { constantTimeEqual } from '../_shared/auth-utils.ts'
 
 // =============================================
 // Verificación de firma del webhook
@@ -78,7 +70,7 @@ serve(async (req) => {
         return new Response('ok', { headers: corsHeaders })
     }
 
-    // Validate secret is configured
+    // Validar si el secreto está configurado
     if (!ZOOM_WEBHOOK_SECRET) {
         console.error('Webhook: ZOOM_WEBHOOK_SECRET is not configured')
         return new Response('Server configuration error', { status: 500 })
@@ -135,7 +127,7 @@ serve(async (req) => {
 })
 
 // =============================================
-// Event Processing
+// Procesamiento de Eventos
 // =============================================
 interface ZoomWebhookEvent {
     event: string
@@ -182,7 +174,7 @@ async function processEvent(supabase: SupabaseClient, event: ZoomWebhookEvent, e
                 console.log('Event type not handled:', eventType)
         }
 
-        // Marcar evento como procesado using its specific ID
+        // Marcar evento como procesado usando su ID específico
         if (eventId) {
             await supabase
                 .from('webhook_events')
@@ -199,7 +191,7 @@ async function processEvent(supabase: SupabaseClient, event: ZoomWebhookEvent, e
 }
 
 // =============================================
-// User Handlers
+// Controladores de Usuario
 // =============================================
 interface ZoomUserPayload {
     id: string
@@ -254,7 +246,7 @@ async function deleteUser(supabase: SupabaseClient, userId: string): Promise<voi
 }
 
 // =============================================
-// Meeting Handlers
+// Controladores de Reunión
 // =============================================
 interface ZoomMeetingPayload {
     id: number | string

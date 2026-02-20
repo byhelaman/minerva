@@ -1,110 +1,20 @@
 // Supabase Edge Function: zoom-api
 // Actualiza reuniones de Zoom (host, fecha, hora, recurrence)
-//
-// POST / - Actualizar reunión(es)
-// Body: { meeting_id, schedule_for, start_time, duration, timezone, recurrence }
-// Body (batch): { batch: true, requests: [...] }
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getValidAccessToken } from '../_shared/zoom-token-utils.ts'
 import { verifyPermission } from '../_shared/auth-utils.ts'
+import { getCorsHeaders } from '../_shared/cors-utils.ts'
+import { handleEdgeError } from '../_shared/error-utils.ts'
+
+import { isBatchRequest, jsonResponse, RequestBody } from './utils/zoom-utils.ts'
+import { handleBatchRequest } from './controllers/batch.ts'
+import { handleSingleRequest } from './controllers/single.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
-const ZOOM_API_BASE = 'https://api.zoom.us/v2'
-const MAX_BATCH_SIZE = 50
-
-import { getCorsHeaders } from '../_shared/cors-utils.ts'
-
-// Tipos
-interface UpdateRequest {
-    meeting_id: string
-    schedule_for: string
-    topic?: string // Agregado para permitir renombrar reuniones
-    start_time?: string
-    duration?: number
-    timezone?: string
-    recurrence?: {
-        type: number
-        repeat_interval?: number
-        weekly_days?: string
-        end_date_time?: string
-    }
-    settings?: {
-        join_before_host?: boolean
-        waiting_room?: boolean
-    }
-}
-
-interface RequestItem extends UpdateRequest {
-    action?: 'create' | 'update' | 'delete'
-    topic?: string // required for create
-    type?: number
-}
-
-interface BatchRequest {
-    batch: true
-    action?: 'create' | 'update' | 'delete' // Global action for batch, or per-item
-    requests: RequestItem[]
-}
-
-type RequestBody = RequestItem | BatchRequest
-
-function isBatchRequest(body: RequestBody): body is BatchRequest {
-    return 'batch' in body && body.batch === true && Array.isArray(body.requests)
-}
-
-// Construir body para PATCH a Zoom API
-function buildZoomPatchBody(req: UpdateRequest): Record<string, unknown> {
-    const body: Record<string, unknown> = {}
-
-    if (req.schedule_for) {
-        body.schedule_for = req.schedule_for
-    }
-
-    if (req.topic) {
-        body.topic = req.topic
-    }
-
-    if (req.start_time) {
-        body.start_time = req.start_time
-    }
-
-    if (req.duration) {
-        body.duration = req.duration
-    }
-
-    if (req.timezone) {
-        body.timezone = req.timezone
-    }
-
-    if (req.recurrence) {
-        body.recurrence = req.recurrence
-    }
-
-    return body
-}
-
-// Construir body para POST (Create) a Zoom API
-function buildZoomCreateBody(req: RequestItem): Record<string, unknown> {
-    const body: Record<string, unknown> = {
-        topic: req.topic,
-        type: req.type || 8, // Por defecto 8 (Recurrente hora fija)
-        start_time: req.start_time,
-        duration: req.duration || 60,
-        timezone: req.timezone || 'America/Lima',
-        recurrence: req.recurrence,
-        settings: req.settings
-    }
-
-    if (req.schedule_for) {
-        body.schedule_for = req.schedule_for
-    }
-
-    return body
-}
 
 serve(async (req: Request) => {
     const corsHeaders = getCorsHeaders(req)
@@ -113,26 +23,19 @@ serve(async (req: Request) => {
         return new Response('ok', { headers: corsHeaders })
     }
 
-    // 1. Cliente Service Role (Para Credenciales y Vault - SISTEMA)
     const supabaseService = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-    // 2. Cliente User Context (Para Datos de Negocio - RLS)
-    // Usamos el token del usuario para respetar sus permisos RLS en la tabla zoom_meetings
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-        return jsonResponse({ error: 'Missing Authorization header' }, 401, corsHeaders)
-    }
+    if (!authHeader) return jsonResponse({ error: 'Missing Authorization header' }, 401, corsHeaders)
 
     const supabaseUser = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         global: { headers: { Authorization: authHeader } }
     })
 
     try {
-        // Verificar autenticación: meetings.create es el permiso BASE para operar.
-        // Pero para DELETE se requerirá meetings.delete más adelante.
+        // Permiso base requerido para entrar
         await verifyPermission(req, supabaseService, 'meetings.create')
 
-        // Obtener token de Zoom válido (Requiere Service Role para leer Vault)
         let accessToken: string
         try {
             accessToken = await getValidAccessToken(supabaseService)
@@ -143,326 +46,13 @@ serve(async (req: Request) => {
 
         const body: RequestBody = await req.json()
 
-        // Helper para sincronizar inmediatamente con DB (Side-Effect Update)
-        // IMPORTANTE: Usamos supabaseUser para respetar RLS en la escritura
-        const syncToSupabase = async (meetingId: string): Promise<{ success: boolean; error?: string }> => {
-            try {
-                // 1. Obtener datos frescos de Zoom
-                const getResp = await fetch(`${ZOOM_API_BASE}/meetings/${meetingId}`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                })
-                if (!getResp.ok) {
-                    const msg = `[Zoom API] Fetch error: ${meetingId} (Status: ${getResp.status})`;
-                    console.error(msg)
-                    return { success: false, error: msg }
-                }
-                const zoomData = await getResp.json()
-
-                // 2. Preparar payload DB
-                const dbPayload = {
-                    meeting_id: zoomData.id.toString(),
-                    topic: zoomData.topic,
-                    host_id: zoomData.host_id,
-                    start_time: zoomData.start_time,
-                    duration: zoomData.duration,
-                    timezone: zoomData.timezone,
-                    join_url: zoomData.join_url,
-                    created_at: zoomData.created_at,
-                    synced_at: new Date().toISOString(),
-                    last_event_timestamp: Date.now() // Actualizar timestamp para invalidar webhooks anteriores
-                }
-
-                // 3. Upsert a Supabase (USER SCOPE - RLS)
-                const { error } = await supabaseUser.from('zoom_meetings').upsert(dbPayload, { onConflict: 'meeting_id' })
-
-                if (error) {
-                    console.error(`[Zoom API] Sync error for ${meetingId} (via RLS):`, error)
-                    return { success: false, error: `DB Sync Error (RLS): ${error.message}` }
-                } else {
-                    return { success: true }
-                }
-            } catch (err) {
-                const msg = err instanceof Error ? err.message : 'Unknown sync error';
-                console.error(`[Zoom API] Sync exception for ${meetingId}:`, err)
-                return { success: false, error: msg }
-            }
-        }
-
-        // ========== MODO BATCH ==========
         if (isBatchRequest(body)) {
-            // FIX: Límite de tamaño de batch para prevenir abuso
-            if (body.requests.length > MAX_BATCH_SIZE) {
-                return jsonResponse({ error: `Batch size exceeds limit of ${MAX_BATCH_SIZE}` }, 400, corsHeaders)
-            }
-
-            // ========== BATCH DELETE ==========
-            const globalAction = (body as BatchRequest).action
-            const isDeleteBatch = globalAction === 'delete' || body.requests.every(r => r.action === 'delete')
-
-            if (isDeleteBatch) {
-                // EXPLICIT PERMISSION CHECK FOR DELETE
-                try {
-                    await verifyPermission(req, supabaseService, 'meetings.delete')
-                } catch (e) {
-                    return jsonResponse({ error: 'Unauthorized: Permission meetings.delete required' }, 403, corsHeaders)
-                }
-
-                const deleteResults = await Promise.allSettled(
-                    body.requests.map(async (request) => {
-                        const meetingId = request.meeting_id
-                        if (!meetingId) {
-                            return { meeting_id: 'unknown', success: false, error: 'meeting_id required' }
-                        }
-
-                        try {
-                            const deleteResp = await fetch(`${ZOOM_API_BASE}/meetings/${meetingId}`, {
-                                method: 'DELETE',
-                                headers: { 'Authorization': `Bearer ${accessToken}` }
-                            })
-
-                            if (deleteResp.status === 204 || deleteResp.ok || deleteResp.status === 404) {
-                                return { meeting_id: meetingId, success: true }
-                            }
-
-                            let errorMsg = `Zoom API delete error: ${deleteResp.status}`
-                            try {
-                                const errorData = await deleteResp.json()
-                                errorMsg = errorData.message || errorMsg
-                            } catch { }
-
-                            return { meeting_id: meetingId, success: false, error: errorMsg }
-                        } catch (err) {
-                            return { meeting_id: meetingId, success: false, error: err instanceof Error ? err.message : 'Unknown error' }
-                        }
-                    })
-                )
-
-                const batchResults = deleteResults.map((result) => {
-                    if (result.status === 'fulfilled') return result.value
-                    return { meeting_id: 'unknown', success: false, error: result.reason?.message || 'Request failed' }
-                })
-
-                // DB batch delete for succeeded meetings (USER SCOPE - RLS)
-                const succeededIds = batchResults.filter(r => r.success && r.meeting_id !== 'unknown').map(r => r.meeting_id)
-                if (succeededIds.length > 0) {
-                    const { error: dbError } = await supabaseUser
-                        .from('zoom_meetings')
-                        .delete()
-                        .in('meeting_id', succeededIds)
-
-                    if (dbError) {
-                        console.error('[Zoom API] DB batch delete error (RLS):', dbError)
-                    }
-                }
-
-                const successCount = batchResults.filter(r => r.success).length
-                const errorCount = batchResults.length - successCount
-
-                return jsonResponse({
-                    batch: true,
-                    total: batchResults.length,
-                    succeeded: successCount,
-                    failed: errorCount,
-                    results: batchResults
-                }, 200, corsHeaders)
-            }
-
-            // ========== BATCH CREATE/UPDATE ==========
-            const results = await Promise.allSettled(
-                body.requests.map(async (request, index) => {
-                    // ... (lógica existente de action determination)
-                    const action = request.action || (body as BatchRequest).action || 'update'
-
-                    if (action === 'delete') {
-                        return { meeting_id: request.meeting_id || 'unknown', success: false, error: 'Mixed delete in update batch not supported yet' }
-                    }
-
-                    if (action === 'update' && (!request.meeting_id || !request.schedule_for)) {
-                        return { meeting_id: request.meeting_id || 'unknown', success: false, error: 'meeting_id and schedule_for required for update' }
-                    }
-                    if (action === 'create' && !request.topic) {
-                        return { meeting_id: 'new', success: false, error: 'topic required for create' }
-                    }
-
-                    try {
-                        let url = ''
-                        let method = ''
-                        let apiBody = {}
-
-                        if (action === 'create') {
-                            url = `${ZOOM_API_BASE}/users/me/meetings`
-                            method = 'POST'
-                            apiBody = buildZoomCreateBody(request)
-                        } else {
-                            url = `${ZOOM_API_BASE}/meetings/${request.meeting_id}`
-                            method = 'PATCH'
-                            apiBody = buildZoomPatchBody(request)
-                        }
-
-                        const zoomResponse = await fetch(url, {
-                            method,
-                            headers: {
-                                'Authorization': `Bearer ${accessToken}`,
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify(apiBody)
-                        })
-
-                        // 201 Creado para POST, 204 Sin Contenido para PATCH
-                        if (zoomResponse.status === 201 || zoomResponse.status === 204 || zoomResponse.ok) {
-                            let resultData: any = {}
-                            let finalMeetingId = request.meeting_id
-
-                            if (action === 'create') {
-                                try {
-                                    resultData = await zoomResponse.json()
-                                    finalMeetingId = resultData.id.toString()
-                                } catch { }
-                            }
-
-                            // SIDE-EFFECT: Sincronizar con DB inmediatamente
-                            if (finalMeetingId && finalMeetingId !== 'unknown') {
-                                const syncResult = await syncToSupabase(finalMeetingId)
-                                if (!syncResult.success) {
-                                    // Si falla el sync, considerarlo un error parcial o warning, pero para el frontend es crítico saberlo.
-                                    // Vamos a marcarlo como fallo para que el usuario sepa que algo salió mal.
-                                    return {
-                                        meeting_id: finalMeetingId,
-                                        success: false,
-                                        error: `Zoom Created but DB Sync Failed: ${syncResult.error}`
-                                    }
-                                }
-                            }
-
-                            return {
-                                meeting_id: finalMeetingId || 'unknown',
-                                success: true,
-                                data: resultData
-                            }
-                        }
-
-                        // ... (Error handling)
-                        let errorMsg = `Zoom API error: ${zoomResponse.status}`
-                        try {
-                            const errorData = await zoomResponse.json()
-                            errorMsg = errorData.message || errorMsg
-                        } catch { }
-                        return { meeting_id: request.meeting_id || 'unknown', success: false, error: errorMsg }
-
-                    } catch (err) {
-                        return { meeting_id: request.meeting_id, success: false, error: err instanceof Error ? err.message : 'Unknown error' }
-                    }
-                })
-            )
-            // ... (resto de lógica batch)
-            const batchResults = results.map((result, index) => {
-                if (result.status === 'fulfilled') return result.value
-                return { meeting_id: 'unknown', success: false, error: result.reason?.message || 'Request failed' }
-            })
-            // ...
-            const successCount = batchResults.filter(r => r.success).length
-            const errorCount = batchResults.length - successCount
-
-            return jsonResponse({
-                batch: true,
-                total: batchResults.length,
-                succeeded: successCount,
-                failed: errorCount,
-                results: batchResults
-            }, 200, corsHeaders)
+            return await handleBatchRequest(req, body, accessToken, supabaseService, supabaseUser, corsHeaders)
+        } else {
+            return await handleSingleRequest(req, body, accessToken, supabaseService, supabaseUser, corsHeaders)
         }
-
-        // ========== DELETE MEETING ==========
-        if ((body as any).action === 'delete-meeting') {
-            // EXPLICIT PERMISSION CHECK FOR DELETE
-            try {
-                await verifyPermission(req, supabaseService, 'meetings.delete')
-            } catch (e) {
-                return jsonResponse({ error: 'Unauthorized: Permission meetings.delete required' }, 403, corsHeaders)
-            }
-
-            const meetingId = body.meeting_id
-            if (!meetingId) {
-                return jsonResponse({ error: 'meeting_id required for delete' }, 400, corsHeaders)
-            }
-
-            const deleteResp = await fetch(`${ZOOM_API_BASE}/meetings/${meetingId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            })
-
-            // Zoom returns 204 No Content on successful delete
-            if (deleteResp.status === 204 || deleteResp.ok || deleteResp.status === 404) {
-                // Also delete from DB (USER SCOPE - RLS)
-                const { error: dbError } = await supabaseUser
-                    .from('zoom_meetings')
-                    .delete()
-                    .eq('meeting_id', meetingId)
-
-                if (dbError) {
-                    console.error(`[Zoom API] DB delete error for ${meetingId} (what RLS?):`, dbError)
-                }
-
-                return jsonResponse({ success: true }, 200, corsHeaders)
-            }
-
-            let errorMsg = `Zoom API delete error: ${deleteResp.status}`
-            try {
-                const errorData = await deleteResp.json()
-                errorMsg = errorData.message || errorMsg
-            } catch { }
-
-            return jsonResponse({ success: false, error: errorMsg }, deleteResp.status, corsHeaders)
-        }
-
-        // ========== MODO INDIVIDUAL (UPDATE) ==========
-        if (!body.meeting_id || !body.schedule_for) {
-            return jsonResponse({ error: 'meeting_id and schedule_for required' }, 400, corsHeaders)
-        }
-
-        const patchBody = buildZoomPatchBody(body)
-
-        const zoomResponse = await fetch(
-            `${ZOOM_API_BASE}/meetings/${body.meeting_id}`,
-            {
-                method: 'PATCH',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(patchBody)
-            }
-        )
-
-        // Zoom devuelve 204 No Content en éxito
-        if (zoomResponse.status === 204 || zoomResponse.ok) {
-            // SIDE-EFFECT: Sync inmediata
-            const syncResult = await syncToSupabase(body.meeting_id)
-            if (!syncResult.success) {
-                return jsonResponse({ success: false, error: `Zoom Updated but DB Sync Failed: ${syncResult.error}` }, 500, corsHeaders)
-            }
-
-            return jsonResponse({ success: true }, 200, corsHeaders)
-        }
-
-        // Error de Zoom
-        let errorMsg = `Zoom API error: ${zoomResponse.status}`
-        try {
-            const errorData = await zoomResponse.json()
-            errorMsg = errorData.message || errorMsg
-        } catch { }
-
-        return jsonResponse({ success: false, error: errorMsg }, zoomResponse.status, corsHeaders)
 
     } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        return jsonResponse({ error: message }, 500, corsHeaders)
+        return handleEdgeError(error, corsHeaders)
     }
 })
-
-function jsonResponse(data: unknown, status = 200, corsHeaders: Record<string, string> = {}): Response {
-    return new Response(JSON.stringify(data), {
-        status,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
-}

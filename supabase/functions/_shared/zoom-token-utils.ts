@@ -1,8 +1,8 @@
 // Supabase Edge Function: Shared Zoom Token Utils
 // Obtención y refresh automático de tokens de acceso de Zoom
 //
-// NOTA: Token refresh race condition — Si múltiples requests concurrentes
-// detectan un token expirado, todos intentarán refrescar. Esto es aceptable
+// NOTA: Condición de carrera en refresh de Token — Si múltiples peticiones concurrentes
+// detectan un token expirado, todas intentarán refrescar. Esto es aceptable
 // porque Zoom devuelve tokens válidos en cada refresh y la última escritura
 // en Vault simplemente sobrescribe con el token más reciente. El coste es
 // un refresh extra, no una corrupción de datos.
