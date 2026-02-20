@@ -1,5 +1,5 @@
 import type { Schedule } from "../types";
-import { parseTimeToMinutes } from "./time-utils";
+import { parseTimeToMinutes, ensureTimeFormat } from "./time-utils";
 
 /**
  * Check if two time ranges overlap
@@ -17,7 +17,10 @@ function timesOverlap(
  * Create unique key for a schedule row
  */
 export function getScheduleKey(schedule: Schedule): string {
-    return `${schedule.date}|${schedule.start_time}|${schedule.end_time}|${schedule.instructor}|${schedule.program}`;
+    const time = ensureTimeFormat(schedule.start_time);
+    const instructor = (schedule.instructor || '').trim();
+    const program = (schedule.program || '').trim();
+    return `${schedule.date}|${time}|${instructor}|${program}`;
 }
 
 /**

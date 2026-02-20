@@ -113,7 +113,7 @@ export async function handleResizeTable(token: string, fileId: string, tableId: 
 export async function handleFormatColumns(token: string, fileId: string, sheetId: string, columns: Record<string, number>) {
     if (!fileId || !sheetId || !columns) throw new Error('File ID, Sheet ID and Columns Config required')
 
-    const promises = Object.entries(columns).map(async ([colLetter, width]) => {
+    const promises = Object.entries(columns).map(([colLetter, width]) => {
         const rangeAddr = `${colLetter}:${colLetter}`;
         const endpoint = `/me/drive/items/${fileId}/workbook/worksheets/${sheetId}/range(address='${rangeAddr}')/format`
         return graphPatch(endpoint, token, { columnWidth: width });

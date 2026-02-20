@@ -69,7 +69,7 @@ const DURATION_MAP: Record<string, string> = {
 };
 
 const SPECIAL_TAGS = new Set(
-    ["@Corp", "@Corporate", "@Lima2", "lima2", "@LimaCorporate", "@LCBulevarArtigas", "@Argentina"]
+    ["@Corp", "@Corporate", "@Lima2", "@LimaCorporate", "@LCBulevarArtigas", "@Argentina"]
         .map(tag => tag.toLowerCase().replace(/\s/g, ''))
 );
 
@@ -152,8 +152,8 @@ export async function parseExcelFile(file: File, options?: { strictValidation?: 
 
         const requiredHeaders = ['date', 'start_time', 'end_time', 'program', 'instructor'];
         const matchedHeaders = requiredHeaders.filter(h => headerCells.includes(h));
-        const isExportedFormat = matchedHeaders.length >= 4; // Al menos 4 de 5 headers requeridos
-
+        const isExportedFormat = matchedHeaders.length >= 5; // Deben existir todos los headers requeridos
+        
         // Strict Validation Logic
         if (options?.strictValidation) {
             // Must be exported format

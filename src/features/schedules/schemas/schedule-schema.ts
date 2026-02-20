@@ -9,11 +9,11 @@ const timeSchema = z.iso.time({ precision: -1 });
 export const ScheduleSchema = z.object({
     date: dateSchema,
     shift: z.string().default(''),        // Calculado después, vacío por defecto
-    branch: z.string().default(''),       // Calculado del contexto, vacío por defecto
+    branch: z.string().trim().transform(val => val === '' ? 'none' : val),
     start_time: timeSchema,
     end_time: timeSchema,
     code: z.string().default(''),         // Puede estar vacío
-    instructor: z.string().default(''),   // Puede estar vacío
+    instructor: z.string().trim().transform(val => val === '' ? 'none' : val),
     program: z.string().min(1, "Program/Group is missing"),
     minutes: z.string().regex(/^\d+$/, "Minutes must be numeric").default('0'),
     units: z.string().regex(/^\d+$/, "Units must be numeric").default('0'),

@@ -57,9 +57,9 @@ CREATE TABLE IF NOT EXISTS public.schedule_entries (
 
     -- Clave compuesta lógica
     date TEXT NOT NULL,
-    program TEXT NOT NULL,
     start_time TEXT NOT NULL,
     instructor TEXT NOT NULL,
+    program TEXT NOT NULL,
 
     -- Campos base del horario (importados de Excel)
     shift TEXT DEFAULT '',
@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS public.schedule_entries (
     CONSTRAINT schedule_entries_date_format CHECK (date ~ '^\d{4}-\d{2}-\d{2}$'),
     CONSTRAINT schedule_entries_start_time_format CHECK (start_time ~ '^\d{2}:\d{2}$'),
     CONSTRAINT schedule_entries_end_time_format CHECK (end_time = '' OR end_time ~ '^\d{2}:\d{2}$'),
-    CONSTRAINT schedule_entries_unique UNIQUE (date, program, start_time, instructor)
+    CONSTRAINT schedule_entries_unique UNIQUE (date, start_time, instructor, program)
 );
 
 COMMENT ON TABLE public.schedule_entries IS 'Horarios desglosados y gestión de incidencias diarias';
@@ -118,8 +118,6 @@ CREATE POLICY "schedule_entries_delete" ON public.schedule_entries
     USING (((SELECT auth.jwt()) -> 'permissions')::jsonb ? 'schedules.manage');
 
 -- Índices
-CREATE INDEX IF NOT EXISTS idx_schedule_entries_date ON public.schedule_entries(date);
-CREATE INDEX IF NOT EXISTS idx_schedule_entries_instructor ON public.schedule_entries(instructor);
 CREATE INDEX IF NOT EXISTS idx_schedule_entries_published_by ON public.schedule_entries(published_by);
 -- Índice parcial: entradas sin sincronizar
 CREATE INDEX IF NOT EXISTS idx_schedule_entries_unsynced ON public.schedule_entries(synced_at)

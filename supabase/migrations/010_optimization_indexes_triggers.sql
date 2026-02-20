@@ -1,18 +1,91 @@
 -- ============================================
--- Minerva v2 — 008: Statistics RPC Functions
+-- Minerva v2 — 010: Indexes & Triggers Optimization
 -- ============================================
--- Server-side aggregation functions for the Statistics page.
--- Avoids the default 1000-row pagination limit of PostgREST.
--- Depends on 006_schedules_realtime.sql (schedule_entries table).
---
--- NOTA: Se usa NULLIF(TRIM(type), '') para contar incidencias,
--- ignorando tanto NULL como strings vacíos ''.
--- Toda incidencia real siempre tiene un tipo asignado (no vacío).
--- ACCESO: Requiere permiso 'reports.view'.
+-- Optimizations for 'schedule_entries' and 
+-- rewrite of reporting RPCs to leverage indexed data.
+-- Replaces heavy string manipulations during SELECT reports 
+-- with a proactive TRIGGER on INSERT/UPDATE.
 
 -- =============================================
--- 1. Daily stats: classes and incidences per day
+-- 1. INDEXES OPTIMIZATION (Expression)
 -- =============================================
+
+-- Magical pre-computed expression index for fast Monthly Incidence Report isolation
+-- USING SUBSTRING(date, 1, 7) TO EXTRACT 'YYYY-MM' (e.g. '2023-10-05' -> '2023-10')
+-- This is used instead of TO_CHAR because index expressions must be strictly IMMUTABLE.
+DROP INDEX IF EXISTS idx_schedule_entries_month;
+CREATE INDEX IF NOT EXISTS idx_schedule_entries_month 
+ON public.schedule_entries(SUBSTRING(date, 1, 7));
+
+-- =============================================
+-- 2. DATA SANITIZATION TRIGGER (Pre-computation)
+-- =============================================
+CREATE OR REPLACE FUNCTION public.sanitize_schedule_entry()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+    IF NEW.type IS NOT NULL THEN
+        NEW.type = NULLIF(TRIM(NEW.type), '');
+    END IF;
+    
+    IF NEW.subtype IS NOT NULL THEN
+        NEW.subtype = NULLIF(TRIM(NEW.subtype), '');
+    END IF;
+    
+    IF NEW.department IS NOT NULL THEN
+        NEW.department = NULLIF(TRIM(NEW.department), '');
+    END IF;
+    
+    IF NEW.instructor IS NOT NULL THEN
+        NEW.instructor = NULLIF(TRIM(NEW.instructor), '');
+        IF NEW.instructor IS NULL THEN
+            NEW.instructor = 'none';
+        END IF;
+    END IF;
+    
+    IF NEW.program IS NOT NULL THEN
+        NEW.program = NULLIF(TRIM(NEW.program), '');
+    END IF;
+    
+    -- Branch normalization (UPPER and standardize)
+    IF NEW.branch IS NOT NULL THEN
+        NEW.branch = UPPER(TRIM(NEW.branch));
+        IF NEW.branch LIKE 'HUB%' THEN
+            NEW.branch = 'HUB';
+        ELSIF NEW.branch LIKE 'MOLINA%' OR NEW.branch LIKE 'LA MOLINA%' THEN
+            NEW.branch = 'LA MOLINA';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_sanitize_schedule_entry ON public.schedule_entries;
+CREATE TRIGGER trg_sanitize_schedule_entry
+    BEFORE INSERT OR UPDATE ON public.schedule_entries
+    FOR EACH ROW
+    EXECUTE FUNCTION public.sanitize_schedule_entry();
+
+-- Retroactively clean existing records
+UPDATE public.schedule_entries SET instructor = 'none' WHERE TRIM(instructor) = '';
+
+-- Add structural constraints
+ALTER TABLE public.schedule_entries DROP CONSTRAINT IF EXISTS schedule_entries_instructor_not_empty;
+ALTER TABLE public.schedule_entries ADD CONSTRAINT schedule_entries_instructor_not_empty CHECK (TRIM(instructor) <> '');
+
+ALTER TABLE public.schedule_entries DROP CONSTRAINT IF EXISTS schedule_entries_program_not_empty;
+ALTER TABLE public.schedule_entries ADD CONSTRAINT schedule_entries_program_not_empty CHECK (TRIM(program) <> '');
+
+UPDATE public.schedule_entries SET id = id;
+
+-- =============================================
+-- 3. REFACTORING STATISTICS RPCs
+-- =============================================
+
 CREATE OR REPLACE FUNCTION public.get_daily_stats(
     p_start_date TEXT,
     p_end_date TEXT
@@ -30,7 +103,7 @@ BEGIN
     SELECT
         se.date,
         COUNT(*)::BIGINT AS total_classes,
-        COUNT(NULLIF(TRIM(se.type), ''))::BIGINT AS incidences
+        COUNT(se.type)::BIGINT AS incidences
     FROM public.schedule_entries se
     WHERE se.date >= p_start_date
       AND se.date <= p_end_date
@@ -39,11 +112,6 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION public.get_daily_stats IS 'Daily aggregation of total classes and incidences for the area chart';
-
--- =============================================
--- 2. Monthly incidence rate (% and counts)
--- =============================================
 CREATE OR REPLACE FUNCTION public.get_monthly_incidence_rate(
     p_start_date TEXT,
     p_end_date TEXT
@@ -59,28 +127,23 @@ BEGIN
 
     RETURN QUERY
     SELECT
-        TO_CHAR(TO_DATE(se.date, 'YYYY-MM-DD'), 'YYYY-MM') AS month,
+        SUBSTRING(se.date, 1, 7) AS month,
         COUNT(*)::BIGINT AS total,
-        COUNT(NULLIF(TRIM(se.type), ''))::BIGINT AS incidences,
+        COUNT(se.type)::BIGINT AS incidences,
         ROUND(
             CASE WHEN COUNT(*) > 0
-                THEN (COUNT(NULLIF(TRIM(se.type), ''))::NUMERIC / COUNT(*)::NUMERIC) * 100
+                THEN (COUNT(se.type)::NUMERIC / COUNT(*)::NUMERIC) * 100
                 ELSE 0
             END, 1
         ) AS rate
     FROM public.schedule_entries se
     WHERE se.date >= p_start_date
       AND se.date <= p_end_date
-    GROUP BY TO_CHAR(TO_DATE(se.date, 'YYYY-MM-DD'), 'YYYY-MM')
+    GROUP BY SUBSTRING(se.date, 1, 7)
     ORDER BY month;
 END;
 $$;
 
-COMMENT ON FUNCTION public.get_monthly_incidence_rate IS 'Monthly incidence rate (percentage and counts) for the bar chart';
-
--- =============================================
--- 3. Incidence type distribution
--- =============================================
 CREATE OR REPLACE FUNCTION public.get_incidence_types(
     p_start_date TEXT,
     p_end_date TEXT
@@ -96,22 +159,17 @@ BEGIN
 
     RETURN QUERY
     SELECT
-        TRIM(se.type) AS type,
+        se.type,
         COUNT(*)::BIGINT AS count
     FROM public.schedule_entries se
     WHERE se.date >= p_start_date
       AND se.date <= p_end_date
-      AND NULLIF(TRIM(se.type), '') IS NOT NULL
-    GROUP BY TRIM(se.type)
+      AND se.type IS NOT NULL
+    GROUP BY se.type
     ORDER BY count DESC;
 END;
 $$;
 
-COMMENT ON FUNCTION public.get_incidence_types IS 'Distribution of incidence types for the horizontal bar chart';
-
--- =============================================
--- 4. Period comparison (current vs previous)
--- =============================================
 CREATE OR REPLACE FUNCTION public.get_period_comparison(
     p_cur_start TEXT,
     p_cur_end TEXT,
@@ -130,10 +188,10 @@ BEGIN
     RETURN QUERY
     SELECT 'current' AS period,
         COUNT(*)::BIGINT AS total,
-        COUNT(NULLIF(TRIM(se.type), ''))::BIGINT AS incidences,
+        COUNT(se.type)::BIGINT AS incidences,
         ROUND(
             CASE WHEN COUNT(*) > 0
-                THEN (COUNT(NULLIF(TRIM(se.type), ''))::NUMERIC / COUNT(*)::NUMERIC) * 100
+                THEN (COUNT(se.type)::NUMERIC / COUNT(*)::NUMERIC) * 100
                 ELSE 0
             END, 1
         ) AS rate
@@ -144,10 +202,10 @@ BEGIN
 
     SELECT 'previous' AS period,
         COUNT(*)::BIGINT AS total,
-        COUNT(NULLIF(TRIM(se.type), ''))::BIGINT AS incidences,
+        COUNT(se.type)::BIGINT AS incidences,
         ROUND(
             CASE WHEN COUNT(*) > 0
-                THEN (COUNT(NULLIF(TRIM(se.type), ''))::NUMERIC / COUNT(*)::NUMERIC) * 100
+                THEN (COUNT(se.type)::NUMERIC / COUNT(*)::NUMERIC) * 100
                 ELSE 0
             END, 1
         ) AS rate
@@ -156,11 +214,6 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION public.get_period_comparison IS 'Comparison of incidence rates between two periods for the donut chart';
-
--- =============================================
--- 5. Branch stats: classes and incidences per branch
--- =============================================
 CREATE OR REPLACE FUNCTION public.get_branch_stats(
     p_start_date TEXT,
     p_end_date TEXT
@@ -176,35 +229,18 @@ BEGIN
 
     RETURN QUERY
     SELECT
-        CASE
-            WHEN UPPER(TRIM(se.branch)) ILIKE 'HUB%'    THEN 'HUB'
-            WHEN UPPER(TRIM(se.branch)) ILIKE 'MOLINA%'
-              OR UPPER(TRIM(se.branch)) ILIKE 'LA MOLINA%' THEN 'LA MOLINA'
-            WHEN TRIM(se.branch) = '' OR se.branch IS NULL THEN 'none'
-            ELSE UPPER(TRIM(se.branch))
-        END AS branch,
+        COALESCE(NULLIF(se.branch, ''), 'none') AS branch,
         COUNT(*)::BIGINT AS total_classes,
-        COUNT(NULLIF(TRIM(se.type), ''))::BIGINT AS incidences
+        COUNT(se.type)::BIGINT AS incidences
     FROM public.schedule_entries se
     WHERE se.date >= p_start_date
       AND se.date <= p_end_date
-    GROUP BY
-        CASE
-            WHEN UPPER(TRIM(se.branch)) ILIKE 'HUB%'    THEN 'HUB'
-            WHEN UPPER(TRIM(se.branch)) ILIKE 'MOLINA%'
-              OR UPPER(TRIM(se.branch)) ILIKE 'LA MOLINA%' THEN 'LA MOLINA'
-            WHEN TRIM(se.branch) = '' OR se.branch IS NULL THEN 'none'
-            ELSE UPPER(TRIM(se.branch))
-        END
+    GROUP BY COALESCE(NULLIF(se.branch, ''), 'none')
     ORDER BY total_classes DESC;
 END;
 $$;
 
-COMMENT ON FUNCTION public.get_branch_stats IS 'Aggregation of total classes and incidences per branch for the stacked bar chart';
-
--- =============================================
--- Grant execute permissions to authenticated users
--- =============================================
+-- Ensure permissions
 GRANT EXECUTE ON FUNCTION public.get_daily_stats TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_monthly_incidence_rate TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_incidence_types TO authenticated;
