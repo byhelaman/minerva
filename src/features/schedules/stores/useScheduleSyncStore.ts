@@ -157,6 +157,7 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
 
         } catch (e: any) {
             console.error("Publish to DB failed", e);
+            toast.error(e.message || "Failed to publish schedule to database");
             return { success: false, error: e.message };
         } finally {
             set({ isPublishing: false });

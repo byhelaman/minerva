@@ -4,7 +4,7 @@ import { Link } from "react-router-dom"
 import { useAuth } from "@/components/auth-provider"
 
 const navItems = [
-    { title: "Home", href: "/" },
+    { title: "Manage", href: "/" },
     { title: "System", href: "/system", minLevel: 80 },
     { title: "Reports", href: "/reports", permission: "reports.view" },
     { title: "Statistics", href: "/statistics" },

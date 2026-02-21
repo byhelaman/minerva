@@ -41,19 +41,33 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
     }, [open, activeDate]);
 
     const checkStatus = async () => {
-        if (!activeDate) return;
-
         setIsLoadingCheck(true);
         setValidationError(null);
 
         try {
-            // 1. Validate Date (ensure not empty)
+            // 1. Validate: no date selected (happens when multiple dates are loaded)
             if (!activeDate) {
-                setValidationError("No date selected.");
+                const uniqueDates = new Set(baseSchedules.map(s => s.date));
+                if (uniqueDates.size > 1) {
+                    setValidationError(
+                        `Cannot publish: the loaded schedules contain ${uniqueDates.size} different dates. Clear the schedule and load only one date at a time.`
+                    );
+                } else {
+                    setValidationError("No date selected.");
+                }
                 return;
             }
 
-            // 2. Validate Date (must be today or future)
+            // 2. Validate: schedules must not contain multiple dates
+            const uniqueDates = new Set(baseSchedules.map(s => s.date));
+            if (uniqueDates.size > 1) {
+                setValidationError(
+                    `Cannot publish: the loaded schedules contain ${uniqueDates.size} different dates. Clear the schedule and load only one date at a time.`
+                );
+                return;
+            }
+
+            // 3. Validate Date (must be today or future)
             const dateObj = parseISODate(activeDate);
             const today = new Date();
             today.setHours(0, 0, 0, 0);
@@ -63,13 +77,13 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
                 return;
             }
 
-            // 3. Validate Content
+            // 4. Validate Content
             if (baseSchedules.length === 0) {
                 setValidationError("There are no schedule entries to publish.");
                 return;
             }
 
-            // 3. Check Existence
+            // 5. Check Existence
             const exists = await checkIfScheduleExists(activeDate);
             setNeedsOverwrite(exists);
 
@@ -86,6 +100,8 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
             onOpenChange(false);
         } else if (result.exists) {
             setNeedsOverwrite(true);
+        } else if (result.error) {
+            setValidationError(result.error);
         }
     };
 
@@ -93,6 +109,8 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
         const result = await publishToSupabase(true);
         if (result.success) {
             onOpenChange(false);
+        } else if (result.error) {
+            setValidationError(result.error);
         }
     };
 

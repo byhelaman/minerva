@@ -20,7 +20,7 @@ export function InstructorCell({ row, instructorsList, onInstructorChange }: Ins
     };
 
     return (
-        <div className="w-full max-w-[180px]">
+        <div className="w-full max-w-45">
             <InstructorSelector
                 value={instructor}
                 onChange={handleInstructorChange}

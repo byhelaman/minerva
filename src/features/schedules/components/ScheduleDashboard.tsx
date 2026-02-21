@@ -274,17 +274,27 @@ export function ScheduleDashboard() {
             }
         }
 
+        // Helper: only set activeDate if ALL entries share a single date
+        const inferActiveDate = (data: Schedule[]) => {
+            if (data.length === 0) return;
+            const uniqueDates = new Set(data.map(s => s.date));
+            if (uniqueDates.size === 1) {
+                setActiveDate(data[0].date);
+            } else {
+                setActiveDate(null);
+                toast.warning("Multiple dates detected", {
+                    description: "The loaded schedules contain multiple dates. Only single-date schedules can be published.",
+                });
+            }
+        };
+
         if (settings.clearScheduleOnLoad) {
             setBaseSchedules(deduplicatedNewData);
             const msg = internalDuplicates > 0
                 ? `Loaded ${deduplicatedNewData.length} schedules (${internalDuplicates} internal duplicates removed)`
                 : `Loaded ${deduplicatedNewData.length} schedules`;
             toast.success(msg);
-
-            // Assume the first date from uploaded file is the active date we want to work on
-            if (deduplicatedNewData.length > 0 && deduplicatedNewData[0].date) {
-                setActiveDate(deduplicatedNewData[0].date);
-            }
+            inferActiveDate(deduplicatedNewData);
             return;
         }
 
@@ -298,7 +308,9 @@ export function ScheduleDashboard() {
             return;
         }
 
-        setBaseSchedules([...baseSchedules, ...uniqueNewData]);
+        const merged = [...baseSchedules, ...uniqueNewData];
+        setBaseSchedules(merged);
+        inferActiveDate(merged);
         toast.success(`Added ${uniqueNewData.length} new schedules`);
     };
 

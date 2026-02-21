@@ -6,7 +6,6 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ScheduleDashboard } from "@/features/schedules/components/ScheduleDashboard";
 import { SettingsPage } from "@/features/settings/components/SettingsPage";
 import { ProfilePage } from "@/features/profile/components/ProfilePage";
-import { DocsPage } from "@/features/docs/components/DocsPage";
 import { SystemPage } from "@/features/system/components/SystemPage";
 import { ReportsPage } from "@/features/system/components/ReportsPage";
 import { StatisticsPage } from "@/features/statistics/components/StatisticsPage";
@@ -55,7 +54,6 @@ function App() {
             <Route path="/" element={<ErrorBoundary><ScheduleDashboard /></ErrorBoundary>} />
             <Route path="/settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
             <Route path="/profile" element={<ErrorBoundary><ProfilePage /></ErrorBoundary>} />
-            <Route path="/docs" element={<ErrorBoundary><DocsPage /></ErrorBoundary>} />
             <Route path="/statistics" element={<ErrorBoundary><StatisticsPage /></ErrorBoundary>} />
 
             <Route path="/system" element={

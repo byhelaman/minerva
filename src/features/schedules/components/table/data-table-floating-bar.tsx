@@ -1,10 +1,12 @@
 import { Copy, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 interface DataTableFloatingBarProps {
     selectedCount: number;
     onCopy?: () => void;
+    onCopyAsTable?: () => void;
     onDelete?: () => void;
     onClearSelection: () => void;
 }
@@ -12,25 +14,41 @@ interface DataTableFloatingBarProps {
 export function DataTableFloatingBar({
     selectedCount,
     onCopy,
+    onCopyAsTable,
     onDelete,
     onClearSelection,
 }: DataTableFloatingBarProps) {
-    if (selectedCount === 0 || (!onCopy && !onDelete)) return null;
+    if (selectedCount === 0 || (!onCopy && !onCopyAsTable && !onDelete)) return null;
+
+    const hasCopyOptions = onCopy && onCopyAsTable;
 
     return (
-        <div className="sticky bottom-4 z-10 mx-auto w-fit flex items-center gap-2 rounded-lg border bg-background px-4 py-2 pr-3 shadow-md animate-in fade-in slide-in-from-bottom-2 duration-200">
+        <div className="sticky bottom-4 z-10 mx-auto w-fit flex items-center gap-2 rounded-lg border bg-background px-4 py-2 pr-3 shadow-md animate-in fade-in slide-in-from-bottom-2 duration-200 transition-colors-none">
             <span className="text-sm text-muted-foreground whitespace-nowrap">
                 {selectedCount} selected
             </span>
 
             <Separator orientation="vertical" className="h-4! ml-2" />
 
-            {onCopy && (
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onCopy}
-                >
+            {hasCopyOptions ? (
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                            <Copy />
+                            Copy
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="center" side="top">
+                        <DropdownMenuItem onSelect={onCopy}>
+                            Simple text
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={onCopyAsTable}>
+                            Table format
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            ) : onCopy && (
+                <Button variant="ghost" size="sm" onClick={onCopy}>
                     <Copy />
                     Copy
                 </Button>

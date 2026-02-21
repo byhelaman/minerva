@@ -35,6 +35,7 @@ src-tauri/gen
 # Lockfiles (project uses pnpm)
 package-lock.json
 yarn.lock
+pnpm-lock.yaml
 
 # AI agent files
 .agents/

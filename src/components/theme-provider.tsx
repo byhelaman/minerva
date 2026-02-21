@@ -1,14 +1,14 @@
 import { createContext, useContext, useEffect, useState } from "react"
 
-type Theme = "dark" | "light" | "system"
+export type Theme = "dark" | "light" | "system"
 
-type ThemeProviderProps = {
+export type ThemeProviderProps = {
     children: React.ReactNode
     defaultTheme?: Theme
     storageKey?: string
 }
 
-type ThemeProviderState = {
+export type ThemeProviderState = {
     theme: Theme
     setTheme: (theme: Theme) => void
 }
@@ -24,6 +24,7 @@ export function ThemeProvider({
     children,
     defaultTheme = "system",
     storageKey = "vite-ui-theme",
+    ...props
 }: ThemeProviderProps) {
     const [theme, setTheme] = useState<Theme>(
         () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
@@ -35,13 +36,18 @@ export function ThemeProvider({
         root.classList.remove("light", "dark")
 
         if (theme === "system") {
-            const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
-                .matches
-                ? "dark"
-                : "light"
-
+            const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
+            const systemTheme = mediaQuery.matches ? "dark" : "light"
             root.classList.add(systemTheme)
-            return
+
+            const listener = (e: MediaQueryListEvent) => {
+                root.classList.remove("light", "dark")
+                root.classList.add(e.matches ? "dark" : "light")
+            }
+
+            // Using modern addEventListener instead of addListener
+            mediaQuery.addEventListener("change", listener)
+            return () => mediaQuery.removeEventListener("change", listener)
         }
 
         root.classList.add(theme)
@@ -49,14 +55,14 @@ export function ThemeProvider({
 
     const value = {
         theme,
-        setTheme: (theme: Theme) => {
-            localStorage.setItem(storageKey, theme)
-            setTheme(theme)
+        setTheme: (newTheme: Theme) => {
+            localStorage.setItem(storageKey, newTheme)
+            setTheme(newTheme)
         },
     }
 
     return (
-        <ThemeProviderContext.Provider {...{ value }}>
+        <ThemeProviderContext.Provider {...props} value={value}>
             {children}
         </ThemeProviderContext.Provider>
     )
@@ -65,8 +71,9 @@ export function ThemeProvider({
 export const useTheme = () => {
     const context = useContext(ThemeProviderContext)
 
-    if (context === undefined)
+    if (context === undefined) {
         throw new Error("useTheme must be used within a ThemeProvider")
+    }
 
     return context
 }

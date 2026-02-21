@@ -11,14 +11,21 @@ import {
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
-    DropdownMenuShortcut,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Link, useNavigate } from "react-router-dom"
 import { useAuth } from "@/components/auth-provider"
+import { useTheme } from "@/components/theme-provider"
+import { useSettings } from "@/components/settings-provider"
+import { LogOut, Settings2, Check, SwatchBook, Plus } from "lucide-react"
 
 export function UserNav() {
     const { profile, signOut } = useAuth();
+    const { theme, setTheme } = useTheme();
+    const { updateSetting } = useSettings();
     const navigate = useNavigate();
 
     // Obtener iniciales del nombre o email
@@ -53,7 +60,7 @@ export function UserNav() {
                     </Avatar>
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56" align="end" forceMount>
+            <DropdownMenuContent className="w-40" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
                         <p className="text-sm leading-none font-medium">
@@ -65,39 +72,62 @@ export function UserNav() {
                     </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                        <SwatchBook />
+                        Theme
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                        <DropdownMenuItem onSelect={() => { setTheme("light"); updateSetting("theme", "light"); }}>
+                            <Check
+                                className={
+                                    theme === "light" ? "opacity-100" : "opacity-0"
+                                }
+                            />
+                            Light
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => { setTheme("dark"); updateSetting("theme", "dark"); }}>
+                            <Check
+                                className={
+                                    theme === "dark" ? "opacity-100" : "opacity-0"
+                                }
+                            />
+                            Dark
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => { setTheme("system"); updateSetting("theme", "system"); }}>
+
+                            <Check
+                                className={
+                                    theme === "system" ? "opacity-100" : "opacity-0"
+                                }
+                            />
+                            System
+                        </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                </DropdownMenuSub>
                 <DropdownMenuGroup>
-                    <DropdownMenuItem asChild>
+                    {/* <DropdownMenuItem asChild>
                         <Link to="/profile">
                             Profile
                             <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
                         </Link>
-                    </DropdownMenuItem>
+                    </DropdownMenuItem> */}
                     <DropdownMenuItem asChild>
                         <Link to="/settings">
+                            <Settings2 />
                             Settings
-                            <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
                         </Link>
                     </DropdownMenuItem>
                 </DropdownMenuGroup>
-                {/* <RequirePermission permission="system.manage">
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                        <Link to="/system">
-                            System
-                        </Link>
-                    </DropdownMenuItem>
-                </RequirePermission>
-                <RequirePermission permission="reports.view">
-                    <DropdownMenuItem asChild>
-                        <Link to="/reports">
-                            Reports
-                        </Link>
-                    </DropdownMenuItem>
-                </RequirePermission> */}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem disabled>
+                    <Plus />
+                    Add Account
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout}>
+                    <LogOut />
                     Log out
-                    <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>

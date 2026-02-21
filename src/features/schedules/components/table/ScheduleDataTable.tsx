@@ -289,6 +289,20 @@ export function ScheduleDataTable<TData, TValue>({
 
     const handleBulkCopy = () => {
         const selectedRows = table.getFilteredSelectedRowModel().rows;
+        const details = selectedRows.map(row => {
+            const s = row.original as Record<string, unknown>;
+            const timeRange = `${s.start_time} - ${s.end_time}`;
+            return `${s.date}\n${s.program}\n${timeRange}`;
+        }).join("\n\n");
+        navigator.clipboard.writeText(details).then(() => {
+            toast.success(`${selectedRows.length} rows copied`);
+        }).catch(() => {
+            toast.error("Failed to copy");
+        });
+    };
+
+    const handleBulkCopyAsTable = () => {
+        const selectedRows = table.getFilteredSelectedRowModel().rows;
         const tdStyle = "border: 1px solid #e5e7eb; padding: 2px 8px; white-space: nowrap; font-size: 10px;";
         const thStyle = `${tdStyle} font-weight: 700;`;
 
@@ -324,7 +338,7 @@ export function ScheduleDataTable<TData, TValue>({
             "text/html": new Blob([html], { type: "text/html" }),
             "text/plain": new Blob([text], { type: "text/plain" }),
         })]).then(() => {
-            toast.success(`${selectedRows.length} rows copied`);
+            toast.success(`${selectedRows.length} rows copied as table`);
         }).catch(() => {
             toast.error("Failed to copy");
         });
@@ -452,6 +466,7 @@ export function ScheduleDataTable<TData, TValue>({
                         const selectedRows = table.getFilteredSelectedRowModel().rows.map(r => r.original);
                         props.onBulkCopy!(selectedRows);
                     } : handleBulkCopy)}
+                    onCopyAsTable={props.hideBulkCopy || props.onBulkCopy ? undefined : handleBulkCopyAsTable}
                     onDelete={props.onBulkDelete ? () => {
                         // Use getSelectedRowModel (not filtered) so rows hidden by filters are also deleted
                         const selectedRows = table.getSelectedRowModel().rows.map(r => r.original);

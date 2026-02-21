@@ -62,7 +62,7 @@ export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: Incid
     };
 
     return (
-        <ScrollArea className="h-[400px] pr-3 -mr-3">
+        <ScrollArea className="h-100 pr-3 -mr-3">
             <div className="space-y-6 px-1 pb-2">
                 <FormField
                     control={form.control}
@@ -78,7 +78,7 @@ export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: Incid
                                         onCheckedChange={(checked) => {
                                             field.onChange(checked ? "Yes" : "No");
                                         }}
-                                        className="h-[20px] w-[36px] [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
+                                        className="h-5 w-9 [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
                                     />
                                     <span className="text-sm text-muted-foreground">{field.value}</span>
                                 </div>
@@ -228,7 +228,7 @@ export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: Incid
                                         <SelectItem value="No debió ser programada">No debió ser programada</SelectItem>
                                         <SelectItem value="Fuera de disponibilidad">Fuera de disponibilidad</SelectItem>
                                         <SelectItem value="Instructor sin competencias">Instructor sin competencias</SelectItem>
-                                        <SelectItem value="Tardanza">Tardanza</SelectItem>
+                                        <SelectItem value="Tardanza/Ausencia">Tardanza/Ausencia</SelectItem>
                                         <SelectItem value="Instructor con bloqueo">Instructor con bloqueo</SelectItem>
                                         <SelectItem value="Error en modalidad">Error en modalidad</SelectItem>
                                         <SelectItem value="Omisión de horario fijo">Omisión de horario fijo</SelectItem>

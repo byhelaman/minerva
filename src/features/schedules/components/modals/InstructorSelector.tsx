@@ -83,7 +83,7 @@ export function InstructorSelector({
                         value={inputValue}
                         onValueChange={setInputValue}
                     />
-                    <CommandList className="max-h-[300px] overflow-y-auto overflow-x-hidden">
+                    <CommandList className="max-h-75 overflow-y-auto overflow-x-hidden">
                         {showFreeTextOption && (
                             <CommandGroup heading="Custom">
                                 <CommandItem

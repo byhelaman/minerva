@@ -1,20 +1,26 @@
 import * as React from "react"
-import { Link } from "react-router-dom"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Controller, useForm } from "react-hook-form"
 import { toast } from "sonner"
 import * as z from "zod"
-import { Bug, BookOpen, Loader2 } from "lucide-react"
+import { Bug, BookOpen, Loader2, LifeBuoy, CircleQuestionMark } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { DocsDialog } from "./DocsDialog"
 import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card"
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from "@/components/ui/dialog"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
     Field,
     FieldDescription,
@@ -29,11 +35,6 @@ import {
     InputGroupText,
     InputGroupTextarea,
 } from "@/components/ui/input-group"
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from "@/components/ui/popover"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/components/auth-provider"
 import { STORAGE_KEYS } from "@/lib/constants"
@@ -62,7 +63,8 @@ const formSchema = z.object({
 const COOLDOWN_MS = 30000 // 30 segundos
 
 export function BugReportButton() {
-    const [open, setOpen] = React.useState(false)
+    const [bugOpen, setBugOpen] = React.useState(false)
+    const [docsOpen, setDocsOpen] = React.useState(false)
     const [isSubmitting, setIsSubmitting] = React.useState(false)
     const { user, profile } = useAuth()
 
@@ -134,7 +136,7 @@ export function BugReportButton() {
                 position: "bottom-right",
             })
             form.reset()
-            setOpen(false)
+            setBugOpen(false)
 
             // Aplicar cooldown persistente en localStorage
             localStorage.setItem(STORAGE_KEYS.RATE_LIMIT, (Date.now() + COOLDOWN_MS).toString())
@@ -151,120 +153,116 @@ export function BugReportButton() {
 
     return (
         <div className="fixed bottom-6 left-6 z-50 flex flex-col items-center gap-2">
-            <Button
-                size="icon"
-                className="h-11 w-11 rounded-xl"
-                variant="outline"
-                asChild
-            >
-                <Link to="/docs">
-                    <BookOpen className="h-5 w-5" />
-                    <span className="sr-only">Documentation</span>
-                </Link>
-            </Button>
-            <Popover open={open} onOpenChange={setOpen}>
-                <PopoverTrigger asChild>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
                     <Button
                         size="icon"
                         className="h-11 w-11 rounded-xl"
                         variant="outline"
                     >
-                        <Bug className="h-5 w-5" />
-                        <span className="sr-only">Report a bug</span>
+                        <CircleQuestionMark className="h-8 w-8" />
+                        <span className="sr-only">Help & Resources</span>
                     </Button>
-                </PopoverTrigger>
-                <PopoverContent
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
                     side="top"
                     align="start"
-                    className="w-[380px] p-0 rounded-xl"
-                    sideOffset={12}
+                    className="rounded-lg"
                 >
-                    <Card className="border-0 shadow-none">
-                        <CardHeader>
-                            <CardTitle className="text-base">Bug Report</CardTitle>
-                            <CardDescription>
-                                Help us improve by reporting bugs you encounter.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <form id="bug-report-form" onSubmit={form.handleSubmit(onSubmit)}>
-                                <FieldGroup>
-                                    <Controller
-                                        name="title"
-                                        control={form.control}
-                                        render={({ field, fieldState }) => (
-                                            <Field data-invalid={fieldState.invalid}>
-                                                <FieldLabel htmlFor="bug-report-title">
-                                                    Bug Title
-                                                </FieldLabel>
-                                                <Input
-                                                    {...field}
-                                                    id="bug-report-title"
-                                                    aria-invalid={fieldState.invalid}
-                                                    placeholder="Login button not working"
-                                                    autoComplete="off"
-                                                />
-                                                {fieldState.invalid && (
-                                                    <FieldError errors={[fieldState.error]} />
-                                                )}
-                                            </Field>
+                    <DropdownMenuItem onSelect={() => setDocsOpen(true)} className="cursor-pointer">
+                        Documentation
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setBugOpen(true)} className="cursor-pointer">
+                        Report a Bug
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DocsDialog open={docsOpen} onOpenChange={setDocsOpen} />
+
+            <Dialog open={bugOpen} onOpenChange={setBugOpen}>
+                <DialogContent className="sm:max-w-105">
+                    <DialogHeader>
+                        <DialogTitle>Bug Report</DialogTitle>
+                        <DialogDescription>
+                            Help us improve by reporting bugs you encounter.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form id="bug-report-form" onSubmit={form.handleSubmit(onSubmit)}>
+                        <FieldGroup>
+                            <Controller
+                                name="title"
+                                control={form.control}
+                                render={({ field, fieldState }) => (
+                                    <Field data-invalid={fieldState.invalid}>
+                                        <FieldLabel htmlFor="bug-report-title">
+                                            Bug Title
+                                        </FieldLabel>
+                                        <Input
+                                            {...field}
+                                            id="bug-report-title"
+                                            aria-invalid={fieldState.invalid}
+                                            placeholder="Login button not working"
+                                            autoComplete="off"
+                                        />
+                                        {fieldState.invalid && (
+                                            <FieldError errors={[fieldState.error]} />
                                         )}
-                                    />
-                                    <Controller
-                                        name="description"
-                                        control={form.control}
-                                        render={({ field, fieldState }) => (
-                                            <Field data-invalid={fieldState.invalid}>
-                                                <FieldLabel htmlFor="bug-report-description">
-                                                    Description
-                                                </FieldLabel>
-                                                <InputGroup>
-                                                    <InputGroupTextarea
-                                                        {...field}
-                                                        id="bug-report-description"
-                                                        placeholder="Describe what happened..."
-                                                        rows={4}
-                                                        className="min-h-20 resize-none max-h-[200px] no-scrollbar"
-                                                        aria-invalid={fieldState.invalid}
-                                                    />
-                                                    <InputGroupAddon align="block-end">
-                                                        <InputGroupText className="tabular-nums">
-                                                            {countWords(field.value)}/200
-                                                        </InputGroupText>
-                                                    </InputGroupAddon>
-                                                </InputGroup>
-                                                <FieldDescription>
-                                                    Steps to reproduce, expected vs actual behavior.
-                                                </FieldDescription>
-                                                {fieldState.invalid && (
-                                                    <FieldError errors={[fieldState.error]} />
-                                                )}
-                                            </Field>
+                                    </Field>
+                                )}
+                            />
+                            <Controller
+                                name="description"
+                                control={form.control}
+                                render={({ field, fieldState }) => (
+                                    <Field data-invalid={fieldState.invalid}>
+                                        <FieldLabel htmlFor="bug-report-description">
+                                            Description
+                                        </FieldLabel>
+                                        <InputGroup>
+                                            <InputGroupTextarea
+                                                {...field}
+                                                id="bug-report-description"
+                                                placeholder="Describe what happened..."
+                                                rows={4}
+                                                className="min-h-20 resize-none max-h-[200px] no-scrollbar"
+                                                aria-invalid={fieldState.invalid}
+                                            />
+                                            <InputGroupAddon align="block-end">
+                                                <InputGroupText className="tabular-nums">
+                                                    {countWords(field.value)}/200
+                                                </InputGroupText>
+                                            </InputGroupAddon>
+                                        </InputGroup>
+                                        <FieldDescription>
+                                            Steps to reproduce, expected vs actual behavior.
+                                        </FieldDescription>
+                                        {fieldState.invalid && (
+                                            <FieldError errors={[fieldState.error]} />
                                         )}
-                                    />
-                                </FieldGroup>
-                            </form>
-                        </CardContent>
-                        <CardFooter className="pt-0 gap-2">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                disabled={isSubmitting}
-                                onClick={() => {
-                                    form.reset()
-                                    // setOpen(false)
-                                }}
-                            >
-                                Reset
-                            </Button>
-                            <Button type="submit" form="bug-report-form" disabled={isSubmitting}>
-                                {isSubmitting && <Loader2 className="animate-spin" />}
-                                {isSubmitting ? "Submitting..." : "Submit"}
-                            </Button>
-                        </CardFooter>
-                    </Card>
-                </PopoverContent>
-            </Popover>
+                                    </Field>
+                                )}
+                            />
+                        </FieldGroup>
+                    </form>
+                    <DialogFooter className="gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            disabled={isSubmitting}
+                            onClick={() => {
+                                form.reset()
+                            }}
+                        >
+                            Reset
+                        </Button>
+                        <Button type="submit" form="bug-report-form" disabled={isSubmitting}>
+                            {isSubmitting && <Loader2 className="animate-spin" />}
+                            {isSubmitting ? "Submitting..." : "Submit"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
