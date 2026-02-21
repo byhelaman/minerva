@@ -1,18 +1,13 @@
 import { supabase } from "@/lib/supabase";
 import { Schedule, DailyIncidence } from "../types";
 import { ensureTimeFormat } from "../utils/time-utils";
-
-/** Trim + collapse internal whitespace for consistent key comparison */
-function normalizeField(val: string | undefined | null): string {
-    return (val || '').trim().replace(/\s+/g, ' ');
-}
+import { normalizeString, getSchedulePrimaryKey } from "../utils/string-utils";
 
 /**
- * Service to handle CRUD operations for schedule entries in Supabase.
- * Replaces the JSONB storage model.
+ * Servicio para operaciones CRUD de entradas de horario en Supabase.
  */
 
-// Helper to map DB row to Schedule type
+// Helper para mapear fila de BD a tipo Schedule
 const mapEntryToSchedule = (row: any): Schedule => ({
     date: row.date,
     program: row.program,
@@ -27,24 +22,25 @@ const mapEntryToSchedule = (row: any): Schedule => ({
     status: row.status || undefined
 });
 
-// Helper to map DB row to DailyIncidence type (if type exists)
+// Helper para mapear fila de BD a DailyIncidence (si tiene type o status)
 const mapEntryToIncidence = (row: any): DailyIncidence | null => {
-    // We rely on 'type' being present to consider it an active incidence
-    if (!row.type) return null;
+    // Considerar como incidencia si tiene 'type' (incidencia completa)
+    // O si tiene 'status' (marcado via switch/Live mode)
+    if (!row.type && !row.status) return null;
     return {
-        // Base Schedule fields (required since DailyIncidence extends Schedule)
+        // Campos base del Schedule (requeridos ya que DailyIncidence extiende Schedule)
         date: row.date,
         program: row.program,
-        start_time: row.start_time,
+        start_time: ensureTimeFormat(row.start_time),
         instructor: row.instructor,
         shift: row.shift,
         branch: row.branch,
-        end_time: row.end_time,
+        end_time: ensureTimeFormat(row.end_time),
         code: row.code,
         minutes: row.minutes,
         units: row.units,
 
-        // Incidence-specific fields
+        // Campos específicos de incidencia
         status: row.status,
         substitute: row.substitute || undefined,
         type: row.type || undefined,
@@ -58,8 +54,8 @@ const mapEntryToIncidence = (row: any): DailyIncidence | null => {
 export const scheduleEntriesService = {
 
     /**
-     * Fetch all schedules for a specific date.
-     * Returns both the base schedules and any recorded incidences.
+     * Obtener todos los horarios de una fecha específica.
+     * Retorna tanto los schedules base como las incidencias registradas.
      */
     async getSchedulesByDate(date: string) {
         const { data, error } = await supabase
@@ -84,8 +80,8 @@ export const scheduleEntriesService = {
     },
 
     /**
-     * Fetch all schedules for a date range.
-     * Returns both the base schedules and any recorded incidences.
+     * Obtener todos los horarios de un rango de fechas.
+     * Retorna tanto los schedules base como las incidencias registradas.
      */
     async getSchedulesByDateRange(startDate: string, endDate: string) {
         const { data, error } = await supabase
@@ -99,9 +95,9 @@ export const scheduleEntriesService = {
         const schedules: Schedule[] = [];
         const incidences: DailyIncidence[] = [];
 
-        // RPC returns a JSON array directly (as a single object/array) due to json_agg check
-        // Supabase .rpc() with json return type usually returns the data directly.
-        // We cast to any[] just to be safe.
+        // El RPC retorna un array JSON directamente por el json_agg.
+        // Supabase .rpc() con retorno JSON usualmente entrega la data directamente.
+        // Casteo a any[] por seguridad.
         const rows = Array.isArray(data) ? data : (data as any) || [];
 
         rows.forEach((row: any) => {
@@ -116,9 +112,9 @@ export const scheduleEntriesService = {
     },
 
     /**
-     * Batch upsert schedules (Publish flow).
-     * Updates existing rows or inserts new ones.
-     * Incidence fields are excluded so existing incidence data is preserved on re-publish.
+     * Upsert masivo de schedules (flujo de Publicar).
+     * Actualiza filas existentes o inserta nuevas.
+     * Los campos de incidencia se excluyen para preservar datos existentes al re-publicar.
      */
     async publishSchedules(schedules: Schedule[], publishedBy: string) {
         if (schedules.length === 0) return;
@@ -127,21 +123,16 @@ export const scheduleEntriesService = {
         const rows: any[] = [];
 
         for (const s of schedules) {
-            // Normalize composite key fields to prevent whitespace/format duplicates
-            const program = (s.program || '').trim();
-            const instructor = (s.instructor || '').trim();
-            const start_time = ensureTimeFormat(s.start_time);
-
-            // Deduplicate within the batch
-            const key = `${s.date}|${program}|${start_time}|${instructor}`;
+            // Deduplicar dentro del lote
+            const key = getSchedulePrimaryKey(s);
 
             if (!uniqueKeys.has(key)) {
                 uniqueKeys.add(key);
                 rows.push({
                     date: s.date,
-                    program,
-                    start_time,
-                    instructor,
+                    program: normalizeString(s.program),
+                    start_time: ensureTimeFormat(s.start_time),
+                    instructor: normalizeString(s.instructor),
 
                     shift: s.shift,
                     branch: s.branch,
@@ -150,9 +141,9 @@ export const scheduleEntriesService = {
                     minutes: s.minutes,
                     units: s.units,
 
-                    // NOTE: Incidence fields intentionally EXCLUDED from publish upsert.
-                    // PostgREST upsert only updates columns present in the request body,
-                    // so existing incidence data is preserved on re-publish.
+                    // NOTA: Campos de incidencia excluidos intencionalmente del publish upsert.
+                    // PostgREST solo actualiza columnas presentes en el body del request,
+                    // así que los datos de incidencia existentes se preservan al re-publicar.
 
                     published_by: publishedBy,
                     synced_at: null
@@ -163,7 +154,7 @@ export const scheduleEntriesService = {
         const { error } = await supabase
             .from('schedule_entries')
             .upsert(rows, {
-                onConflict: 'date,program,start_time,instructor',
+                onConflict: 'date,start_time,instructor,program',
                 ignoreDuplicates: false
             });
 
@@ -171,15 +162,15 @@ export const scheduleEntriesService = {
     },
 
     /**
-     * Batch upsert schedules from Import/Pull flows.
-     * Normalizes all key fields (trim + time format) to prevent duplicates.
+     * Upsert masivo de schedules desde flujos de Importar/Pull.
+     * Normaliza todos los campos clave (trim + formato de hora) para prevenir duplicados.
      *
-     * IMPORTANT: PostgREST batch upsert uses the UNION of all columns across
-     * all rows. If even ONE row has an incidence field, ALL rows get that column
-     * with NULL for missing values — wiping existing incidence data on conflict.
-     * To prevent this, rows are split into two separate upserts:
-     *   1. Base-only rows (no incidence columns) → preserves existing incidences
-     *   2. Incidence rows (ALL incidence columns, uniform shape) → updates incidences
+     * IMPORTANTE: El upsert masivo de PostgREST usa la UNIÓN de todas las columnas
+     * de todas las filas. Si UNA fila tiene un campo de incidencia, TODAS las filas
+     * reciben esa columna con NULL — borrando datos de incidencia existentes en conflicto.
+     * Para evitarlo, las filas se dividen en dos upserts separados:
+     *   1. Filas base (sin columnas de incidencia) → preserva incidencias existentes
+     *   2. Filas de incidencia (TODAS las columnas, forma uniforme) → actualiza incidencias
      */
     async importSchedules(schedules: Schedule[], publishedBy: string): Promise<{ upsertedCount: number; duplicatesSkipped: number }> {
         if (schedules.length === 0) return { upsertedCount: 0, duplicatesSkipped: 0 };
@@ -190,13 +181,8 @@ export const scheduleEntriesService = {
         let duplicatesSkipped = 0;
 
         for (const s of schedules) {
-            // Normalize ALL composite key fields consistently
-            const program = normalizeField(s.program);
-            const instructor = normalizeField(s.instructor);
-            const start_time = ensureTimeFormat(s.start_time);
-
-            // Deduplicate within this import batch
-            const key = `${s.date}|${program}|${start_time}|${instructor}`;
+            // Deduplicar dentro de este lote de importación
+            const key = getSchedulePrimaryKey(s);
 
             if (uniqueKeys.has(key)) {
                 duplicatesSkipped++;
@@ -205,13 +191,13 @@ export const scheduleEntriesService = {
             uniqueKeys.add(key);
 
             const baseRow: any = {
-                // Composite key fields (normalized)
+                // Campos clave compuesta (normalizados)
                 date: s.date,
-                program,
-                start_time,
-                instructor,
+                program: normalizeString(s.program),
+                start_time: ensureTimeFormat(s.start_time),
+                instructor: normalizeString(s.instructor),
 
-                // Base schedule fields
+                // Campos base del schedule
                 shift: s.shift,
                 branch: s.branch,
                 end_time: ensureTimeFormat(s.end_time),
@@ -227,7 +213,7 @@ export const scheduleEntriesService = {
                 || s.description || s.department || s.feedback;
 
             if (hasIncidence) {
-                // Include ALL incidence fields to ensure uniform column shape
+                // Incluir TODOS los campos de incidencia para asegurar forma de columnas uniforme
                 incidenceRows.push({
                     ...baseRow,
                     status: s.status || null,
@@ -244,11 +230,11 @@ export const scheduleEntriesService = {
         }
 
         const upsertOpts = {
-            onConflict: 'date,program,start_time,instructor',
+            onConflict: 'date,start_time,instructor,program',
             ignoreDuplicates: false
         };
 
-        // Two separate upserts to avoid mixed-column contamination
+        // Dos upserts separados para evitar contaminación de columnas mixtas
         if (baseOnlyRows.length > 0) {
             const { error } = await supabase
                 .from('schedule_entries')
@@ -267,10 +253,17 @@ export const scheduleEntriesService = {
     },
 
     /**
-     * Update a specific entry's incidence data (IncidenceModal).
-     * Returns true if the update was successful (row existed), false otherwise.
+     * Actualizar datos de incidencia de una entrada específica (IncidenceModal).
+     * Retorna true si la actualización fue exitosa (la fila existía), false si no.
      */
     async updateIncidence(key: { date: string, program: string, start_time: string, instructor: string }, changes: Partial<DailyIncidence>): Promise<boolean> {
+        const normalizedKey = {
+            date: key.date,
+            program: normalizeString(key.program),
+            start_time: ensureTimeFormat(key.start_time),
+            instructor: normalizeString(key.instructor) || 'none'
+        };
+
         const { data, error } = await supabase
             .from('schedule_entries')
             .update({
@@ -282,7 +275,7 @@ export const scheduleEntriesService = {
                 department: changes.department,
                 feedback: changes.feedback,
             })
-            .match(key)
+            .match(normalizedKey)
             .select();
 
         if (error) throw error;
@@ -291,7 +284,7 @@ export const scheduleEntriesService = {
     },
 
     /**
-     * For Sync: Get entries that need to be synced to Excel
+     * Para Sync: Obtener entradas que necesitan sincronizarse a Excel
      */
     async getEntriesPendingSync(date: string) {
         const { data, error } = await supabase
@@ -305,7 +298,7 @@ export const scheduleEntriesService = {
     },
 
     /**
-     * Find dates that look like they need syncing.
+     * Buscar fechas que parecen necesitar sincronización.
      */
     async getPendingSyncDates(): Promise<string[]> {
         const { data, error } = await supabase
@@ -319,8 +312,8 @@ export const scheduleEntriesService = {
     },
 
     /**
-     * Fetch all entries that have incidence data.
-     * Used for the consolidated incidences Excel export.
+     * Obtener todas las entradas que tienen datos de incidencia.
+     * Usado para la exportación consolidada de incidencias a Excel.
      */
     async getAllIncidences(startDate?: string, endDate?: string): Promise<DailyIncidence[]> {
         let query = supabase
@@ -363,7 +356,7 @@ export const scheduleEntriesService = {
     },
 
     /**
-     * Mark a date as synced
+     * Marcar una fecha como sincronizada
      */
     async markDateAsSynced(date: string) {
         const now = new Date().toISOString();
@@ -376,8 +369,8 @@ export const scheduleEntriesService = {
     },
 
     /**
-     * Batch delete multiple schedule entries in a single RPC call.
-     * Much faster than sequential individual deletes.
+     * Eliminar múltiples entradas de horario en una sola llamada RPC.
+     * Mucho más rápido que eliminaciones individuales secuenciales.
      */
     async batchDeleteScheduleEntries(entries: { date: string, program: string, start_time: string, instructor: string }[]): Promise<number> {
         if (entries.length === 0) return 0;
@@ -398,25 +391,27 @@ export const scheduleEntriesService = {
     },
 
     /**
-     * Delete a specific schedule entry.
+     * Eliminar una entrada de horario específica.
      */
     async deleteScheduleEntry(entry: { date: string, program: string, start_time: string, instructor: string }) {
-        const { date, program, start_time, instructor } = entry;
+        const normalizedKey = {
+            date: entry.date,
+            program: normalizeString(entry.program),
+            start_time: ensureTimeFormat(entry.start_time),
+            instructor: normalizeString(entry.instructor)
+        };
+
         const { error } = await supabase
             .from('schedule_entries')
             .delete()
-            .match({ date, program, start_time, instructor });
+            .match(normalizedKey);
 
         if (error) throw error;
     },
 
     /**
-     * Insert a single schedule entry.
-     * Used for manually adding entries from Reports page.
-     */
-    /**
-     * Fetch composite keys for existing entries on given dates.
-     * Lightweight: only selects key columns for overlap comparison.
+     * Obtener claves compuestas de entradas existentes en las fechas dadas.
+     * Ligero: solo selecciona columnas clave para comparación de superposición.
      */
     async getExistingKeys(dates: string[]): Promise<Set<string>> {
         if (dates.length === 0) return new Set();
@@ -430,7 +425,7 @@ export const scheduleEntriesService = {
 
         const keys = new Set<string>();
         data?.forEach(row => {
-            const key = `${row.date}|${normalizeField(row.program)}|${ensureTimeFormat(row.start_time)}|${normalizeField(row.instructor)}`;
+            const key = getSchedulePrimaryKey(row);
             keys.add(key);
         });
         return keys;
@@ -452,7 +447,7 @@ export const scheduleEntriesService = {
                 units: schedule.units,
                 published_by: publishedBy,
 
-                // Incidence fields
+                // Campos de incidencia
                 status: schedule.status || null,
                 type: schedule.type || null,
                 subtype: schedule.subtype || null,

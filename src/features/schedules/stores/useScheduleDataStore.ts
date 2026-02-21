@@ -2,23 +2,22 @@ import { create } from 'zustand';
 import { Schedule, DailyIncidence } from '../types';
 import { scheduleEntriesService } from '../services/schedule-entries-service';
 import { toast } from 'sonner';
+import { getSchedulePrimaryKey } from '../utils/string-utils';
 
 interface ScheduleDataState {
     baseSchedules: Schedule[];
-    // Incidences are now part of the fetched data, but we might want to keep them separated in memory if useful,
-    // or just merge them? The UI usually expects a merged view or separation.
-    // The new service returns { schedules, incidences }.
-    // Let's keep them separated here to match previous structure, but source them from DB.
+    // Las incidencias son parte de los datos obtenidos de BD.
+    // Se mantienen separadas en memoria para coincidir con la estructura previa.
     incidences: DailyIncidence[];
-    incidencesVersion: number; // Incremented on every incidence mutation
+    incidencesVersion: number; // Se incrementa en cada mutación de incidencia
 
     isLoading: boolean;
 
-    // Actions
+    // Acciones
     setBaseSchedules: (schedules: Schedule[]) => void;
     setLoadedData: (schedules: Schedule[], incidences: DailyIncidence[]) => void;
 
-    // DB Actions
+    // Acciones de BD
     fetchSchedulesForDate: (date: string) => Promise<void>;
     fetchSchedulesForRange: (startDate: string, endDate: string) => Promise<void>;
     updateIncidence: (incidence: DailyIncidence) => Promise<void>;
@@ -26,7 +25,7 @@ interface ScheduleDataState {
     fetchIncidencesForDate: (date: string) => Promise<void>;
     deleteSchedule: (schedule: Schedule) => Promise<void>;
 
-    // Computed (Keep for compatibility if needed, but logic changes)
+    // Computed (mantener por compatibilidad)
     getComputedSchedules: () => (Schedule | DailyIncidence)[];
 }
 
@@ -79,7 +78,7 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
     },
 
     fetchIncidencesForDate: async (date: string) => {
-        // Non-destructive fetch: only updates incidences, keeps base schedules (e.g. drafts)
+        // Fetch no destructivo: solo actualiza incidencias, preserva base schedules (ej: drafts)
         set({ isLoading: true });
         try {
             const { incidences } = await scheduleEntriesService.getSchedulesByDate(date);
@@ -96,46 +95,52 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
 
     deleteIncidence: async (incidence: DailyIncidence) => {
         const previousIncidences = get().incidences;
+        const previousBaseSchedules = get().baseSchedules;
 
-        // Optimistic update (local only, no version bump yet)
+        const incidenceKey = getSchedulePrimaryKey(incidence);
+
+        // Update optimista: remover de incidencias y limpiar status en baseSchedules
         set(state => ({
-            incidences: state.incidences.filter(i =>
-                !(i.date === incidence.date &&
-                    i.program === incidence.program &&
-                    i.start_time === incidence.start_time &&
-                    i.instructor === incidence.instructor)
-            ),
+            incidences: state.incidences.filter(i => getSchedulePrimaryKey(i) !== incidenceKey),
+            baseSchedules: state.baseSchedules.map(sch => {
+                if (getSchedulePrimaryKey(sch) === incidenceKey) {
+                    return { ...sch, status: null };
+                }
+                return sch;
+            })
         }));
 
+        const clearPayload: Partial<DailyIncidence> = {
+            status: null,
+            type: null,
+            subtype: null,
+            substitute: null,
+            description: null,
+            department: null,
+            feedback: null
+        };
+
         try {
-            // DB Update: Set fields to null
-            const wasUpdated = await scheduleEntriesService.updateIncidence({
+            const success = await scheduleEntriesService.updateIncidence({
                 date: incidence.date,
                 program: incidence.program,
                 start_time: incidence.start_time,
-                instructor: incidence.instructor
-            }, {
-                status: null,
-                type: null,
-                subtype: null,
-                substitute: null,
-                description: null,
-                department: null,
-                feedback: null
-            } as any);
-
-            if (!wasUpdated) {
+                instructor: incidence.instructor || 'none'
+            }, clearPayload);
+            
+            if (!success) {
                 throw new Error('SCHEDULE_NOT_PUBLISHED');
             }
-
-            // DB write confirmed → notify cross-component listeners
+            
+            // Confirmar bump de versión si exitoso (para triggear refetch en ReportsPage)
             set(state => ({ incidencesVersion: state.incidencesVersion + 1 }));
             toast.success("Incidence removed");
         } catch (error) {
             console.error("Failed to delete incidence:", error);
-            // Revert
+            // Revertir
             set(state => ({
                 incidences: previousIncidences,
+                baseSchedules: previousBaseSchedules,
                 incidencesVersion: state.incidencesVersion + 1
             }));
 
@@ -153,20 +158,12 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
         const previousSchedules = get().baseSchedules;
         const previousIncidences = get().incidences;
 
-        // Optimistic Update: Remove from base schedules AND incidences
+        const scheduleKey = getSchedulePrimaryKey(schedule);
+
+        // Update optimista: remover de base schedules Y de incidencias
         set(state => ({
-            baseSchedules: state.baseSchedules.filter(s =>
-                !(s.date === schedule.date &&
-                    s.program === schedule.program &&
-                    s.start_time === schedule.start_time &&
-                    s.instructor === schedule.instructor)
-            ),
-            incidences: state.incidences.filter(i =>
-                !(i.date === schedule.date &&
-                    i.program === schedule.program &&
-                    i.start_time === schedule.start_time &&
-                    i.instructor === schedule.instructor)
-            ),
+            baseSchedules: state.baseSchedules.filter(s => getSchedulePrimaryKey(s) !== scheduleKey),
+            incidences: state.incidences.filter(i => getSchedulePrimaryKey(i) !== scheduleKey),
             incidencesVersion: state.incidencesVersion + 1
         }));
 
@@ -175,12 +172,12 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
                 date: schedule.date,
                 program: schedule.program,
                 start_time: schedule.start_time,
-                instructor: schedule.instructor
+                instructor: schedule.instructor || 'none'
             });
             toast.success("Schedule removed");
         } catch (error) {
             console.error("Failed to delete schedule:", error);
-            // Revert
+            // Revertir
             set(state => ({
                 baseSchedules: previousSchedules,
                 incidences: previousIncidences,
@@ -191,69 +188,103 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
     },
 
     updateIncidence: async (newIncidence: DailyIncidence) => {
-        // Store previous state for potential rollback
+        // Guardar estado previo para posible rollback
         const previousIncidences = get().incidences;
+        const previousBaseSchedules = get().baseSchedules;
 
-        // Optimistic update (local incidences only, no version bump yet)
+        const incidenceKey = getSchedulePrimaryKey(newIncidence);
+
+        // Update optimista: actualizar incidencias y solo el status en baseSchedules
+        // (no contaminar baseSchedules con campos de incidencia que se guardan en el draft)
         set(state => {
-            const filtered = state.incidences.filter(i =>
-                !(i.date === newIncidence.date &&
-                    i.program === newIncidence.program &&
-                    i.start_time === newIncidence.start_time &&
-                    i.instructor === newIncidence.instructor)
-            );
-            return { incidences: [...filtered, newIncidence] };
+            const filtered = state.incidences.filter(i => getSchedulePrimaryKey(i) !== incidenceKey);
+
+            const newBaseSchedules = state.baseSchedules.map(sch => {
+                if (getSchedulePrimaryKey(sch) === incidenceKey) {
+                    return { ...sch, status: newIncidence.status };
+                }
+                return sch;
+            });
+
+            return { 
+                incidences: [...filtered, newIncidence],
+                baseSchedules: newBaseSchedules
+            };
         });
 
-        // DB Update
+        const changes = {
+            status: newIncidence.status,
+            type: newIncidence.type,
+            subtype: newIncidence.subtype,
+            substitute: newIncidence.substitute,
+            description: newIncidence.description,
+            department: newIncidence.department,
+            feedback: newIncidence.feedback
+        };
+
         try {
-            const wasUpdated = await scheduleEntriesService.updateIncidence({
+            const success = await scheduleEntriesService.updateIncidence({
                 date: newIncidence.date,
                 program: newIncidence.program,
                 start_time: newIncidence.start_time,
-                instructor: newIncidence.instructor
-            }, newIncidence);
+                instructor: newIncidence.instructor || 'none'
+            }, changes);
 
-            if (!wasUpdated) {
-                set(state => ({
-                    incidences: previousIncidences,
-                    incidencesVersion: state.incidencesVersion + 1
-                }));
-                throw new Error('SCHEDULE_NOT_PUBLISHED');
+            if (!success) {
+                throw new Error("SCHEDULE_NOT_PUBLISHED"); // Manejado abajo
             }
 
-            // DB write confirmed → bump version to notify cross-component listeners (Reports)
+            // Confirmar bump de versión si exitoso
             set(state => ({ incidencesVersion: state.incidencesVersion + 1 }));
+
         } catch (error) {
-            // Revert optimistic update on any error
-            set(state => ({
+            console.error("Failed to update incidence via service", error);
+            // Revertir update optimista
+            set(() => ({
                 incidences: previousIncidences,
-                incidencesVersion: state.incidencesVersion + 1
+                baseSchedules: previousBaseSchedules,
             }));
-            throw error;
+
+            if (error instanceof Error && error.message === 'SCHEDULE_NOT_PUBLISHED') {
+                toast.error("Schedule not in database. Publish it first to track incidence data.");
+            } else {
+                toast.error("Failed to save incidence.");
+            }
         }
     },
 
     getComputedSchedules: () => {
         const { baseSchedules, incidences } = get();
 
-        // Optimization: Build lookup map first O(M)
+        // Optimización: construir mapa de lookup primero O(M)
         const incidenceMap = new Map<string, DailyIncidence>();
         for (const inc of incidences) {
-            const key = `${inc.date}|${inc.program}|${inc.start_time}|${inc.instructor}`;
+            const key = getSchedulePrimaryKey(inc);
             incidenceMap.set(key, inc);
         }
 
-        // Merge incidence status on top of base schedule O(N)
+        // Merge O(N)
         return baseSchedules.map(sch => {
-            const key = `${sch.date}|${sch.program}|${sch.start_time}|${sch.instructor}`;
+            const key = getSchedulePrimaryKey(sch);
             const match = incidenceMap.get(key);
 
-            // If match exists, it essentially IS the schedule with extra props.
+            // Limpiar propiedades de incidencia que podrían estar cacheadas incorrectamente en baseSchedules
+            const cleanSch = {
+                ...sch,
+                status: undefined,
+                type: undefined,
+                subtype: undefined,
+                substitute: undefined,
+                description: undefined,
+                department: undefined,
+                feedback: undefined
+            };
+
+            // Si hay match, es el schedule con sus props extra de incidencia.
             if (match) {
-                return { ...sch, ...match };
+                return { ...cleanSch, ...match };
             }
-            return sch;
+            return cleanSch;
         });
     }
 }));

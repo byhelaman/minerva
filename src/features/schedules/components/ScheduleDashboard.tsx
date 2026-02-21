@@ -27,7 +27,7 @@ import { ScheduleUpdateBanner } from "./ScheduleUpdateBanner";
 import { PublishToDbModal } from "./modals/PublishToDbModal";
 import { AddScheduleModal } from "./modals/AddScheduleModal";
 
-// Module-level flag: persists across mount/unmount (page navigation), unlike useRef
+// Flag a nivel de módulo: persiste entre mount/unmount (navegación de página), a diferencia de useRef
 let autosaveLoadedThisSession = false;
 
 export function ScheduleDashboard() {
@@ -38,41 +38,41 @@ export function ScheduleDashboard() {
     const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-    // Auth
+    // Autenticación
     const { profile } = useAuth();
     const canManage = (profile?.hierarchy_level ?? 0) >= 80;
 
-    // Store Access
+    // Acceso al Store
     const { baseSchedules, setBaseSchedules, incidences, getComputedSchedules } = useScheduleDataStore();
     const { activeDate, setActiveDate } = useScheduleUIStore();
     const { refreshMsConfig, isPublishing } = useScheduleSyncStore();
 
-    // Computed Schedules (Merged with Incidences)
-    // Memoize to prevent infinite loops in downstream components (AssignLinkModal) that depend on this array
+    // Schedules Computados (Mergeados con Incidencias)
+    // Memoizar para prevenir loops infinitos en componentes downstream (AssignLinkModal) que dependen de este array
     const schedules = useMemo(() => getComputedSchedules(), [baseSchedules, incidences, getComputedSchedules]);
 
     const hasLoadedAutosave = useRef(false);
     const autoSaveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
     const { settings } = useSettings();
-    const { meetings, users, fetchActiveMeetings, isLoadingData } = useZoomStore();
+    const { fetchActiveMeetings, isLoadingData } = useZoomStore();
 
-    // Live Mode state
+    // Estado del Live Mode
     const [showLiveMode, setShowLiveMode] = useState(false);
     const [isLiveLoading, setIsLiveLoading] = useState(false);
     const [activePrograms, setActivePrograms] = useState<Set<string>>(new Set());
     const [liveTimeFilter, setLiveTimeFilter] = useState<string | undefined>(undefined);
     const [liveDateFilter, setLiveDateFilter] = useState<string | undefined>(undefined);
 
-    // Init Global Store
+    // Inicializar Store Global
     useEffect(() => {
         refreshMsConfig();
     }, [refreshMsConfig]);
 
 
-    // Auto-load drafts on mount (only once per app session)
+    // Auto-cargar drafts al montar (solo una vez por sesión de app)
     useEffect(() => {
         if (autosaveLoadedThisSession) {
-            hasLoadedAutosave.current = true; // Enable auto-save on re-visits
+            hasLoadedAutosave.current = true; // Habilitar auto-save en re-visitas
             return;
         }
         autosaveLoadedThisSession = true;
@@ -80,7 +80,7 @@ export function ScheduleDashboard() {
 
         const loadAutosave = async () => {
             try {
-                // Load Base Schedules (Drafts)
+                // Cargar Base Schedules (Drafts)
                 const schedExists = await exists(STORAGE_FILES.SCHEDULES_DRAFT, { baseDir: BaseDirectory.AppLocalData });
                 if (schedExists) {
                     const content = await readTextFile(STORAGE_FILES.SCHEDULES_DRAFT, { baseDir: BaseDirectory.AppLocalData });
@@ -89,8 +89,6 @@ export function ScheduleDashboard() {
                         setBaseSchedules(parsedData);
                         if (parsedData.length > 0 && parsedData[0].date) {
                             setActiveDate(parsedData[0].date);
-                            // Also fetch incidences from DB without overwriting the draft
-                            useScheduleDataStore.getState().fetchIncidencesForDate(parsedData[0].date);
                         }
                         toast.success("Draft schedule restored");
                     }
@@ -104,7 +102,13 @@ export function ScheduleDashboard() {
         loadAutosave();
     }, [setBaseSchedules, setActiveDate]);
 
-    // Debounced auto-save for SCHEDULES (Drafts Only)
+    // Obtener incidencias de BD cuando cambia la fecha activa
+    useEffect(() => {
+        if (!activeDate) return;
+        useScheduleDataStore.getState().fetchIncidencesForDate(activeDate);
+    }, [activeDate]);
+
+    // Auto-guardado con debounce para SCHEDULES (Solo Drafts)
     useEffect(() => {
         if (!hasLoadedAutosave.current) return;
         if (!settings.autoSave) return;
@@ -138,7 +142,7 @@ export function ScheduleDashboard() {
     }, [baseSchedules, settings.autoSave, settings.autoSaveInterval]);
 
 
-    // Live Mode Logic 
+    // Lógica del Live Mode
     const handleLiveModeToggle = useCallback(async (enabled: boolean) => {
         setShowLiveMode(enabled);
 
@@ -152,6 +156,7 @@ export function ScheduleDashboard() {
         const now = new Date();
         const currentHour = now.getHours().toString().padStart(2, '0');
         const currentDate = formatDateToISO(now);
+
         setLiveTimeFilter(currentHour);
         setLiveDateFilter(currentDate);
 
@@ -166,7 +171,8 @@ export function ScheduleDashboard() {
                 return;
             }
 
-            const activeMeetings = meetings.filter(m => currentActiveIds.includes(m.meeting_id));
+            const { meetings: freshMeetings, users: freshUsers } = useZoomStore.getState();
+            const activeMeetings = freshMeetings.filter(m => currentActiveIds.includes(m.meeting_id));
 
             if (activeMeetings.length === 0) {
                 setActivePrograms(new Set());
@@ -180,7 +186,7 @@ export function ScheduleDashboard() {
                 return matchesDate && matchesHour;
             });
 
-            const matcher = new MatchingService(activeMeetings, users);
+            const matcher = new MatchingService(activeMeetings, freshUsers);
             const matchedPrograms = new Set<string>();
 
             for (const schedule of filteredSchedules) {
@@ -192,11 +198,11 @@ export function ScheduleDashboard() {
 
             setActivePrograms(matchedPrograms);
 
-            // Auto-mark matched classes as "Yes" only if status is currently null
+            // Auto-marcar clases coincidentes como "Yes" solo si el status es null
             const { updateIncidence } = useScheduleDataStore.getState();
             for (const s of filteredSchedules) {
                 if (matchedPrograms.has(s.program) && !s.status) {
-                    updateIncidence({ ...s, status: "Yes" }).catch(() => { /* not published yet */ });
+                    updateIncidence({ ...s, status: "Yes" }).catch(e => console.warn('Live: no se pudo actualizar status', e));
                 }
             }
         } catch (error) {
@@ -205,13 +211,13 @@ export function ScheduleDashboard() {
         } finally {
             setIsLiveLoading(false);
         }
-    }, [meetings, users, schedules, fetchActiveMeetings]);
+    }, [schedules, fetchActiveMeetings]);
 
-    // Live auto-refresh: every minute update time filter and re-run local matching
+    // Auto-refresh del Live: cada minuto actualizar filtro de hora y re-ejecutar matching local
     useEffect(() => {
         if (!showLiveMode) return;
 
-        const tick = () => {
+        const tick = async () => {
             const now = new Date();
             const currentHour = now.getHours().toString().padStart(2, '0');
             const currentDate = formatDateToISO(now);
@@ -219,7 +225,8 @@ export function ScheduleDashboard() {
             setLiveTimeFilter(currentHour);
             setLiveDateFilter(currentDate);
 
-            // Re-run matching with cached data (no API call)
+            // Re-ejecutar matching con llamada fresca a la API
+            await fetchActiveMeetings();
             const { activeMeetingIds, meetings: cachedMeetings, users: cachedUsers } = useZoomStore.getState();
             if (activeMeetingIds.length === 0) { setActivePrograms(new Set()); return; }
 
@@ -239,11 +246,11 @@ export function ScheduleDashboard() {
             }
             setActivePrograms(matched);
 
-            // Auto-mark matched classes as "Yes" only if status is currently null
+            // Auto-marcar clases coincidentes como "Yes" solo si el status es null
             const { updateIncidence } = useScheduleDataStore.getState();
             for (const s of filtered) {
                 if (matched.has(s.program) && !s.status) {
-                    updateIncidence({ ...s, status: "Yes" }).catch(() => { /* not published yet */ });
+                    updateIncidence({ ...s, status: "Yes" }).catch(e => console.warn('Live tick: no se pudo actualizar status', e));
                 }
             }
         };
@@ -295,13 +302,14 @@ export function ScheduleDashboard() {
         toast.success(`Added ${uniqueNewData.length} new schedules`);
     };
 
-    const handleDeleteSchedule = (scheduleToDelete: Schedule) => {
+    const handleDeleteSchedule = useCallback((scheduleToDelete: Schedule) => {
         const keyToDelete = getUniqueScheduleKey(scheduleToDelete);
-        setBaseSchedules(baseSchedules.filter((s) => getUniqueScheduleKey(s) !== keyToDelete));
+        const store = useScheduleDataStore.getState();
+        store.setBaseSchedules(store.baseSchedules.filter((s) => getUniqueScheduleKey(s) !== keyToDelete));
         toast.success("Row Deleted", {
             description: scheduleToDelete.program,
         });
-    };
+    }, []);
 
     const handleBulkDeleteSchedules = (rows: Schedule[]) => {
         const keysToDelete = new Set(rows.map(getUniqueScheduleKey));
@@ -344,7 +352,7 @@ export function ScheduleDashboard() {
 
     const columns = useMemo(
         () => getScheduleColumns(handleDeleteSchedule, canManage),
-        [baseSchedules, canManage],
+        [handleDeleteSchedule, canManage],
     );
 
     return (

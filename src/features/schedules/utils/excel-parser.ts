@@ -1,5 +1,6 @@
 import { read, utils } from "xlsx";
 import { formatTimeTo24h, parseTimeValue } from "./time-utils";
+import { normalizeString } from "./string-utils";
 import { ScheduleSchema } from "../schemas/schedule-schema";
 import type { Schedule } from "../types";
 
@@ -32,9 +33,11 @@ export const PARSER_CONFIG = {
 // UTILIDADES GENERALES
 // =============================================================================
 
-/** Convierte cualquier valor a string de forma segura (maneja null/undefined) */
+/**
+ * Safely converts any value to a normalized string.
+ */
 function safeString(val: unknown): string {
-    return String(val ?? "").trim();
+    return normalizeString(val as string);
 }
 
 /** Verifica si el texto contiene una palabra (case-insensitive, límite de palabra) */

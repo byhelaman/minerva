@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeString } from '../utils/string-utils';
 
 // Formato de fecha ISO: YYYY-MM-DD (valida correctitud semántica, ej: rechaza 2020-01-32)
 const dateSchema = z.iso.date();
@@ -13,8 +14,8 @@ export const ScheduleSchema = z.object({
     start_time: timeSchema,
     end_time: timeSchema,
     code: z.string().default(''),         // Puede estar vacío
-    instructor: z.string().trim().transform(val => val === '' ? 'none' : val),
-    program: z.string().min(1, "Program/Group is missing"),
+    instructor: z.string().trim().transform(val => normalizeString(val)).transform(val => val === '' ? 'none' : val),
+    program: z.string().min(1, "Program/Group is missing").trim().transform(val => normalizeString(val)),
     minutes: z.string().regex(/^\d+$/, "Minutes must be numeric").default('0'),
     units: z.string().regex(/^\d+$/, "Units must be numeric").default('0'),
 

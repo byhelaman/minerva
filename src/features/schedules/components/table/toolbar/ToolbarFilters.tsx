@@ -171,6 +171,17 @@ export function ToolbarFilters<TData>({
                 </InputGroupAddon>
             </InputGroup>
 
+            {/* Branch Filter */}
+            {(showBranch ?? !hideFilters) && table.getColumn("branch") && (
+                <DataTableFacetedFilter
+                    column={table.getColumn("branch")}
+                    title="Branch"
+                    options={branchOptions}
+                    matchMode="includes"
+                    disabled={isTableEmpty}
+                />
+            )}
+
             {/* Status Filter */}
             {!hideStatusFilter && (() => {
                 const statusColumn = table.getAllColumns().find(c => c.id === "status");
@@ -197,16 +208,6 @@ export function ToolbarFilters<TData>({
 
             {/* Custom Filter Items (e.g. Incidences Toggle) */}
             {customFilterItems}
-
-            {(showBranch ?? !hideFilters) && table.getColumn("branch") && (
-                <DataTableFacetedFilter
-                    column={table.getColumn("branch")}
-                    title="Branch"
-                    options={branchOptions}
-                    matchMode="includes"
-                    disabled={isTableEmpty}
-                />
-            )}
 
             {(showTime ?? !hideFilters) && table.getColumn("start_time") && (
                 <DataTableFacetedFilter

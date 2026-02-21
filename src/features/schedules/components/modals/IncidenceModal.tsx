@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Schedule, DailyIncidence } from "../../types";
 import { useScheduleDataStore } from "../../stores/useScheduleDataStore";
+import { getSchedulePrimaryKey } from "../../utils/string-utils";
 import { useInstructors } from "../../hooks/useInstructors";
 import { useZoomStore } from "@/features/matching/stores/useZoomStore";
 import {
@@ -18,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { IncidenceFormContent } from "./IncidenceFormContent";
 import { ScheduleInfo } from "./ScheduleInfo";
 
-// Zod validation schema
+// Esquema de validación Zod
 const incidenceFormSchema = z.object({
     status: z.string().optional(),
     type: z.string().min(1, "Type is required"),
@@ -27,7 +28,7 @@ const incidenceFormSchema = z.object({
     description: z.string().optional(),
     department: z.string().optional(),
 }).refine((data) => {
-    // Department is required UNLESS type is 'Novedad'
+    // Department es requerido A MENOS que el tipo sea 'Novedad'
     if (data.type !== 'Novedad' && (!data.department || data.department.trim() === '')) {
         return false;
     }
@@ -52,7 +53,7 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
     const canEdit = hasPermission("schedules.manage");
     const [isDeleting, setIsDeleting] = useState(false);
 
-    // Get unique instructors from Supabase (Zoom users)
+    // Obtener instructores únicos de Supabase (usuarios Zoom)
     const uniqueInstructors = useInstructors();
     const { isInitialized, fetchZoomData } = useZoomStore();
 
@@ -62,7 +63,7 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
         }
     }, [isInitialized, fetchZoomData, open]);
 
-    // Initialize form with react-hook-form
+    // Inicializar formulario con react-hook-form
     const form = useForm<IncidenceFormValues>({
         resolver: zodResolver(incidenceFormSchema),
         defaultValues: {
@@ -75,10 +76,10 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
         },
     });
 
-    // Load existing data or initial values when opening
+    // Cargar datos existentes o valores iniciales al abrir
     useEffect(() => {
         if (open && schedule) {
-            // Priority 1: Check for existing incidence data
+            // Prioridad 1: Verificar datos de incidencia existentes
             const existing = incidences.find(i =>
                 i.date === schedule.date &&
                 i.program === schedule.program &&
@@ -87,7 +88,7 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
             );
 
             if (existing) {
-                // Load existing incidence data
+                // Cargar datos de incidencia existentes
                 form.reset({
                     status: existing.status || "",
                     type: existing.type || "",
@@ -97,7 +98,7 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                     department: existing.department || "",
                 });
             } else if (initialValues) {
-                // Priority 2: Apply initial values from Quick Status
+                // Prioridad 2: Aplicar valores iniciales de Quick Status
                 form.reset({
                     status: initialValues.status || "",
                     type: initialValues.type || "",
@@ -107,7 +108,7 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                     department: initialValues.department || "",
                 });
             } else {
-                // Priority 3: Use schedule's existing fields (from Excel/computed) or defaults
+                // Prioridad 3: Usar campos existentes del schedule (de Excel/computed) o defaults
                 form.reset({
                     status: schedule.status || "",
                     type: schedule.type || "",
@@ -120,7 +121,7 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
         }
     }, [open, schedule, incidences, initialValues, form]);
 
-    // Local submitting state for robust button disabling
+    // Estado local de envío para deshabilitación robusta del botón
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const onSubmit = async (values: IncidenceFormValues) => {
@@ -131,13 +132,13 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
 
         try {
             const incidence: DailyIncidence = {
-                // Composite Key
+                // Clave Compuesta
                 date: schedule.date,
                 program: schedule.program,
                 start_time: schedule.start_time,
                 instructor: schedule.instructor,
 
-                // Base Schedule Fields
+                // Campos base del Schedule
                 shift: schedule.shift,
                 branch: schedule.branch,
                 end_time: schedule.end_time,
@@ -145,13 +146,13 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                 minutes: schedule.minutes,
                 units: schedule.units,
 
-                // Incidence Data from form
-                status: values.status || undefined,
-                type: values.type || undefined,
-                subtype: values.subtype || undefined,
-                substitute: values.substitute || undefined,
-                description: values.description || undefined,
-                department: values.department || undefined,
+                // Datos de Incidencia del formulario
+                status: values.status || null,
+                type: values.type || null,
+                subtype: values.subtype || null,
+                substitute: values.substitute || null,
+                description: values.description || null,
+                department: values.department || null,
             };
 
             await updateIncidence(incidence);
@@ -189,7 +190,7 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                 code: schedule.code,
                 minutes: schedule.minutes,
                 units: schedule.units,
-                type: "Novedad" // Dummy type to satisfy type checker, will be ignored by delete
+                type: undefined,
             });
             onOpenChange(false);
         } catch (error) {
@@ -199,13 +200,10 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
         }
     };
 
-    // Check if there is an actual incidence saved to show the delete button
+    // Verificar si hay una incidencia real guardada para mostrar el botón de eliminar
     const existingIncidence = schedule ? incidences.find(i =>
-        i.date === schedule.date &&
-        i.program === schedule.program &&
-        i.start_time === schedule.start_time &&
-        i.instructor === schedule.instructor &&
-        i.type // Ensure it has a type (active incidence)
+        getSchedulePrimaryKey(i) === getSchedulePrimaryKey(schedule) &&
+        i.type // Asegurar que tiene type (incidencia activa)
     ) : null;
 
     if (!schedule) return null;

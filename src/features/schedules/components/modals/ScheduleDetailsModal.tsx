@@ -16,7 +16,7 @@ interface ScheduleDetailsModalProps {
     schedule: Schedule | null;
 }
 
-const DetailRow = ({ label, value }: { label: string; value: string | undefined }) => (
+const DetailRow = ({ label, value }: { label: string; value: string | null | undefined }) => (
     <div className="flex flex-col gap-0.5">
         <span className="text-xs text-muted-foreground">{label}</span>
         <span className="text-sm">{value || "-"}</span>

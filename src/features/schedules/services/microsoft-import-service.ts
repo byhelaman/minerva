@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { supabase } from '@/lib/supabase';
 import { Schedule, SchedulesConfig } from '../types';
+import { normalizeString, getSchedulePrimaryKey } from "../utils/string-utils";
 import { scheduleEntriesService } from './schedule-entries-service';
 
 // Relaxed schema - only truly required fields are strict
@@ -43,7 +44,12 @@ export interface ImportPreview {
 
 // Generate a unique key for a schedule row
 export function getRowKey(row: Partial<Schedule>): string {
-    return `${row.date || ''}|${row.program || ''}|${row.start_time || ''}|${row.instructor || ''}`;
+    return getSchedulePrimaryKey({
+        date: row.date || '',
+        start_time: row.start_time || '',
+        instructor: row.instructor || '',
+        program: row.program || ''
+    });
 }
 
 // Map Excel headers to Schedule field names
@@ -112,12 +118,11 @@ export async function fetchAndValidateFromExcel(
         const rowArray = rows[i];
         const rowObj: Record<string, unknown> = {};
 
-        // Map array values to object using headers
         headers.forEach((header, idx) => {
             const fieldName = HEADER_MAP[header];
             if (fieldName) {
                 const raw = rowArray[idx];
-                rowObj[fieldName] = typeof raw === 'string' ? raw.trim() : (raw ?? '');
+                rowObj[fieldName] = typeof raw === 'string' ? normalizeString(raw) : (raw ?? '');
             }
         });
 

@@ -221,13 +221,14 @@ export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: Incid
                                     </FormControl>
                                     <SelectContent>
                                         <SelectItem value="Problemas de salud">Problemas de salud</SelectItem>
-                                        <SelectItem value="Imprevistos en red eléctrica">Imprevistos en red eléctrica</SelectItem>
+                                        <SelectItem value="Problema eléctrico/Wi-Fi">Problema eléctrico/Wi-Fi</SelectItem>
                                         <SelectItem value="Cancelación manual">Cancelación manual</SelectItem>
                                         <SelectItem value="Beneficio cancelación">Beneficio cancelación</SelectItem>
                                         <SelectItem value="No fue programada">No fue programada</SelectItem>
                                         <SelectItem value="No debió ser programada">No debió ser programada</SelectItem>
                                         <SelectItem value="Fuera de disponibilidad">Fuera de disponibilidad</SelectItem>
                                         <SelectItem value="Instructor sin competencias">Instructor sin competencias</SelectItem>
+                                        <SelectItem value="Tardanza">Tardanza</SelectItem>
                                         <SelectItem value="Instructor con bloqueo">Instructor con bloqueo</SelectItem>
                                         <SelectItem value="Error en modalidad">Error en modalidad</SelectItem>
                                         <SelectItem value="Omisión de horario fijo">Omisión de horario fijo</SelectItem>

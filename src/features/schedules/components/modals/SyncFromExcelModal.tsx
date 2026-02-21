@@ -36,7 +36,7 @@ function normalizeField(val: string | undefined | null): string {
 
 /** Normalize composite key for a schedule — matches importSchedules logic */
 function normalizeKey(s: Schedule): string {
-    return `${s.date}|${normalizeField(s.program)}|${ensureTimeFormat(s.start_time)}|${normalizeField(s.instructor)}`;
+    return `${s.date}|${ensureTimeFormat(s.start_time)}|${normalizeField(s.instructor)}|${normalizeField(s.program)}`;
 }
 
 type ModalStep = 'filter' | 'loading' | 'preview' | 'importing';

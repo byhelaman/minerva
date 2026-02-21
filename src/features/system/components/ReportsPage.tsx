@@ -30,6 +30,7 @@ import { ImportReportsModal } from "./modals/ImportReportsModal";
 import { UploadModal } from "@/features/schedules/components/modals/UploadModal";
 import { AddScheduleModal } from "@/features/schedules/components/modals/AddScheduleModal";
 import { SyncFromExcelModal } from "@/features/schedules/components/modals/SyncFromExcelModal";
+import { getSchedulePrimaryKey } from "@/features/schedules/utils/string-utils";
 import { scheduleEntriesService } from "@/features/schedules/services/schedule-entries-service";
 import { secureSaveFile } from "@/lib/secure-export";
 import { utils, write } from "xlsx";
@@ -38,7 +39,7 @@ import { useSettings } from "@/components/settings-provider";
 import { type DateRange } from "react-day-picker";
 import { ScheduleInfo } from "@/features/schedules/components/modals/ScheduleInfo";
 
-// Module-level cache: persists across mount/unmount (page navigation)
+// Cache a nivel de módulo: persiste entre mount/unmount (navegación de página)
 let reportCache: {
     key: string; // "from|to"
     schedules: Schedule[];
@@ -54,7 +55,7 @@ function getDateRangeKey(range: DateRange | undefined): string {
 }
 
 export function ReportsPage() {
-    // State — restore last date range or default to today
+    // Estado — restaurar último rango de fechas o default a hoy
     const defaultDateRange: DateRange = { from: new Date(), to: new Date() };
     const initialDateRange = reportCache?.dateRange ?? defaultDateRange;
     const initialKey = getDateRangeKey(initialDateRange);
@@ -64,7 +65,7 @@ export function ReportsPage() {
     const [pendingRange, setPendingRange] = useState<DateRange | undefined>(initialDateRange);
     const [calendarOpen, setCalendarOpen] = useState(false);
 
-    // Filter state
+    // Estado de filtro
     const [showOnlyIncidences, setShowOnlyIncidences] = useState(false);
 
     const [importModalOpen, setImportModalOpen] = useState(false);
@@ -72,8 +73,8 @@ export function ReportsPage() {
     const [syncFromExcelModalOpen, setSyncFromExcelModalOpen] = useState(false);
     const [importedData, setImportedData] = useState<Schedule[]>([]);
 
-    // Local state for report data (isolated from Management's draft store)
-    // Initialize from cache if available for the current date range
+    // Estado local para datos de reportes (aislado del store de drafts de Management)
+    // Inicializar desde cache si disponible para el rango de fechas actual
     const [reportSchedules, setReportSchedules] = useState<Schedule[]>(
         hasCachedData ? reportCache!.schedules : []
     );
@@ -85,35 +86,31 @@ export function ReportsPage() {
 
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-    // Sync store
+    // Store de sincronización
     const { syncToExcel, refreshMsConfig } = useScheduleSyncStore();
     const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
 
-    // Subscribe to incidence changes from the shared store
-    // This ensures Reports refreshes when incidences are saved via modal
+    // Suscribirse a cambios de incidencias del store compartido
+    // Esto asegura que Reports se refresque cuando se guardan incidencias via modal
     const incidencesVersion = useScheduleDataStore(s => s.incidencesVersion);
 
-    // Load MS config on mount
+    // Cargar config de MS al montar
     useEffect(() => {
         refreshMsConfig();
     }, [refreshMsConfig]);
 
-    // Re-fetch when incidences change in the shared store (effect defined below after fetchData)
-
-    // Format date to YYYY-MM-DD for Supabase queries
-
-    // Optimistic delete — keys of rows currently being deleted
+    // Eliminación optimista — claves de filas en proceso de eliminación
     const [pendingDeleteKeys, setPendingDeleteKeys] = useState<Set<string>>(new Set());
 
-    // Compute table data from local state (exclude pending deletes)
+    // Calcular datos de tabla desde estado local (excluir eliminaciones pendientes)
     const tableData = useMemo(() => {
         const merged = mergeSchedulesWithIncidences(reportSchedules, reportIncidences);
         const filtered = showOnlyIncidences ? merged.filter(row => !!row.type) : merged;
         if (pendingDeleteKeys.size === 0) return filtered;
-        return filtered.filter(row => !pendingDeleteKeys.has(`${row.date}|${row.program}|${row.start_time}|${row.instructor}`));
+        return filtered.filter(row => !pendingDeleteKeys.has(getSchedulePrimaryKey(row)));
     }, [reportSchedules, reportIncidences, showOnlyIncidences, pendingDeleteKeys]);
 
-    // Fetch data when date range changes (into local state, not shared store)
+    // Obtener datos cuando cambia el rango de fechas (al estado local, no al store compartido)
     const fetchData = useCallback(async () => {
         if (!dateRange?.from) return;
 
@@ -121,7 +118,7 @@ export function ReportsPage() {
         const toStr = dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : fromStr;
         const key = `${fromStr}|${toStr}`;
 
-        // Only show loading if no cached data for this range
+        // Solo mostrar loading si no hay datos cacheados para este rango
         const hasCached = reportCache?.key === key;
         if (!hasCached) {
             setIsLoading(true);
@@ -132,7 +129,13 @@ export function ReportsPage() {
             setReportSchedules(schedules);
             setReportIncidences(incidences);
 
-            // Update module-level cache
+            // Sincronizar incidencias al store compartido para que IncidenceModal pueda
+            // detectar incidencias existentes (ej: mostrar el botón de limpieza).
+            // Usamos setState directo para no incrementar incidencesVersion,
+            // lo cual causaría un bucle infinito de refetch.
+            useScheduleDataStore.setState({ incidences });
+
+            // Actualizar cache a nivel de módulo
             reportCache = { key, schedules, incidences, dateRange };
         } catch (error) {
             console.error("Failed to fetch report data:", error);
@@ -142,16 +145,16 @@ export function ReportsPage() {
         }
     }, [dateRange]);
 
-    // Initial fetch on date change
+    // Fetch inicial al cambiar fecha
     useEffect(() => {
         fetchData();
     }, [fetchData]);
 
-    // Keep a stable ref to the latest fetchData to avoid stale closure in the incidences effect
+    // Mantener ref estable al fetchData más reciente para evitar closure stale en el efecto de incidencias
     const fetchDataRef = useRef(fetchData);
     useEffect(() => { fetchDataRef.current = fetchData; });
 
-    // Re-fetch when incidences change in the shared store
+    // Re-fetch cuando cambian las incidencias en el store compartido
     useEffect(() => {
         if (incidencesVersion > 0) {
             fetchDataRef.current();
@@ -167,14 +170,14 @@ export function ReportsPage() {
         setCalendarOpen(false);
     };
 
-    // State for delete confirmation (supports single + bulk)
+    // Estado para confirmación de eliminación (soporta individual + masivo)
     const [schedulesToDelete, setSchedulesToDelete] = useState<Schedule[]>([]);
 
-    const columns = getDataSourceColumns(
+    const columns = useMemo(() => getDataSourceColumns(
         (schedule) => setSchedulesToDelete([schedule]),
-    );
+    ), []);
 
-    // Handle sync
+    // Manejar sincronización
     const handleSync = async () => {
         if (!dateRange?.from) return;
         const dateString = format(dateRange.from, "yyyy-MM-dd");
@@ -188,7 +191,7 @@ export function ReportsPage() {
         try {
             await scheduleEntriesService.addScheduleEntry(newSchedule, user?.id || "");
             toast.success("Schedule added");
-            // Refresh data
+            // Refrescar datos
             fetchData();
         } catch (error) {
             console.error("Failed to add schedule:", error);
@@ -382,8 +385,10 @@ export function ReportsPage() {
                             hideDefaultActions={true}
                             customExportFn={handleExportData as (data: unknown[]) => Promise<void>}
                             onBulkDelete={(rows) => setSchedulesToDelete(rows as Schedule[])}
-                            customFilterItems={
-                                reportIncidences.length > 0 ? (
+                            customFilterItems={(() => {
+                                // Solo contar incidencias con type (no status-only rows)
+                                const realIncidenceCount = reportIncidences.filter(i => !!i.type).length;
+                                return realIncidenceCount > 0 ? (
                                     <Button
                                         variant="outline"
                                         size="sm"
@@ -393,10 +398,10 @@ export function ReportsPage() {
                                     >
                                         <AlertCircle />
                                         Incidences
-                                        {showOnlyIncidences && ` (${reportIncidences.length})`}
+                                        {showOnlyIncidences && ` (${realIncidenceCount})`}
                                     </Button>
-                                ) : undefined
-                            }
+                                ) : undefined;
+                            })()}
                             customActionItems={
                                 <>
                                     <RequirePermission permission="reports.manage">
@@ -434,6 +439,7 @@ export function ReportsPage() {
                             initialPageSize={100}
                             filterConfig={{
                                 showStatus: false,
+                                showBranch: true,
                                 showIncidenceType: true,
                             }}
                             onAddRow={() => setIsAddModalOpen(true)}
@@ -485,7 +491,7 @@ export function ReportsPage() {
                             className="border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
                             onClick={async () => {
                                 // Optimistic: hide rows immediately
-                                const keys = new Set(schedulesToDelete.map(s => `${s.date}|${s.program}|${s.start_time}|${s.instructor}`));
+                                const keys = new Set(schedulesToDelete.map(s => getSchedulePrimaryKey(s)));
                                 const entriesToDelete = [...schedulesToDelete];
                                 setPendingDeleteKeys(keys);
                                 setSchedulesToDelete([]); // Close dialog

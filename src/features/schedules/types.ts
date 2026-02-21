@@ -11,13 +11,13 @@ export interface Schedule {
     minutes: string;
     units: string;
     // Optional incidence fields
-    status?: string;
-    substitute?: string;
-    type?: string;
-    subtype?: string;
-    description?: string;
-    department?: string;
-    feedback?: string;
+    status?: string | null;
+    substitute?: string | null;
+    type?: string | null;
+    subtype?: string | null;
+    description?: string | null;
+    department?: string | null;
+    feedback?: string | null;
 }
 
 export type DailyIncidence = Schedule;

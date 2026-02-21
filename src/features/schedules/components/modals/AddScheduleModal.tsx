@@ -39,6 +39,7 @@ import { useInstructors } from "../../hooks/useInstructors";
 import { useZoomStore } from "@/features/matching/stores/useZoomStore";
 import { InstructorSelector } from "./InstructorSelector";
 import { parseTimeValue } from "../../utils/time-utils";
+import { normalizeString, getSchedulePrimaryKey } from "../../utils/string-utils";
 import { IncidenceFormContent } from "./IncidenceFormContent";
 import { ScheduleInfo } from "./ScheduleInfo";
 
@@ -173,13 +174,17 @@ export function AddScheduleModal({
         // Also check manual duplicate validation
         if (valid) {
             const values = form.getValues();
-            // Trim program for comparison to match Zod transformation
-            const cleanProgram = values.program?.trim() || "";
+            const cleanProgram = normalizeString(values.program);
+            const cleanInstructor = normalizeString(values.instructor) || "none";
 
-            const duplicateKey = `${values.date}|${cleanProgram}|${values.start_time}|${values.instructor}`;
-            const isDuplicate = existingSchedules.some(s =>
-                `${s.date}|${s.program}|${s.start_time}|${s.instructor}` === duplicateKey
-            );
+            const duplicateKey = getSchedulePrimaryKey({
+                date: values.date,
+                start_time: values.start_time,
+                instructor: cleanInstructor,
+                program: cleanProgram
+            });
+
+            const isDuplicate = existingSchedules.some(s => getSchedulePrimaryKey(s) === duplicateKey);
 
             if (isDuplicate) {
                 form.setError("program", {
@@ -196,11 +201,17 @@ export function AddScheduleModal({
     const handleSubmit = async (values: AddScheduleFormValues) => {
         if (isSubmitting) return;
 
+        const cleanProgram = normalizeString(values.program);
+        const cleanInstructor = normalizeString(values.instructor) || "none";
+
         // Re-validate duplicates just in case
-        const duplicateKey = `${values.date}|${values.program}|${values.start_time}|${values.instructor}`;
-        const isDuplicate = existingSchedules.some(s =>
-            `${s.date}|${s.program}|${s.start_time}|${s.instructor}` === duplicateKey
-        );
+        const duplicateKey = getSchedulePrimaryKey({
+            date: values.date,
+            start_time: values.start_time,
+            instructor: cleanInstructor,
+            program: cleanProgram
+        });
+        const isDuplicate = existingSchedules.some(s => getSchedulePrimaryKey(s) === duplicateKey);
 
         if (isDuplicate) {
             form.setError("program", {
@@ -222,8 +233,8 @@ export function AddScheduleModal({
                 start_time: values.start_time,
                 end_time: values.end_time,
                 code: values.code || "",
-                instructor: values.instructor || "none",
-                program: values.program,
+                instructor: cleanInstructor, // Always store sanitized
+                program: cleanProgram, // Always store sanitized
                 minutes: values.minutes || "",
                 units: values.units || "",
                 // Include incidence fields if we are in step 2 (Incidence details)
