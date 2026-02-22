@@ -62,14 +62,15 @@ export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: Incid
                         <Field data-invalid={fieldState.invalid}>
                             <FieldLabel>Was the class taught?</FieldLabel>
                             <div className="flex items-center gap-2">
-                                <Switch
-                                    disabled={!canEdit}
-                                    checked={field.value === "Yes"}
-                                    onCheckedChange={(checked) => {
-                                        field.onChange(checked ? "Yes" : "No");
-                                    }}
-                                // className="h-5 w-9 [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
-                                />
+                                <div className="h-5 pt-px">
+                                    <Switch
+                                        disabled={!canEdit}
+                                        checked={field.value === "Yes"}
+                                        onCheckedChange={(checked) => {
+                                            field.onChange(checked ? "Yes" : "No");
+                                        }}
+                                    />
+                                </div>
                                 <span className="text-sm text-muted-foreground">{field.value}</span>
                             </div>
                             {fieldState.invalid && <FieldError errors={[fieldState.error]} />}

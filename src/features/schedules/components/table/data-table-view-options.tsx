@@ -30,27 +30,29 @@ export function DataTableViewOptions<TData>({
                     View
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[150px] max-h-[340px]">
-                <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+            <DropdownMenuContent align="end" className="w-38 p-0">
+                <DropdownMenuLabel className="px-3 pt-2.5">Toggle columns</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {table
-                    .getAllColumns()
-                    .filter(
-                        (column) =>
-                            typeof column.accessorFn !== "undefined" && column.getCanHide()
-                    )
-                    .map((column) => {
-                        return (
-                            <DropdownMenuCheckboxItem
-                                key={column.id}
-                                className="capitalize"
-                                checked={column.getIsVisible()}
-                                onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                            >
-                                {column.id.replace(/_/g, " ")}
-                            </DropdownMenuCheckboxItem>
-                        );
-                    })}
+                <div className="overflow-auto max-h-80 p-1 pt-0">
+                    {table
+                        .getAllColumns()
+                        .filter(
+                            (column) =>
+                                typeof column.accessorFn !== "undefined" && column.getCanHide()
+                        )
+                        .map((column) => {
+                            return (
+                                <DropdownMenuCheckboxItem
+                                    key={column.id}
+                                    className="capitalize"
+                                    checked={column.getIsVisible()}
+                                    onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                                >
+                                    {column.id.replace(/_/g, " ")}
+                                </DropdownMenuCheckboxItem>
+                            );
+                        })}
+                </div>
             </DropdownMenuContent>
         </DropdownMenu>
     );

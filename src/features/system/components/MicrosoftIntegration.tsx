@@ -488,7 +488,7 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
                                     Disconnect
                                 </Button>
                             </AlertDialogTrigger>
-                            <AlertDialogContent>
+                            <AlertDialogContent className="sm:max-w-100!">
                                 <AlertDialogHeader>
                                     <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                     <AlertDialogDescription>
@@ -497,7 +497,7 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={handleDisconnect}>Disconnect</AlertDialogAction>
+                                    <AlertDialogAction onClick={handleDisconnect}>Continue</AlertDialogAction>
                                 </AlertDialogFooter>
                             </AlertDialogContent>
                         </AlertDialog>
@@ -591,8 +591,8 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
                         </DialogHeader>
 
                         {/* File Tree */}
-                        <ScrollArea className="border rounded-md flex-1 overflow-hidden">
-                            <div className="h-[300px] max-w-[460px] p-2 w-full">
+                        <ScrollArea className="border rounded-md flex-1">
+                            <div className="h-75 max-w-[460px] p-2 w-full">
                                 {loadingFolders.has('root') && !folderChildren.has('root') ? (
                                     <div className="flex justify-center p-8 text-muted-foreground">
                                         <Loader2 className="animate-spin h-6 w-6" />

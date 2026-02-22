@@ -13,8 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Label } from "@/components/ui/label";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
     Select,
     SelectContent,
@@ -22,17 +23,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import {
-    AlertDialog,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Loader2 } from "lucide-react";
+import { Loader2, Monitor, Moon, Sun } from "lucide-react";
 
 const editNameSchema = z.object({
     displayName: z
@@ -42,8 +33,6 @@ const editNameSchema = z.object({
 });
 
 type EditNameValues = z.infer<typeof editNameSchema>;
-
-const LANGUAGE_LABELS: Record<string, string> = { en: "English", es: "Español", fr: "Français" };
 
 interface AccountTabProps {
     onClose: () => void;
@@ -111,27 +100,29 @@ export function AccountTab({ onClose }: AccountTabProps) {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pr-1">
             {/* Account info */}
             <div className="space-y-4">
-                <p className="text-sm font-medium">Account info</p>
-                <div className="grid gap-4">
-                    <div className="space-y-1">
-                        <p className="text-sm text-muted-foreground">Name</p>
-                        <p className="text-sm font-medium">{profile?.display_name || "—"}</p>
-                        <Button variant="ghost" size="sm" onClick={() => setEditNameOpen(true)} className="self-start">
+                <p className="text-sm font-semibold">Account info</p>
+                <div className="grid gap-6">
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="space-y-0.5">
+                            <p className="text-sm text-muted-foreground">Name</p>
+                            <p className="text-sm font-medium">{profile?.display_name || "—"}</p>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => setEditNameOpen(true)} className="shrink-0">
                             Change name
                         </Button>
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-0.5">
                         <p className="text-sm text-muted-foreground">Email</p>
                         <p className="text-sm font-medium">{profile?.email || "—"}</p>
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-0.5">
                         <p className="text-sm text-muted-foreground">Role</p>
                         <p className="text-sm font-medium capitalize">{(profile?.role || "—").replace(/_/g, " ")}</p>
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-0.5">
                         <p className="text-sm text-muted-foreground">Permissions</p>
                         <div className="flex flex-wrap gap-1.5">
                             {profile?.permissions?.map(perm => (
@@ -150,18 +141,24 @@ export function AccountTab({ onClose }: AccountTabProps) {
 
             <Separator />
 
-            {/* Preferences */}
+            {/* Language & Theme */}
             <div className="space-y-4">
-                <div className="grid gap-4">
-                    <div className="space-y-1">
-                        <p className="text-sm text-muted-foreground">Language</p>
-                        <p className="text-sm font-medium">{LANGUAGE_LABELS[i18n.language] ?? i18n.language}</p>
-                        <Button variant="ghost" size="sm" onClick={() => setEditLanguageOpen(true)} className="self-start">
+                <p className="text-sm font-semibold">Preferences</p>
+                <div className="grid gap-6">
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="space-y-0.5">
+                            <p className="text-sm text-muted-foreground">Language</p>
+                            <p className="text-sm font-medium">{i18n.language === "en" ? "English" : i18n.language === "es" ? "Español" : i18n.language === "fr" ? "Français" : i18n.language}</p>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => setEditLanguageOpen(true)} className="shrink-0">
                             Change language
                         </Button>
                     </div>
-                    <Field>
-                        <FieldLabel>Theme</FieldLabel>
+                    <div className="flex items-center justify-between gap-4">
+                        <Label className="flex flex-col gap-0.5 cursor-pointer font-normal items-start">
+                            <span className="text-sm text-muted-foreground">Theme</span>
+                            <span className="text-xs text-muted-foreground">Select your preferred theme.</span>
+                        </Label>
                         <Select
                             value={settings.theme}
                             onValueChange={(value: "light" | "dark" | "system") => {
@@ -169,17 +166,16 @@ export function AccountTab({ onClose }: AccountTabProps) {
                                 setTheme(value);
                             }}
                         >
-                            <SelectTrigger className="w-36" size="sm">
+                            <SelectTrigger className="min-w-35 shrink-0" size="sm">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="light">Light</SelectItem>
-                                <SelectItem value="dark">Dark</SelectItem>
-                                <SelectItem value="system">System</SelectItem>
+                                <SelectItem value="light"><div className="flex items-center"><Sun className="mr-2 h-4 w-4" />Light</div></SelectItem>
+                                <SelectItem value="dark"><div className="flex items-center"><Moon className="mr-2 h-4 w-4" />Dark</div></SelectItem>
+                                <SelectItem value="system"><div className="flex items-center"><Monitor className="mr-2 h-4 w-4" />System</div></SelectItem>
                             </SelectContent>
                         </Select>
-                        <FieldDescription>Select your preferred theme.</FieldDescription>
-                    </Field>
+                    </div>
                 </div>
             </div>
 
@@ -187,47 +183,16 @@ export function AccountTab({ onClose }: AccountTabProps) {
 
             {/* Danger Zone */}
             <div className="space-y-4">
-                <p className="text-sm font-medium">Danger Zone</p>
-                <AlertDialog open={deleteDialogOpen} onOpenChange={(open) => {
-                    setDeleteDialogOpen(open);
-                    if (!open) setDeleteConfirmText("");
-                }}>
-                    <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="text-destructive">
-                            Delete Account
-                        </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>{t("profile.delete_confirm_title")}</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                For security purposes, please re-enter your email below.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <Field>
-                            <FieldLabel htmlFor="delete-confirm">
-                                {t("profile.delete_confirm_label")}
-                            </FieldLabel>
-                            <Input
-                                id="delete-confirm"
-                                value={deleteConfirmText}
-                                onChange={(e) => setDeleteConfirmText(e.target.value)}
-                                placeholder={profile?.email || ""}
-                                autoComplete="off"
-                            />
-                        </Field>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-                            <Button
-                                onClick={onDeleteAccount}
-                                disabled={isDeleting || deleteConfirmText !== profile?.email}
-                            >
-                                {isDeleting && <Loader2 className="animate-spin" />}
-                                Continue
-                            </Button>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
+                <p className="text-sm font-semibold">Danger Zone</p>
+                <div className="flex items-center justify-between gap-4">
+                    <div className="flex flex-col gap-0.5">
+                        <p className="text-sm">Delete Account</p>
+                        <p className="text-xs text-muted-foreground">Permanently delete your account and all associated data.</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => setDeleteDialogOpen(true)} className="shrink-0">
+                        Delete Account
+                    </Button>
+                </div>
             </div>
 
             {/* Edit Name Dialog */}
@@ -265,7 +230,7 @@ export function AccountTab({ onClose }: AccountTabProps) {
                         <DialogTitle>Change language</DialogTitle>
                     </DialogHeader>
                     <Field>
-                        <FieldLabel>Pick which language to use for Minerva</FieldLabel>
+                        <FieldLabel>Language</FieldLabel>
                         <Select
                             value={i18n.language}
                             onValueChange={(value) => {
@@ -285,8 +250,47 @@ export function AccountTab({ onClose }: AccountTabProps) {
                                 <SelectItem value="fr">Français</SelectItem>
                             </SelectContent>
                         </Select>
+                        <FieldDescription>
+                            Pick which language to use for Minerva
+                        </FieldDescription>
                     </Field>
                     <DialogFooter showCloseButton />
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Account Dialog */}
+            <Dialog open={deleteDialogOpen} onOpenChange={(open) => {
+                setDeleteDialogOpen(open);
+                if (!open) setDeleteConfirmText("");
+            }}>
+                <DialogContent className="sm:max-w-sm gap-6">
+                    <DialogHeader>
+                        <DialogTitle>{t("profile.delete_confirm_title")}</DialogTitle>
+                        <DialogDescription>
+                            For security purposes, please re-enter your email below.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <Field>
+                        <FieldLabel htmlFor="delete-confirm">
+                            {t("profile.delete_confirm_label")}
+                        </FieldLabel>
+                        <Input
+                            id="delete-confirm"
+                            value={deleteConfirmText}
+                            onChange={(e) => setDeleteConfirmText(e.target.value)}
+                            placeholder={profile?.email || ""}
+                            autoComplete="off"
+                        />
+                    </Field>
+                    <DialogFooter>
+                        <Button
+                            onClick={onDeleteAccount}
+                            disabled={isDeleting || deleteConfirmText !== profile?.email}
+                        >
+                            {isDeleting && <Loader2 className="animate-spin" />}
+                            Continue
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>

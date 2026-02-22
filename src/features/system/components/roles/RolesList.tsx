@@ -16,8 +16,8 @@ interface RolesListProps {
 
 export function RolesList({ roles, selectedRole, onSelectRole }: RolesListProps) {
     return (
-        <div className="w-50">
-            <ScrollArea className="h-[400px]">
+        <div className="flex w-45 shrink-0 flex-col gap-1 p-1">
+            <ScrollArea className="overflow-auto pr-3">
                 <div className="space-y-1.5 p-1">
                     {roles.map((role) => (
                         <Button

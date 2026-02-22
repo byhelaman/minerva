@@ -76,16 +76,17 @@ export const getAssignmentColumns = (
             enableHiding: false,
         },
         {
+            id: "meeting_id",
             accessorKey: "meetingId",
             size: 120,
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Meeting ID" className="text-center" />
             ),
             cell: ({ row }) => {
-                const meetingId = row.getValue("meetingId") as string;
+                const meetingId = row.getValue("meeting_id") as string;
                 const isValidId = meetingId && meetingId !== "-" && meetingId !== "—";
                 return (
-                    <div className="font-mono text-center min-w-[100px]">
+                    <div className="font-mono text-center min-w-25">
                         {isValidId ? (
                             <a href={`https://zoom.us/meeting/${meetingId}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline cursor-pointer underline underline-offset-2">
                                 {meetingId}
@@ -164,7 +165,7 @@ export const getAssignmentColumns = (
                 <DataTableColumnHeader column={column} title="Reason" />
             ),
             cell: ({ row }) => (
-                <div className="max-w-[200px] truncate text-muted-foreground" title={row.getValue("reason")}>
+                <div className="max-w-50 truncate text-muted-foreground" title={row.getValue("reason")}>
                     {row.getValue("reason")}
                 </div>
             ),

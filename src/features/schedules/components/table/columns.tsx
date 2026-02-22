@@ -139,7 +139,7 @@ export const getScheduleColumns = (
             id: "status",
             size: 70,
             header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Status" className="justify-center" />
+                <DataTableColumnHeader column={column} title="Status" />
             ),
             cell: ({ row }) => {
                 const schedule = row.original;
@@ -163,12 +163,11 @@ export const getScheduleColumns = (
                 };
 
                 return (
-                    <div className="flex justify-center">
+                    <div className="flex h-8 py-2 justify-center">
                         <Switch
                             checked={isYes}
                             onCheckedChange={handleToggle}
                             disabled={!canManage}
-                        // className="h-5 w-9 [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
                         />
                     </div>
                 );

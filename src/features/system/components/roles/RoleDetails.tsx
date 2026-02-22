@@ -37,7 +37,7 @@ export function RoleDetails({
     onDelete,
 }: RoleDetailsProps) {
     return (
-        <Card className="shadow-none flex-1 bg-muted/30">
+        <Card className="shadow-none w-full">
             <CardHeader className="grid grid-rows-1">
                 <div className="flex items-start justify-between gap-4">
                     <div>
@@ -54,8 +54,8 @@ export function RoleDetails({
                     </Badge>
                 </div>
             </CardHeader>
-            <CardContent>
-                <p className="text-xs font-medium text-muted-foreground mb-3">
+            <CardContent className="flex flex-col min-h-0 gap-4">
+                <p className="text-xs font-medium text-muted-foreground">
                     PERMISSIONS ({rolePermissions.length})
                 </p>
                 {isLoadingPerms ? (
@@ -63,8 +63,8 @@ export function RoleDetails({
                         <Loader2 className="size-4 animate-spin text-muted-foreground" />
                     </div>
                 ) : canEditPermissions ? (
-                    <ScrollArea>
-                        <div className="grid grid-cols-2 gap-1 h-75 pr-4">
+                    <ScrollArea className="overflow-auto">
+                        <div className="grid grid-cols-2 gap-1 pr-4">
                             {permissions.map((perm) => {
                                 const hasPerm = rolePermissions.includes(perm.name);
                                 const isSaving = isSavingPerm === perm.name;
@@ -94,7 +94,7 @@ export function RoleDetails({
                         </div>
                     </ScrollArea>
                 ) : (
-                    <ScrollArea>
+                    <ScrollArea className="overflow-auto">
                         <div className="space-y-2 h-75 pr-4">
                             {rolePermissions.map((permName) => {
                                 const perm = permissions.find(p => p.name === permName);
@@ -118,7 +118,6 @@ export function RoleDetails({
                             )}
                         </div>
                     </ScrollArea>
-
                 )}
             </CardContent>
             {canModify && (
@@ -133,13 +132,12 @@ export function RoleDetails({
                     </Button>
                     {!isSystemRole(role.name) && (
                         <Button
-                            variant="outline"
-                            size="sm"
+                            variant="secondary"
+                            size="icon-sm"
                             onClick={onDelete}
                             className="border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
                         >
                             <Trash2 />
-                            Delete
                         </Button>
                     )}
                 </CardFooter>
@@ -152,7 +150,7 @@ export function RoleDetails({
 export function RoleDetailsEmpty() {
     return (
         <Card className="shadow-none flex-1 bg-muted/30">
-            <CardContent className="flex items-center justify-center h-full min-h-[300px]">
+            <CardContent className="flex items-center justify-center h-full min-h-75">
                 <div className="text-center text-muted-foreground">
                     <Shield className="size-12 mx-auto mb-4 opacity-20" />
                     <p className="text-sm">Select a role to view details</p>

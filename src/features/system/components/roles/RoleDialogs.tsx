@@ -121,7 +121,7 @@ export function CreateRoleDialog({ open, onOpenChange, isCreating, onSubmit }: C
                         </Button>
                         <Button type="submit" disabled={isCreating}>
                             {isCreating && <Loader2 className="animate-spin" />}
-                            Create Role
+                            Continue
                         </Button>
                     </DialogFooter>
                 </form>
@@ -188,7 +188,7 @@ export function EditRoleDialog({ open, onOpenChange, role, isEditing, onSubmit }
                         </Button>
                         <Button type="submit" disabled={isEditing}>
                             {isEditing && <Loader2 className="animate-spin" />}
-                            Save Changes
+                            Save
                         </Button>
                     </DialogFooter>
                 </form>

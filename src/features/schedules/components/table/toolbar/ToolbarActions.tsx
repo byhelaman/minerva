@@ -310,7 +310,7 @@ export function ToolbarActions<TData>({
             </DropdownMenu>
 
             <AlertDialog open={showClearDialog} onOpenChange={setShowClearDialog}>
-                <AlertDialogContent>
+                <AlertDialogContent className="sm:max-w-100!">
                     <AlertDialogHeader>
                         <AlertDialogTitle>Clear all schedules?</AlertDialogTitle>
                         <AlertDialogDescription>
@@ -323,7 +323,7 @@ export function ToolbarActions<TData>({
                             onClearSchedule?.();
                             setShowClearDialog(false);
                         }}>
-                            Clear Schedule
+                            Continue
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

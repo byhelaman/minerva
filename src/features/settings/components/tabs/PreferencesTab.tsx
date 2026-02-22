@@ -1,8 +1,8 @@
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { ArrowUpRight, Coffee, Github, Loader2, Monitor, Moon, Sun } from "lucide-react";
+import { ArrowUpRight, Coffee, Github, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import {
     Select,
     SelectContent,
@@ -32,29 +32,8 @@ import { useUpdaterContext } from "@/components/updater-context";
 import { getVersion, getTauriVersion } from "@tauri-apps/api/app";
 import { useState, useEffect } from "react";
 
-const switchCn = "";
-
-// const switchCn = "h-5 w-9 [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4";
-
-function SettingRow({ children }: { children: React.ReactNode }) {
-    return <div className="flex items-center justify-between gap-4 py-2">{children}</div>;
-}
-
-function SettingLabel({ label, desc, htmlFor }: { label: string; desc?: string; htmlFor?: string }) {
-    return (
-        <Label htmlFor={htmlFor} className="flex flex-col gap-0.5 cursor-pointer font-normal">
-            <span className="text-sm font-medium">{label}</span>
-            {desc && <span className="text-xs text-muted-foreground leading-snug">{desc}</span>}
-        </Label>
-    );
-}
-
-function SectionHeader({ label }: { label: string }) {
-    return <p className="text-sm font-semibold pb-1">{label}</p>;
-}
-
 export function PreferencesTab() {
-    const { t, i18n } = useTranslation();
+    const { t } = useTranslation();
     const { setTheme } = useTheme();
     const { settings, updateSetting } = useSettings();
     const { checkForUpdates, isChecking, error: updateError } = useUpdaterContext();
@@ -119,109 +98,51 @@ export function PreferencesTab() {
     };
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-6 pr-1">
             {/* Appearance */}
-            <div>
-                <SectionHeader label={t("settings.appearance.title")} />
-                <SettingRow>
-                    <SettingLabel
-                        label={t("settings.appearance.theme")}
-                        desc={t("settings.appearance.theme_desc")}
-                    />
-                    <Select
-                        value={settings.theme}
-                        onValueChange={(value: "light" | "dark" | "system") => {
-                            updateSetting("theme", value);
-                            setTheme(value);
-                        }}
-                    >
-                        <SelectTrigger className="min-w-30 shrink-0" size="sm">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="light"><div className="flex items-center"><Sun className="mr-2 h-4 w-4" />{t("settings.appearance.theme_light")}</div></SelectItem>
-                            <SelectItem value="dark"><div className="flex items-center"><Moon className="mr-2 h-4 w-4" />{t("settings.appearance.theme_dark")}</div></SelectItem>
-                            <SelectItem value="system"><div className="flex items-center"><Monitor className="mr-2 h-4 w-4" />{t("settings.appearance.theme_system")}</div></SelectItem>
-                        </SelectContent>
-                    </Select>
-                </SettingRow>
-                <SettingRow>
-                    <SettingLabel
-                        htmlFor="actions-respect-filters"
-                        label={t("settings.appearance.respect_filters")}
-                        desc={t("settings.appearance.respect_filters_desc")}
-                    />
+            <div className="space-y-4">
+                <p className="text-sm font-semibold">{t("settings.appearance.title")}</p>
+                <div className="flex items-center justify-between gap-4">
+                    <Label htmlFor="actions-respect-filters" className="flex flex-col gap-0.5 cursor-pointer font-normal items-start">
+                        <span className="text-sm">{t("settings.appearance.respect_filters")}</span>
+                        <span className="text-xs text-muted-foreground">{t("settings.appearance.respect_filters_desc")}</span>
+                    </Label>
                     <Switch
                         id="actions-respect-filters"
                         checked={settings.actionsRespectFilters}
                         onCheckedChange={(checked) => updateSetting("actionsRespectFilters", checked)}
-                        className={switchCn}
                     />
-                </SettingRow>
-            </div>
-
-            <Separator />
-
-            {/* Language */}
-            <div>
-                <SectionHeader label={t("settings.preferences.language")} />
-                <SettingRow>
-                    <SettingLabel
-                        label={t("settings.preferences.language")}
-                        desc={t("settings.preferences.language_desc")}
-                    />
-                    <Select
-                        value={i18n.language}
-                        onValueChange={(value) => {
-                            i18n.changeLanguage(value);
-                            toast.info(t("settings.preferences.language_changed"), {
-                                description: t("settings.preferences.language_wip"),
-                            });
-                        }}
-                    >
-                        <SelectTrigger className="min-w-30 shrink-0" size="sm">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="en">English</SelectItem>
-                            <SelectItem value="es">Español</SelectItem>
-                            <SelectItem value="fr">Français</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </SettingRow>
+                </div>
             </div>
 
             <Separator />
 
             {/* Notifications */}
-            <div>
-                <SectionHeader label={t("settings.notifications.title")} />
-                <SettingRow>
-                    <SettingLabel
-                        htmlFor="realtime-notifications"
-                        label={t("settings.notifications.schedule_updates")}
-                        desc={t("settings.notifications.schedule_updates_desc")}
-                    />
+            <div className="space-y-4">
+                <p className="text-sm font-semibold">{t("settings.notifications.title")}</p>
+                <div className="flex items-center justify-between gap-4">
+                    <Label htmlFor="realtime-notifications" className="flex flex-col gap-0.5 cursor-pointer font-normal items-start">
+                        <span className="text-sm">{t("settings.notifications.schedule_updates")}</span>
+                        <span className="text-xs text-muted-foreground">{t("settings.notifications.schedule_updates_desc")}</span>
+                    </Label>
                     <Switch
                         id="realtime-notifications"
                         checked={settings.realtimeNotifications}
                         onCheckedChange={(checked) => updateSetting("realtimeNotifications", checked)}
-                        className={switchCn}
                     />
-                </SettingRow>
+                </div>
             </div>
 
             <Separator />
 
             {/* Automation */}
-            <div>
-                <SectionHeader label={t("settings.automation.title")} />
-                <SettingRow>
-                    <SettingLabel
-                        htmlFor="auto-save"
-                        label={t("settings.automation.auto_save")}
-                        desc={t("settings.automation.auto_save_desc")}
-                    />
+            <div className="space-y-4">
+                <p className="text-sm font-semibold">{t("settings.automation.title")}</p>
+                <div className="flex items-center justify-between gap-4">
+                    <Label htmlFor="auto-save" className="flex flex-col gap-0.5 cursor-pointer font-normal items-start">
+                        <span className="text-sm">{t("settings.automation.auto_save")}</span>
+                        <span className="text-xs text-muted-foreground">{t("settings.automation.auto_save_desc")}</span>
+                    </Label>
                     <div className="flex items-center gap-2 shrink-0">
                         <Select
                             value={String(settings.autoSaveInterval)}
@@ -244,62 +165,57 @@ export function PreferencesTab() {
                             id="auto-save"
                             checked={settings.autoSave}
                             onCheckedChange={(checked) => updateSetting("autoSave", checked)}
-                            className={switchCn}
                         />
                     </div>
-                </SettingRow>
-                <SettingRow>
-                    <SettingLabel
-                        htmlFor="clear-schedule-on-load"
-                        label={t("settings.automation.clear_schedule_on_load")}
-                        desc={t("settings.automation.clear_schedule_on_load_desc")}
-                    />
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                    <Label htmlFor="clear-schedule-on-load" className="flex flex-col gap-0.5 cursor-pointer font-normal items-start">
+                        <span className="text-sm">{t("settings.automation.clear_schedule_on_load")}</span>
+                        <span className="text-xs text-muted-foreground">{t("settings.automation.clear_schedule_on_load_desc")}</span>
+                    </Label>
                     <Switch
                         id="clear-schedule-on-load"
                         checked={settings.clearScheduleOnLoad}
                         onCheckedChange={(checked) => updateSetting("clearScheduleOnLoad", checked)}
-                        className={switchCn}
                     />
-                </SettingRow>
+                </div>
             </div>
 
             <Separator />
 
             {/* Storage */}
-            <div>
-                <SectionHeader label={t("settings.storage.title")} />
-                <SettingRow>
-                    <SettingLabel
-                        htmlFor="open-after-export"
-                        label={t("settings.storage.open_after_export")}
-                        desc={t("settings.storage.open_after_export_desc")}
-                    />
+            <div className="space-y-4">
+                <p className="text-sm font-semibold">{t("settings.storage.title")}</p>
+                <div className="flex items-center justify-between gap-4">
+                    <Label htmlFor="open-after-export" className="flex flex-col gap-0.5 cursor-pointer font-normal items-start">
+                        <span className="text-sm">{t("settings.storage.open_after_export")}</span>
+                        <span className="text-xs text-muted-foreground">{t("settings.storage.open_after_export_desc")}</span>
+                    </Label>
                     <Switch
                         id="open-after-export"
                         checked={settings.openAfterExport}
                         onCheckedChange={(checked) => updateSetting("openAfterExport", checked)}
-                        className={switchCn}
                     />
-                </SettingRow>
+                </div>
             </div>
 
             <Separator />
 
             {/* System */}
-            <div>
-                <SectionHeader label={t("settings.system.title")} />
-                <SettingRow>
-                    <SettingLabel
-                        label={t("settings.system.local_storage")}
-                        desc={t("settings.system.local_storage_desc")}
-                    />
+            <div className="space-y-4">
+                <p className="text-sm font-semibold">{t("settings.system.title")}</p>
+                <div className="flex items-center justify-between gap-4">
+                    <Label className="flex flex-col gap-0.5 font-normal items-start">
+                        <span className="text-sm">{t("settings.system.local_storage")}</span>
+                        <span className="text-xs text-muted-foreground">{t("settings.system.local_storage_desc")}</span>
+                    </Label>
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="outline" size="sm" className="shrink-0">
                                 {t("settings.system.clear_cache_btn")}
                             </Button>
                         </AlertDialogTrigger>
-                        <AlertDialogContent>
+                        <AlertDialogContent className="sm:max-w-100!">
                             <AlertDialogHeader>
                                 <AlertDialogTitle>{t("settings.system.clear_cache_modal_title")}</AlertDialogTitle>
                                 <AlertDialogDescription>
@@ -309,57 +225,45 @@ export function PreferencesTab() {
                             <AlertDialogFooter>
                                 <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
                                 <AlertDialogAction onClick={handleClearCache}>
-                                    {t("settings.system.clear_cache_btn")}
+                                    Continue
                                 </AlertDialogAction>
                             </AlertDialogFooter>
                         </AlertDialogContent>
                     </AlertDialog>
-                </SettingRow>
-                <SettingRow>
-                    <SettingLabel
-                        label={t("settings.system.software_update")}
-                        desc={t("settings.system.software_update_desc")}
-                    />
-                    <Button variant="outline" size="sm" onClick={handleCheckUpdates} disabled={isChecking} className="shrink-0">
-                        {isChecking ? <><Loader2 className="animate-spin" />{t("settings.system.checking_updates")}</> : t("settings.system.check_updates_btn")}
-                    </Button>
-                </SettingRow>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 pt-2 text-sm">
-                    {[
-                        { label: t("settings.system.version"), value: appVersion ? `v${appVersion}` : "—" },
-                        { label: t("settings.system.environment"), value: import.meta.env.DEV ? t("settings.system.environment_dev") : t("settings.system.environment_prod") },
-                        { label: t("settings.system.build"), value: __BUILD_DATE__ },
-                        { label: t("settings.system.tauri"), value: tauriVersion ? `v${tauriVersion}` : "—" },
-                    ].map(({ label, value }) => (
-                        <div key={label} className="flex flex-col">
-                            <span className="text-xs text-muted-foreground">{label}</span>
-                            <span className="text-sm font-medium">{value}</span>
-                        </div>
-                    ))}
                 </div>
             </div>
 
             <Separator />
 
             {/* About */}
-            <div className="space-y-3 pb-2">
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center size-10 rounded-xl bg-primary/10 shrink-0">
-                        <span className="text-xl font-bold text-primary">M</span>
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-2">
-                            <span className="font-semibold">Minerva</span>
-                            {appVersion && (
-                                <span className="text-[10px] font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded-md">
-                                    v{appVersion}
-                                </span>
-                            )}
-                        </div>
-                        <p className="text-xs text-muted-foreground">Manage, view, and export your schedules with ease.</p>
-                    </div>
+            <div className="space-y-4 pb-2">
+                <p className="text-sm font-semibold">About</p>
+                <div className="flex items-center justify-between gap-4">
+                    <Label className="flex flex-col gap-0.5 font-normal items-start">
+                        <span className="text-sm">{t("settings.system.software_update")}</span>
+                        <span className="text-xs text-muted-foreground">{t("settings.system.software_update_desc")}</span>
+                    </Label>
+                    <Button variant="outline" size="sm" onClick={handleCheckUpdates} disabled={isChecking} className="shrink-0">
+                        {isChecking ? <><Loader2 className="animate-spin" />{t("settings.system.checking_updates")}</> : t("settings.system.check_updates_btn")}
+                    </Button>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="grid grid-cols-2 gap-4 pt-2 text-sm">
+                    {[
+                        { label: t("settings.system.version"), value: appVersion ? `v${appVersion}` : "—" },
+                        { label: t("settings.system.environment"), value: import.meta.env.DEV ? t("settings.system.environment_dev") : t("settings.system.environment_prod") },
+                        { label: t("settings.system.build"), value: __BUILD_DATE__ },
+                        { label: t("settings.system.tauri"), value: tauriVersion ? `v${tauriVersion}` : "—" },
+                    ].map(({ label, value }) => (
+                        <div key={label} className="flex flex-col gap-0.5">
+                            <span className="text-xs text-muted-foreground">{label}</span>
+                            <span className="text-sm font-medium">{value}</span>
+                        </div>
+                    ))}
+                </div>
+
+                <Separator />
+
+                <div className="flex flex-wrap gap-2 pl-1">
                     <Button variant="outline" size="sm" onClick={() => openUrl("https://github.com/byhelaman/minerva")}>
                         <Github />GitHub<ArrowUpRight />
                     </Button>

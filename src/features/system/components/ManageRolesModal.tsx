@@ -60,7 +60,6 @@ export function ManageRolesModal({ open, onOpenChange }: ManageRolesModalProps) 
     // Loading states
     const [isCreating, setIsCreating] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
-    const [isDeleting, setIsDeleting] = useState(false);
 
     const myLevel = profile?.hierarchy_level ?? 0;
 
@@ -135,25 +134,24 @@ export function ManageRolesModal({ open, onOpenChange }: ManageRolesModalProps) 
     const handleDeleteRole = async () => {
         if (!deleteRoleName) return;
 
-        setIsDeleting(true);
+        const roleName = deleteRoleName;
+        setDeleteRoleName(null);
+        if (selectedRole === roleName) {
+            setSelectedRole(null);
+        }
+
         try {
             const { error } = await supabase.rpc('delete_role', {
-                role_name: deleteRoleName
+                role_name: roleName
             });
 
             if (error) throw error;
 
             toast.success('Role deleted successfully');
-            setDeleteRoleName(null);
-            if (selectedRole === deleteRoleName) {
-                setSelectedRole(null);
-            }
             refetch(false);
         } catch (err: any) {
             console.error('Error deleting role:', err);
             toast.error(err.message || 'Failed to delete role');
-        } finally {
-            setIsDeleting(false);
         }
     };
 
@@ -173,7 +171,7 @@ export function ManageRolesModal({ open, onOpenChange }: ManageRolesModalProps) 
     return (
         <>
             <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent className="sm:max-w-3xl gap-6">
+                <DialogContent className="sm:max-w-3xl flex max-h-[85vh] flex-col gap-6">
                     <DialogHeader>
                         <DialogTitle>Roles & Permissions</DialogTitle>
                         <DialogDescription>
@@ -182,7 +180,7 @@ export function ManageRolesModal({ open, onOpenChange }: ManageRolesModalProps) 
                     </DialogHeader>
 
                     {isLoading && (
-                        <div className="flex items-center justify-center py-8 h-[300px]">
+                        <div className="flex items-center justify-center py-8 h-75">
                             <Loader2 className="size-6 animate-spin text-muted-foreground" />
                         </div>
                     )}
@@ -195,7 +193,7 @@ export function ManageRolesModal({ open, onOpenChange }: ManageRolesModalProps) 
                     )}
 
                     {!isLoading && !error && (
-                        <div className="flex gap-3">
+                        <div className="flex min-h-0 flex-1 gap-4">
                             <RolesList
                                 roles={roles}
                                 selectedRole={selectedRole}
@@ -254,7 +252,7 @@ export function ManageRolesModal({ open, onOpenChange }: ManageRolesModalProps) 
 
             {/* Delete Confirmation */}
             <AlertDialog open={!!deleteRoleName} onOpenChange={(open) => !open && setDeleteRoleName(null)}>
-                <AlertDialogContent onCloseAutoFocus={(e) => e.preventDefault()}>
+                <AlertDialogContent className="sm:max-w-100!">
                     <AlertDialogHeader>
                         <AlertDialogTitle>Delete Role</AlertDialogTitle>
                         <AlertDialogDescription>
@@ -264,12 +262,8 @@ export function ManageRolesModal({ open, onOpenChange }: ManageRolesModalProps) 
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={handleDeleteRole}
-                            disabled={isDeleting}
-                        >
-                            {isDeleting && <Loader2 className="animate-spin" />}
-                            Delete
+                        <AlertDialogAction onClick={handleDeleteRole}>
+                            Continue
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

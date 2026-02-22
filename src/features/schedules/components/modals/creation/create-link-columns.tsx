@@ -332,6 +332,7 @@ export const getCreateLinkColumns = (
                     </div>
                 );
             },
+            enableSorting: false,
         },
         // Date & Time column - only visible when dailyOnly is true
         ...(dailyOnly ? [{

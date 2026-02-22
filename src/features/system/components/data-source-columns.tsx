@@ -79,14 +79,6 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDe
         ),
     },
     {
-        accessorKey: "end_time",
-        size: 100,
-        header: ({ column }) => (
-            <DataTableColumnHeader column={column} title="end time" />
-        ),
-        cell: ({ row }) => <div className="text-center">{row.getValue("end_time")}</div>,
-    },
-    {
         accessorKey: "code",
         size: 100,
         header: ({ column }) => (

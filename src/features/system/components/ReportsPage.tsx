@@ -329,7 +329,7 @@ export function ReportsPage() {
 
                     {/* Sync to Excel */}
                     <AlertDialog open={confirmSyncOpen} onOpenChange={setConfirmSyncOpen}>
-                        <AlertDialogContent>
+                        <AlertDialogContent className="sm:max-w-100!">
                             <AlertDialogHeader>
                                 <AlertDialogTitle>Sync to Excel?</AlertDialogTitle>
                                 <AlertDialogDescription>
@@ -349,7 +349,7 @@ export function ReportsPage() {
                                     handleSync();
                                     setConfirmSyncOpen(false);
                                 }}>
-                                    Confirm Sync
+                                    Continue
                                 </AlertDialogAction>
                             </AlertDialogFooter>
                         </AlertDialogContent>

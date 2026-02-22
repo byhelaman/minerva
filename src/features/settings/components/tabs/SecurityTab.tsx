@@ -63,7 +63,7 @@ export function SecurityTab() {
     return (
         <div className="space-y-4">
             <p className="text-sm font-semibold">{t("profile.security")}</p>
-            <div className="flex items-center justify-between py-2">
+            <div className="flex items-center justify-between">
                 <div className="flex flex-col gap-0.5">
                     <span className="text-sm">Password</span>
                     <span className="text-xs text-muted-foreground">Change your account password.</span>

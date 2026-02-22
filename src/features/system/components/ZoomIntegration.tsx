@@ -258,7 +258,7 @@ export function ZoomIntegration() {
                                         {isDisconnecting ? "Waiting..." : "Disconnect"}
                                     </Button>
                                 </AlertDialogTrigger>
-                                <AlertDialogContent>
+                                <AlertDialogContent className="sm:max-w-100!">
                                     <AlertDialogHeader>
                                         <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                         <AlertDialogDescription>
@@ -274,7 +274,7 @@ export function ZoomIntegration() {
                                                     Disconnecting...
                                                 </>
                                             ) : (
-                                                "Disconnect"
+                                                "Continue"
                                             )}
                                         </AlertDialogAction>
                                     </AlertDialogFooter>

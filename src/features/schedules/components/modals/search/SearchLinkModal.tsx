@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ScheduleDataTable } from "@schedules/components/table/ScheduleDataTable";
 import { useZoomStore } from "@/features/matching/stores/useZoomStore";
@@ -299,7 +299,7 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
 
             {/* Delete Meeting Confirmation (single + bulk) */}
             <AlertDialog open={meetingsToDelete.length > 0} onOpenChange={(open) => !open && setMeetingsToDelete([])}>
-                <AlertDialogContent>
+                <AlertDialogContent className="sm:max-w-100!">
                     <AlertDialogHeader>
                         <AlertDialogTitle>
                             {meetingsToDelete.length === 1 ? "Delete Meeting?" : `Delete ${meetingsToDelete.length} meetings?`}
@@ -319,7 +319,6 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
                     <AlertDialogFooter>
                         <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
                         <AlertDialogAction
-                            className="border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
                             onClick={handleConfirmDelete}
                             disabled={isDeleting}
                         >

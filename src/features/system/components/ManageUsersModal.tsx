@@ -558,7 +558,7 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
 
             {/* Delete Confirmation Dialog */}
             <AlertDialog open={!!deleteConfirmUser} onOpenChange={() => setDeleteConfirmUser(null)}>
-                <AlertDialogContent>
+                <AlertDialogContent className="sm:max-w-100!">
                     <AlertDialogHeader>
                         <AlertDialogTitle>Delete User</AlertDialogTitle>
                         <AlertDialogDescription>
@@ -573,7 +573,7 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
                             disabled={isDeleting}
                         >
                             {isDeleting && <Loader2 className="size-4 animate-spin mr-2" />}
-                            Delete
+                            Continue
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

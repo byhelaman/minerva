@@ -435,7 +435,6 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
                                     setIncludeAssigned(checked);
                                 }}
                                 disabled={isExecuting || isLoadingData || isMatching}
-                                className="h-[20px] w-[36px] [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
                             />
                             <Label htmlFor="include-assigned" className={cn('text-sm cursor-pointer', includeAssigned ? 'text-primary' : 'text-muted-foreground')}>
                                 Update assigned

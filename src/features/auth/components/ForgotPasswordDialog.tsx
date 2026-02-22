@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import {
     Field,
+    FieldDescription,
     FieldError,
     FieldGroup,
     FieldLabel,
@@ -174,6 +175,7 @@ export function ForgotPasswordDialog({
     // Formulario de Password
     const passwordForm = useForm<z.infer<typeof passwordSchema>>({
         resolver: zodResolver(passwordSchema),
+        defaultValues: { password: "", confirmPassword: "" },
     });
 
     const handlePasswordSubmit = async (data: z.infer<typeof passwordSchema>) => {
@@ -198,7 +200,7 @@ export function ForgotPasswordDialog({
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className="sm:max-w-md gap-6">
+            <DialogContent className="sm:max-w-sm gap-6">
                 {step === "email" && (
                     <>
                         <DialogHeader>
@@ -335,6 +337,9 @@ export function ForgotPasswordDialog({
                                                 aria-invalid={fieldState.invalid}
                                                 disabled={isLoading}
                                             />
+                                            <FieldDescription>
+                                                Password must be at least 8 characters.
+                                            </FieldDescription>
                                             {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                                         </Field>
                                     )}
@@ -352,6 +357,9 @@ export function ForgotPasswordDialog({
                                                 aria-invalid={fieldState.invalid}
                                                 disabled={isLoading}
                                             />
+                                            <FieldDescription>
+                                                Please confirm your new password.
+                                            </FieldDescription>
                                             {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                                         </Field>
                                     )}

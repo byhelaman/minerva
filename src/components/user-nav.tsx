@@ -21,7 +21,7 @@ import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/components/auth-provider"
 import { useTheme } from "@/components/theme-provider"
 import { useSettings } from "@/components/settings-provider"
-import { LogOut, Settings2, Check, SwatchBook, Plus, Palette } from "lucide-react"
+import { LogOut, Settings2, Check, Plus, Palette } from "lucide-react"
 import { SettingsModal } from "@/features/settings/components/SettingsModal"
 
 export function UserNav() {
@@ -64,7 +64,7 @@ export function UserNav() {
                         </Avatar>
                     </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-40" align="end" forceMount>
+                <DropdownMenuContent className="w-55" align="end" forceMount>
                     <DropdownMenuLabel className="font-normal">
                         <div className="flex flex-col space-y-1">
                             <p className="text-sm leading-none font-medium">

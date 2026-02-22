@@ -359,15 +359,6 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
             )}>
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        {step === 'results' && (
-                            <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={handleBack}
-                            >
-                                <ArrowLeft className="h-4 w-4" />
-                            </Button>
-                        )}
                         Create Zoom Links
                     </DialogTitle>
                     <DialogDescription>
@@ -386,7 +377,7 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
                             <Textarea
                                 id="programs"
                                 placeholder="Corporate English 9AM&#10;Kids Program 10AM&#10;Business English 2PM"
-                                className="min-h-[240px] font-mono text-sm max-h-[400px] resize-none no-scrollbar"
+                                className="h-60 max-h-60 font-mono text-sm resize-none"
                                 value={inputText}
                                 onChange={(e) => setInputText(e.target.value)}
                             />
@@ -490,21 +481,32 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
                             {/* Botones a la derecha */}
                             <div className="flex items-center gap-2">
                                 <div className="flex items-center gap-2 mr-2">
-                                    <Switch
-                                        id="daily-only"
-                                        checked={dailyOnly}
-                                        onCheckedChange={setDailyOnly}
-                                        disabled={isExecuting || isValidating || isLoadingData}
-                                        className="h-[20px] w-[36px] [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
-                                    />
+                                    <div className="h-5 pt-px">
+                                        <Switch
+                                            id="daily-only"
+                                            checked={dailyOnly}
+                                            onCheckedChange={setDailyOnly}
+                                            disabled={isExecuting || isValidating || isLoadingData}
+                                        />
+                                    </div>
                                     <Label htmlFor="daily-only" className={cn('text-sm cursor-pointer', dailyOnly ? 'text-primary' : 'text-muted-foreground')}>
                                         Daily links
                                     </Label>
                                 </div>
 
-                                <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isExecuting}>
-                                    Cancel
-                                </Button>
+                                {step === 'results' ? (
+                                    <Button
+                                        variant="secondary"
+                                        onClick={handleBack}
+                                    >
+                                        <ArrowLeft />
+                                        Back
+                                    </Button>
+                                ) :
+                                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isExecuting}>
+                                        Cancel
+                                    </Button>
+                                }
 
                                 <Button
                                     disabled={selectedCount === 0 || isExecuting || isValidating || isLoadingData}

@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import type { Schedule } from "../../types";
-import { ScheduleInfo } from "./ScheduleInfo";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface ScheduleDetailsModalProps {
     open: boolean;
@@ -30,43 +30,43 @@ export function ScheduleDetailsModal({ open, onOpenChange, schedule }: ScheduleD
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md gap-6">
+            <DialogContent className="sm:max-w-md flex max-h-[85vh] flex-col gap-6">
                 <DialogHeader>
                     <DialogTitle>Schedule Details</DialogTitle>
                     <DialogDescription>View details for this class.</DialogDescription>
                 </DialogHeader>
-
-                <ScheduleInfo schedule={schedule} />
-
-                {/* Base Schedule Info */}
-                <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                    <DetailRow label="Date" value={schedule.date} />
-                    <DetailRow label="Branch" value={schedule.branch} />
-                    <DetailRow label="Start Time" value={schedule.start_time} />
-                    <DetailRow label="End Time" value={schedule.end_time} />
-                    <DetailRow label="Instructor" value={schedule.instructor} />
-                    <DetailRow label="Code" value={schedule.code} />
-                    <DetailRow label="Shift" value={schedule.shift} />
-                    <DetailRow label="Minutes" value={schedule.minutes} />
-                </div>
-
-                {/* Incidence Section */}
-                {hasIncidence && (
-                    <>
-                        <Separator />
-                        <DetailRow label="Incidence" value={schedule.type} />
+                <ScrollArea className="min-h-0 flex-1 overflow-auto">
+                    <div className="space-y-4">
+                        <DetailRow label="Program" value={schedule.program} />
                         <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                            <DetailRow label="Status" value={schedule.status} />
-                            <DetailRow label="Subtype" value={schedule.subtype} />
-                            <DetailRow label="Substitute" value={schedule.substitute} />
-                            <DetailRow label="Department" value={schedule.department} />
+                            <DetailRow label="Date" value={schedule.date} />
+                            <DetailRow label="Branch" value={schedule.branch} />
+                            <DetailRow label="Start Time" value={schedule.start_time} />
+                            <DetailRow label="End Time" value={schedule.end_time} />
+                            <DetailRow label="Instructor" value={schedule.instructor} />
+                            <DetailRow label="Code" value={schedule.code} />
+                            <DetailRow label="Shift" value={schedule.shift} />
+                            <DetailRow label="Minutes" value={schedule.minutes} />
                         </div>
-                        {schedule.description && (
-                            <DetailRow label="Description" value={schedule.description} />
-                        )}
-                    </>
-                )}
 
+                        {/* Incidence Section */}
+                        {hasIncidence && (
+                            <>
+                                <Separator />
+                                <DetailRow label="Incidence" value={schedule.type} />
+                                <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                                    <DetailRow label="Status" value={schedule.status} />
+                                    <DetailRow label="Subtype" value={schedule.subtype} />
+                                    <DetailRow label="Substitute" value={schedule.substitute} />
+                                    <DetailRow label="Department" value={schedule.department} />
+                                </div>
+                                {schedule.description && (
+                                    <DetailRow label="Description" value={schedule.description} />
+                                )}
+                            </>
+                        )}
+                    </div>
+                </ScrollArea>
                 <DialogFooter showCloseButton />
             </DialogContent>
         </Dialog>

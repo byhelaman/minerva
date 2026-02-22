@@ -116,7 +116,7 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
 
     return (
         <AlertDialog open={open} onOpenChange={(val) => !isPublishing && onOpenChange(val)}>
-            <AlertDialogContent>
+            <AlertDialogContent className="sm:max-w-100!">
                 <AlertDialogHeader>
                     <AlertDialogTitle>
                         {isLoadingCheck ? "Checking..." : (validationError ? "Cannot Publish Schedule" : (needsOverwrite ? "Schedule Already Exists" : "Publish Schedule"))}
@@ -135,9 +135,7 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
                                 </span>
                             ) : needsOverwrite ? (
                                 <span>
-                                    A schedule for <strong>{formatDateForDisplay(activeDate!)}</strong> has already been published.
-                                    <br />
-                                    If you proceed, it will replace the existing schedule for all users.
+                                    A schedule for <strong>{formatDateForDisplay(activeDate!)}</strong> has already been published. If you proceed, it will replace the existing schedule for all users.
                                 </span>
                             ) : (
                                 <>
@@ -167,10 +165,9 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
                                 <AlertDialogAction
                                     onClick={handleOverwrite}
                                     disabled={isPublishing}
-                                    className="border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
                                 >
                                     {isPublishing ? <Loader2 className="animate-spin" /> : null}
-                                    Replace
+                                    Continue
                                 </AlertDialogAction>
                             ) : (
                                 <AlertDialogAction onClick={handlePublish} disabled={isPublishing || isLoadingCheck}>
