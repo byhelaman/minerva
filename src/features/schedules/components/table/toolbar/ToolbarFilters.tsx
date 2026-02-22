@@ -14,7 +14,7 @@ const branchOptions = [
     { label: "CORPORATE", value: "CORPORATE" },
     { label: "HUB", value: "HUB" },
     { label: "LA MOLINA", value: "LA MOLINA" },
-    { label: "KIDS", value: "KIDS" },
+    // { label: "KIDS", value: "KIDS" },
 ];
 
 const defaultStatusOptions = [

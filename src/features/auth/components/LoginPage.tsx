@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/components/auth-provider";
@@ -59,17 +59,14 @@ function LoginForm({
 
     const from = (location.state as { from?: Location })?.from?.pathname || "/";
 
-    const {
-        register,
-        handleSubmit,
-        watch,
-        formState: { errors, isSubmitting },
-    } = useForm<LoginFormData>({
+    const form = useForm<LoginFormData>({
         resolver: zodResolver(loginSchema),
         defaultValues: {
             email: localStorage.getItem(STORAGE_KEYS.AUTH_LAST_EMAIL) || "",
         },
     });
+
+    const { formState: { isSubmitting } } = form;
 
     // Verificar lockout al montar y actualizar countdown
     useEffect(() => {
@@ -143,43 +140,55 @@ function LoginForm({
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <form onSubmit={handleSubmit(onSubmit)} noValidate>
+                    <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
                         <FieldGroup>
-                            <Field data-invalid={!!errors.email}>
-                                <FieldLabel htmlFor="email">Email</FieldLabel>
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    placeholder="m@example.com"
-                                    disabled={isSubmitting || isLocked}
-                                    aria-invalid={!!errors.email}
-                                    {...register("email")}
-                                />
-                                <FieldError errors={[errors.email]} />
-                            </Field>
-                            <Field data-invalid={!!errors.password}>
-                                <div className="flex items-center">
-                                    <FieldLabel htmlFor="password">Password</FieldLabel>
-                                    <a
-                                        href="#"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            setIsForgotPasswordOpen(true);
-                                        }}
-                                        className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
-                                    >
-                                        Forgot your password?
-                                    </a>
-                                </div>
-                                <Input
-                                    id="password"
-                                    type="password"
-                                    disabled={isSubmitting || isLocked}
-                                    aria-invalid={!!errors.password}
-                                    {...register("password")}
-                                />
-                                <FieldError errors={[errors.password]} />
-                            </Field>
+                            <Controller
+                                name="email"
+                                control={form.control}
+                                render={({ field, fieldState }) => (
+                                    <Field data-invalid={fieldState.invalid}>
+                                        <FieldLabel htmlFor={field.name}>Email</FieldLabel>
+                                        <Input
+                                            {...field}
+                                            id={field.name}
+                                            type="email"
+                                            placeholder="m@example.com"
+                                            aria-invalid={fieldState.invalid}
+                                            disabled={isSubmitting || isLocked}
+                                        />
+                                        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                    </Field>
+                                )}
+                            />
+                            <Controller
+                                name="password"
+                                control={form.control}
+                                render={({ field, fieldState }) => (
+                                    <Field data-invalid={fieldState.invalid}>
+                                        <div className="flex items-center">
+                                            <FieldLabel htmlFor={field.name}>Password</FieldLabel>
+                                            <a
+                                                href="#"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    setIsForgotPasswordOpen(true);
+                                                }}
+                                                className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
+                                            >
+                                                Forgot your password?
+                                            </a>
+                                        </div>
+                                        <Input
+                                            {...field}
+                                            id={field.name}
+                                            type="password"
+                                            aria-invalid={fieldState.invalid}
+                                            disabled={isSubmitting || isLocked}
+                                        />
+                                        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                    </Field>
+                                )}
+                            />
                             <Field>
                                 <Button type="submit" disabled={isSubmitting || isLocked}>
                                     {isSubmitting && (
@@ -208,7 +217,7 @@ function LoginForm({
             <ForgotPasswordDialog
                 open={isForgotPasswordOpen}
                 onOpenChange={setIsForgotPasswordOpen}
-                defaultEmail={watch("email")}
+                defaultEmail={form.watch("email")}
             />
             <SignupDialog
                 open={isSignupOpen || !!pendingEmailForOtp}

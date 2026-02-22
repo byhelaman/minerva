@@ -3,7 +3,7 @@
  * Utiliza react-hook-form con validación zod.
  */
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +48,7 @@ export function CreateRoleDialog({ open, onOpenChange, isCreating, onSubmit }: C
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md" onCloseAutoFocus={(e) => e.preventDefault()}>
+            <DialogContent className="sm:max-w-md gap-6" onCloseAutoFocus={(e) => e.preventDefault()}>
                 <DialogHeader>
                     <DialogTitle>Create New Role</DialogTitle>
                     <DialogDescription>
@@ -57,41 +57,63 @@ export function CreateRoleDialog({ open, onOpenChange, isCreating, onSubmit }: C
                 </DialogHeader>
                 <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
                     <FieldGroup>
-                        <Field data-invalid={!!form.formState.errors.name}>
-                            <FieldLabel htmlFor="role-name">Role Name</FieldLabel>
-                            <Input
-                                id="role-name"
-                                placeholder="e.g. moderator"
-                                {...form.register("name")}
-                                disabled={isCreating}
-                            />
-                            <FieldError errors={[form.formState.errors.name]} />
-                        </Field>
-                        <Field>
-                            <FieldLabel htmlFor="role-level">Hierarchy Level</FieldLabel>
-                            <Input
-                                id="role-level"
-                                type="number"
-                                min={1}
-                                max={99}
-                                {...form.register("level", { valueAsNumber: true })}
-                                disabled={isCreating}
-                            />
-                            <FieldDescription>Higher level = more permissions. Max: 99</FieldDescription>
-                            <FieldError errors={[form.formState.errors.level]} />
-                        </Field>
-                        <Field>
-                            <FieldLabel htmlFor="role-description">Description</FieldLabel>
-                            <Textarea
-                                id="role-description"
-                                placeholder="What can this role do?"
-                                {...form.register("description")}
-                                rows={4}
-                                className="min-h-20 resize-none"
-                                disabled={isCreating}
-                            />
-                            <FieldError errors={[form.formState.errors.description]} />
-                        </Field>
+                        <Controller
+                            name="name"
+                            control={form.control}
+                            render={({ field, fieldState }) => (
+                                <Field data-invalid={fieldState.invalid}>
+                                    <FieldLabel htmlFor={field.name}>Role Name</FieldLabel>
+                                    <Input
+                                        {...field}
+                                        id={field.name}
+                                        placeholder="e.g. moderator"
+                                        aria-invalid={fieldState.invalid}
+                                        disabled={isCreating}
+                                    />
+                                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                </Field>
+                            )}
+                        />
+                        <Controller
+                            name="level"
+                            control={form.control}
+                            render={({ field, fieldState }) => (
+                                <Field data-invalid={fieldState.invalid}>
+                                    <FieldLabel htmlFor={field.name}>Hierarchy Level</FieldLabel>
+                                    <Input
+                                        {...field}
+                                        id={field.name}
+                                        type="number"
+                                        min={1}
+                                        max={99}
+                                        onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                                        aria-invalid={fieldState.invalid}
+                                        disabled={isCreating}
+                                    />
+                                    <FieldDescription>Higher level = more permissions. Max: 99</FieldDescription>
+                                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                </Field>
+                            )}
+                        />
+                        <Controller
+                            name="description"
+                            control={form.control}
+                            render={({ field, fieldState }) => (
+                                <Field data-invalid={fieldState.invalid}>
+                                    <FieldLabel htmlFor={field.name}>Description</FieldLabel>
+                                    <Textarea
+                                        {...field}
+                                        id={field.name}
+                                        placeholder="What can this role do?"
+                                        rows={4}
+                                        className="min-h-20 resize-none"
+                                        aria-invalid={fieldState.invalid}
+                                        disabled={isCreating}
+                                    />
+                                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                </Field>
+                            )}
+                        />
                     </FieldGroup>
                     <DialogFooter className="mt-6">
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
@@ -131,7 +153,7 @@ export function EditRoleDialog({ open, onOpenChange, role, isEditing, onSubmit }
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md" onCloseAutoFocus={(e) => e.preventDefault()}>
+            <DialogContent className="sm:max-w-md gap-6" onCloseAutoFocus={(e) => e.preventDefault()}>
                 <DialogHeader>
                     <DialogTitle>Edit Role <span className="font-mono">[{role?.name}]</span></DialogTitle>
                     <DialogDescription>
@@ -140,18 +162,25 @@ export function EditRoleDialog({ open, onOpenChange, role, isEditing, onSubmit }
                 </DialogHeader>
                 <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
                     <FieldGroup>
-                        <Field>
-                            <FieldLabel htmlFor="edit-description">Description</FieldLabel>
-                            <Textarea
-                                id="edit-description"
-                                placeholder="What can this role do?"
-                                {...form.register("description")}
-                                rows={4}
-                                className="min-h-20 resize-none"
-                                disabled={isEditing}
-                            />
-                            <FieldError errors={[form.formState.errors.description]} />
-                        </Field>
+                        <Controller
+                            name="description"
+                            control={form.control}
+                            render={({ field, fieldState }) => (
+                                <Field data-invalid={fieldState.invalid}>
+                                    <FieldLabel htmlFor={field.name}>Description</FieldLabel>
+                                    <Textarea
+                                        {...field}
+                                        id={field.name}
+                                        placeholder="What can this role do?"
+                                        rows={4}
+                                        className="min-h-20 resize-none"
+                                        aria-invalid={fieldState.invalid}
+                                        disabled={isEditing}
+                                    />
+                                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                </Field>
+                            )}
+                        />
                     </FieldGroup>
                     <DialogFooter className="mt-6">
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

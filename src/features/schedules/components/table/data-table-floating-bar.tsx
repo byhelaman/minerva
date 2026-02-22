@@ -23,7 +23,7 @@ export function DataTableFloatingBar({
     const hasCopyOptions = onCopy && onCopyAsTable;
 
     return (
-        <div className="sticky bottom-4 z-10 mx-auto w-fit flex items-center gap-2 rounded-lg border bg-background px-4 py-2 pr-3 shadow-md animate-in fade-in slide-in-from-bottom-2 duration-200 transition-colors-none">
+        <div className="sticky bottom-4 z-10 mx-auto w-fit flex items-center gap-2 rounded-lg border bg-background px-4 py-2 pr-3 shadow-md animate-in fade-in slide-in-from-bottom-2 duration-200">
             <span className="text-sm text-muted-foreground whitespace-nowrap">
                 {selectedCount} selected
             </span>

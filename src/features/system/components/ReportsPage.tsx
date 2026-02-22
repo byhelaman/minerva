@@ -481,14 +481,13 @@ export function ReportsPage() {
                                 : `Are you sure you want to delete ${schedulesToDelete.length} entries? This action cannot be undone.`
                             }
                         </AlertDialogDescription>
-                        {schedulesToDelete.length === 1 && schedulesToDelete[0] && (
-                            <ScheduleInfo schedule={schedulesToDelete[0]} />
-                        )}
                     </AlertDialogHeader>
+                    {schedulesToDelete.length === 1 && schedulesToDelete[0] && (
+                        <ScheduleInfo schedule={schedulesToDelete[0]} />
+                    )}
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
-                            className="border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
                             onClick={async () => {
                                 // Optimistic: hide rows immediately
                                 const keys = new Set(schedulesToDelete.map(s => getSchedulePrimaryKey(s)));

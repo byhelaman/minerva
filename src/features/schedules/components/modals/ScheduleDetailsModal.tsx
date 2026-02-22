@@ -6,8 +6,8 @@ import {
     DialogDescription,
     DialogFooter,
 } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import type { Schedule } from "../../types";
-import { Button } from "@/components/ui/button";
 import { ScheduleInfo } from "./ScheduleInfo";
 
 interface ScheduleDetailsModalProps {
@@ -17,9 +17,9 @@ interface ScheduleDetailsModalProps {
 }
 
 const DetailRow = ({ label, value }: { label: string; value: string | null | undefined }) => (
-    <div className="flex flex-col gap-0.5">
-        <span className="text-xs text-muted-foreground">{label}</span>
-        <span className="text-sm">{value || "-"}</span>
+    <div className="space-y-1">
+        <p className="text-sm text-muted-foreground">{label}</p>
+        <p className="text-sm font-medium">{value || "-"}</p>
     </div>
 );
 
@@ -30,14 +30,13 @@ export function ScheduleDetailsModal({ open, onOpenChange, schedule }: ScheduleD
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md gap-5">
+            <DialogContent className="sm:max-w-md gap-6">
                 <DialogHeader>
                     <DialogTitle>Schedule Details</DialogTitle>
                     <DialogDescription>View details for this class.</DialogDescription>
                 </DialogHeader>
 
                 <ScheduleInfo schedule={schedule} />
-
 
                 {/* Base Schedule Info */}
                 <div className="grid grid-cols-2 gap-x-6 gap-y-3">
@@ -54,12 +53,8 @@ export function ScheduleDetailsModal({ open, onOpenChange, schedule }: ScheduleD
                 {/* Incidence Section */}
                 {hasIncidence && (
                     <>
+                        <Separator />
                         <DetailRow label="Incidence" value={schedule.type} />
-
-                        {/* <div className="flex items-center gap-2">
-                                <span className="text-xs font-medium text-muted-foreground">Incidence</span>
-                                <Badge variant="outline" className="text-xs">{schedule.type}</Badge>
-                            </div> */}
                         <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                             <DetailRow label="Status" value={schedule.status} />
                             <DetailRow label="Subtype" value={schedule.subtype} />
@@ -71,9 +66,8 @@ export function ScheduleDetailsModal({ open, onOpenChange, schedule }: ScheduleD
                         )}
                     </>
                 )}
-                <DialogFooter>
-                    <Button variant={"secondary"} onClick={() => onOpenChange(false)}>Close</Button>
-                </DialogFooter>
+
+                <DialogFooter showCloseButton />
             </DialogContent>
         </Dialog>
     );

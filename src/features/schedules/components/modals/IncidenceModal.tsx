@@ -11,9 +11,6 @@ import { useScheduleDataStore } from "../../stores/useScheduleDataStore";
 import { getSchedulePrimaryKey } from "../../utils/string-utils";
 import { useInstructors } from "../../hooks/useInstructors";
 import { useZoomStore } from "@/features/matching/stores/useZoomStore";
-import {
-    Form,
-} from "@/components/ui/form";
 import { BrushCleaning, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { IncidenceFormContent } from "./IncidenceFormContent";
@@ -211,7 +208,7 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="gap-6">
+            <DialogContent className="flex max-h-[85vh] flex-col gap-6">
                 <DialogHeader>
                     <div className="flex gap-2 items-center">
                         <DialogTitle>Incidence Details</DialogTitle>
@@ -227,43 +224,42 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                 </DialogHeader>
 
                 {/* Schedule Info */}
-                <ScheduleInfo schedule={schedule} />
+                <ScheduleInfo schedule={schedule} className="px-1" />
 
                 {/* Form */}
-                <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                        <IncidenceFormContent
-                            form={form}
-                            uniqueInstructors={uniqueInstructors}
-                            canEdit={canEdit}
-                        />
-                        <DialogFooter className="mt-6 flex sm:justify-between gap-2">
-                            {canEdit && existingIncidence ? (
-                                <Button
-                                    variant="secondary"
-                                    size="icon"
-                                    onClick={handleDelete}
-                                    disabled={isDeleting}
-                                >
-                                    {isDeleting ? <Loader2 className="animate-spin" /> : <BrushCleaning />}
-                                    <span className="sr-only">Delete</span>
-                                </Button>
-                            ) : <div></div>}
+                <form onSubmit={form.handleSubmit(onSubmit)} id="form-incidence" className="flex min-h-0 flex-1 flex-col">
+                    <IncidenceFormContent
+                        form={form}
+                        uniqueInstructors={uniqueInstructors}
+                        canEdit={canEdit}
+                    />
+                </form>
+                <DialogFooter>
+                    {canEdit && existingIncidence ? (
+                        <Button
+                            variant="secondary"
+                            size="icon"
+                            onClick={handleDelete}
+                            disabled={isDeleting}
+                            className="mr-auto"
+                        >
+                            {isDeleting ? <Loader2 className="animate-spin" /> : <BrushCleaning />}
+                            <span className="sr-only">Delete</span>
+                        </Button>
+                    ) : <div />}
 
-                            <div className="flex gap-2 justify-end flex-1">
-                                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-                                    {canEdit ? "Cancel" : "Close"}
-                                </Button>
-                                {canEdit && (
-                                    <Button type="submit" disabled={isSubmitting}>
-                                        {isSubmitting && <Loader2 className="animate-spin" />}
-                                        {isSubmitting ? "Saving..." : "Save Changes"}
-                                    </Button>
-                                )}
-                            </div>
-                        </DialogFooter>
-                    </form>
-                </Form>
+                    <div className="flex gap-2">
+                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+                            {canEdit ? "Cancel" : "Close"}
+                        </Button>
+                        {canEdit && (
+                            <Button type="submit" disabled={isSubmitting} form="form-incidence">
+                                {isSubmitting && <Loader2 className="animate-spin" />}
+                                {isSubmitting ? "Saving..." : "Save"}
+                            </Button>
+                        )}
+                    </div>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     );

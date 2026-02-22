@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
 import { ScheduleDataTable } from "@schedules/components/table/ScheduleDataTable";
 import { useZoomStore } from "@/features/matching/stores/useZoomStore";
@@ -353,7 +354,7 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className={cn(
-                "flex flex-col max-h-[85vh]",
+                "flex flex-col max-h-[85vh] gap-6",
                 step === 'input' ? "sm:max-w-lg" : "max-w-4xl!"
             )}>
                 <DialogHeader>
@@ -380,21 +381,19 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
                 {/* Step 1: Input */}
                 {step === 'input' && (
                     <>
-                        <div className="grid gap-4 py-4">
-                            <div className="grid gap-3">
-                                <Label htmlFor="programs">Program Names</Label>
-                                <Textarea
-                                    id="programs"
-                                    placeholder="Corporate English 9AM&#10;Kids Program 10AM&#10;Business English 2PM"
-                                    className="min-h-[240px] font-mono text-sm max-h-[400px] resize-none no-scrollbar"
-                                    value={inputText}
-                                    onChange={(e) => setInputText(e.target.value)}
-                                />
-                                <p className="text-sm text-muted-foreground">
-                                    {parsedLines.length} program{parsedLines.length !== 1 ? 's' : ''} to validate
-                                </p>
-                            </div>
-                        </div>
+                        <Field>
+                            <FieldLabel htmlFor="programs">Program Names</FieldLabel>
+                            <Textarea
+                                id="programs"
+                                placeholder="Corporate English 9AM&#10;Kids Program 10AM&#10;Business English 2PM"
+                                className="min-h-[240px] font-mono text-sm max-h-[400px] resize-none no-scrollbar"
+                                value={inputText}
+                                onChange={(e) => setInputText(e.target.value)}
+                            />
+                            <FieldDescription>
+                                {parsedLines.length} program{parsedLines.length !== 1 ? 's' : ''} to validate
+                            </FieldDescription>
+                        </Field>
                         <DialogFooter>
                             <Button variant="outline" onClick={() => onOpenChange(false)}>
                                 Cancel

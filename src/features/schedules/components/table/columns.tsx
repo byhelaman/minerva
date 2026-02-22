@@ -168,7 +168,7 @@ export const getScheduleColumns = (
                             checked={isYes}
                             onCheckedChange={handleToggle}
                             disabled={!canManage}
-                            className="h-5 w-9 [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
+                        // className="h-5 w-9 [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
                         />
                     </div>
                 );

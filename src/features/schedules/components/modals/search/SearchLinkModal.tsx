@@ -253,7 +253,7 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
     return (
         <>
             <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent className="max-w-5xl! max-h-[85vh] flex flex-col">
+                <DialogContent className="max-w-5xl! max-h-[85vh] flex flex-col gap-6">
                     <DialogHeader>
                         <DialogTitle>Search Meetings</DialogTitle>
                         <DialogDescription>
@@ -261,7 +261,7 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="flex-1 flex flex-col min-h-0 overflow-hidden pr-2">
+                    <div className="flex-1 flex flex-col min-h-0 overflow-hidden pr-2 pb-2">
                         {isLoading ? (
                             <div className="flex flex-col items-center justify-center gap-2 h-full border border-dashed rounded-lg bg-muted/10 p-8 min-h-100">
                                 <div className="relative flex items-center justify-center">
@@ -290,9 +290,9 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
                             />
                         )}
                     </div>
-                    <DialogFooter>
+                    {/* <DialogFooter>
                         <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-                    </DialogFooter>
+                    </DialogFooter> */}
 
                 </DialogContent>
             </Dialog>

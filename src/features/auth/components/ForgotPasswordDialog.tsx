@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/components/auth-provider";
@@ -198,7 +198,7 @@ export function ForgotPasswordDialog({
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-md gap-6">
                 {step === "email" && (
                     <>
                         <DialogHeader>
@@ -209,18 +209,24 @@ export function ForgotPasswordDialog({
                         </DialogHeader>
                         <form onSubmit={emailForm.handleSubmit(handleEmailSubmit)}>
                             <FieldGroup>
-                                <Field data-invalid={!!emailForm.formState.errors.email}>
-                                    <FieldLabel htmlFor="reset-email">Email</FieldLabel>
-                                    <Input
-                                        id="reset-email"
-                                        type="email"
-                                        placeholder="m@example.com"
-                                        {...emailForm.register("email")}
-                                        disabled={isLoading}
-                                        aria-invalid={!!emailForm.formState.errors.email}
-                                    />
-                                    <FieldError errors={[emailForm.formState.errors.email]} />
-                                </Field>
+                                <Controller
+                                    name="email"
+                                    control={emailForm.control}
+                                    render={({ field, fieldState }) => (
+                                        <Field data-invalid={fieldState.invalid}>
+                                            <FieldLabel htmlFor={field.name}>Email</FieldLabel>
+                                            <Input
+                                                {...field}
+                                                id={field.name}
+                                                type="email"
+                                                placeholder="m@example.com"
+                                                aria-invalid={fieldState.invalid}
+                                                disabled={isLoading}
+                                            />
+                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                        </Field>
+                                    )}
+                                />
                             </FieldGroup>
                             <DialogFooter className="mt-6">
                                 <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
@@ -316,28 +322,40 @@ export function ForgotPasswordDialog({
                         </DialogHeader>
                         <form onSubmit={passwordForm.handleSubmit(handlePasswordSubmit)}>
                             <FieldGroup>
-                                <Field data-invalid={!!passwordForm.formState.errors.password}>
-                                    <FieldLabel htmlFor="new-password">New Password</FieldLabel>
-                                    <Input
-                                        id="new-password"
-                                        type="password"
-                                        {...passwordForm.register("password")}
-                                        disabled={isLoading}
-                                        aria-invalid={!!passwordForm.formState.errors.password}
-                                    />
-                                    <FieldError errors={[passwordForm.formState.errors.password]} />
-                                </Field>
-                                <Field data-invalid={!!passwordForm.formState.errors.confirmPassword}>
-                                    <FieldLabel htmlFor="confirm-password">Confirm Password</FieldLabel>
-                                    <Input
-                                        id="confirm-password"
-                                        type="password"
-                                        {...passwordForm.register("confirmPassword")}
-                                        disabled={isLoading}
-                                        aria-invalid={!!passwordForm.formState.errors.confirmPassword}
-                                    />
-                                    <FieldError errors={[passwordForm.formState.errors.confirmPassword]} />
-                                </Field>
+                                <Controller
+                                    name="password"
+                                    control={passwordForm.control}
+                                    render={({ field, fieldState }) => (
+                                        <Field data-invalid={fieldState.invalid}>
+                                            <FieldLabel htmlFor={field.name}>New Password</FieldLabel>
+                                            <Input
+                                                {...field}
+                                                id={field.name}
+                                                type="password"
+                                                aria-invalid={fieldState.invalid}
+                                                disabled={isLoading}
+                                            />
+                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                        </Field>
+                                    )}
+                                />
+                                <Controller
+                                    name="confirmPassword"
+                                    control={passwordForm.control}
+                                    render={({ field, fieldState }) => (
+                                        <Field data-invalid={fieldState.invalid}>
+                                            <FieldLabel htmlFor={field.name}>Confirm Password</FieldLabel>
+                                            <Input
+                                                {...field}
+                                                id={field.name}
+                                                type="password"
+                                                aria-invalid={fieldState.invalid}
+                                                disabled={isLoading}
+                                            />
+                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                        </Field>
+                                    )}
+                                />
                             </FieldGroup>
                             <DialogFooter className="mt-6">
                                 <Button type="submit" disabled={isLoading} className="w-full">

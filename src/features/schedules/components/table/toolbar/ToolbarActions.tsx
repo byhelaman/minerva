@@ -330,7 +330,7 @@ export function ToolbarActions<TData>({
             </AlertDialog>
 
             <Dialog open={showVersionsDialog} onOpenChange={setShowVersionsDialog}>
-                <DialogContent className="max-w-md">
+                <DialogContent className="sm:max-w-md gap-6">
                     <DialogHeader>
                         <DialogTitle>Select Cloud Version</DialogTitle>
                         <DialogDescription>

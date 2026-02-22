@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
@@ -20,14 +20,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import {
-    Form,
-    FormControl,
-    FormField,
-    FormItem,
-    FormLabel,
-    FormMessage,
-} from "@/components/ui/form";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
@@ -218,8 +211,6 @@ export function AddScheduleModal({
                 type: "manual",
                 message: "A schedule already exists",
             });
-            // If we are in step 2 and error is in step 1 fields, we might need to go back or show error toast
-            // But usually validation prevents getting here.
             return;
         }
 
@@ -259,7 +250,7 @@ export function AddScheduleModal({
 
     return (
         <Dialog open={open} onOpenChange={(val) => !isSubmitting && onOpenChange(val)}>
-            <DialogContent className="gap-6 max-w-lg">
+            <DialogContent className="flex max-h-[85vh] flex-col gap-6">
                 <DialogHeader>
                     <DialogTitle>{step === 1 ? "Add Schedule Entry" : "Add Incidence Details"}</DialogTitle>
                     <DialogDescription>
@@ -267,312 +258,287 @@ export function AddScheduleModal({
                     </DialogDescription>
                 </DialogHeader>
 
-                <Form {...form}>
-                    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-
-                        {step === 1 && (
-                            <div className="space-y-6">
-                                {/* Date */}
-                                <div className="grid grid-cols-2 gap-3">
-
-                                    <FormField
-                                        control={form.control}
-                                        name="date"
-                                        render={({ field }) => (
-                                            <FormItem className="flex flex-col">
-                                                <FormLabel>Date *</FormLabel>
-                                                <Popover>
-                                                    <PopoverTrigger asChild>
-                                                        <FormControl>
-                                                            <Button
-                                                                variant={"outline"}
-                                                                disabled={isDateLocked}
-                                                                className={cn(
-                                                                    "w-full pl-3 text-left font-normal",
-                                                                    !field.value && "text-muted-foreground"
-                                                                )}
-                                                            >
-                                                                {field.value ? (
-                                                                    format(new Date(field.value + "T00:00:00"), "dd/MM/yyyy")
-                                                                ) : (
-                                                                    <span>Pick a date</span>
-                                                                )}
-                                                                <CalendarIcon className="ml-auto opacity-50" />
-                                                            </Button>
-                                                        </FormControl>
-                                                    </PopoverTrigger>
-                                                    <PopoverContent className="w-auto p-0" align="start">
-                                                        <Calendar
-                                                            mode="single"
-                                                            selected={field.value ? new Date(field.value + "T00:00:00") : undefined}
-                                                            onSelect={(date) => {
-                                                                if (date) {
-                                                                    const y = date.getFullYear();
-                                                                    const m = String(date.getMonth() + 1).padStart(2, '0');
-                                                                    const d = String(date.getDate()).padStart(2, '0');
-                                                                    field.onChange(`${y}-${m}-${d}`);
-                                                                }
-                                                            }}
-                                                            disabled={allowAnyDate ? undefined : { before: new Date() }}
-                                                            className="[--cell-size:--spacing(7.5)]"
-                                                        />
-                                                    </PopoverContent>
-                                                </Popover>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
-                                    {/* Time Range */}
-                                    <div className="space-y-2">
-                                        <Label className={cn((form.formState.errors.start_time || form.formState.errors.end_time) && "text-destructive")}>
-                                            Time *
-                                        </Label>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <FormField
-                                                control={form.control}
-                                                name="start_time"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormControl>
-                                                            <InputGroup>
-                                                                <InputGroupInput
-                                                                    type="time"
-                                                                    className="appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
-                                                                    {...field}
-                                                                    aria-invalid={!!form.formState.errors.start_time}
-                                                                />
-                                                                <InputGroupAddon>
-                                                                    <Clock2 className="text-muted-foreground" />
-                                                                </InputGroupAddon>
-                                                            </InputGroup>
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-                                            <FormField
-                                                control={form.control}
-                                                name="end_time"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormControl>
-                                                            <InputGroup>
-                                                                <InputGroupInput
-                                                                    type="time"
-                                                                    className="appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
-                                                                    {...field}
-                                                                    aria-invalid={!!form.formState.errors.end_time}
-                                                                />
-                                                                <InputGroupAddon>
-                                                                    <Clock2 className="text-muted-foreground" />
-                                                                </InputGroupAddon>
-                                                            </InputGroup>
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-                                        </div>
-                                        <div>
-                                            {(form.formState.errors.start_time || form.formState.errors.end_time) && (
-                                                <p className="text-[0.8rem] font-medium text-destructive">
-                                                    {form.formState.errors.start_time?.message || form.formState.errors.end_time?.message}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Code & Instructor */}
-                                <div className="grid grid-cols-2 gap-3">
-                                    <FormField
-                                        control={form.control}
-                                        name="code"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Code</FormLabel>
-                                                <FormControl>
-                                                    <Input placeholder="Optional" {...field} />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
-                                    {/* Instructor */}
-                                    <FormField
-                                        control={form.control}
-                                        name="instructor"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Instructor</FormLabel>
-                                                <FormControl>
-                                                    <div className="flex gap-1 items-center w-full">
-                                                        <InstructorSelector
-                                                            value={field.value}
-                                                            onChange={(value) => field.onChange(value)}
-                                                            instructors={uniqueInstructors}
-                                                            aria-invalid={!!form.formState.errors.instructor}
-                                                            className="flex-1"
-                                                            popoverClassName="max-w-[220px]"
-                                                        />
-                                                        {field.value && (
-                                                            <Button
-                                                                type="button"
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-9 w-9 shrink-0"
-                                                                onClick={() => field.onChange("")}
-                                                                title="Clear instructor"
-                                                            >
-                                                                <X className="h-4 w-4" />
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
-                                </div>
-
-                                {/* Program */}
-                                <FormField
+                {step === 2 && (
+                    <ScheduleInfo
+                        schedule={{
+                            program: form.getValues("program"),
+                            start_time: form.getValues("start_time"),
+                            end_time: form.getValues("end_time"),
+                            instructor: form.getValues("instructor") || "No Instructor",
+                        }}
+                    />
+                )}
+                <form onSubmit={form.handleSubmit(handleSubmit)} id="add-schedule-form" className="flex min-h-0 flex-1 flex-col">
+                    {step === 1 && (
+                        <div className="space-y-6">
+                            {/* Date & Time */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <Controller
+                                    name="date"
                                     control={form.control}
-                                    name="program"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Program *</FormLabel>
-                                            <FormControl>
-                                                <Input placeholder="e.g. English Level 5" {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
+                                    render={({ field, fieldState }) => (
+                                        <Field data-invalid={fieldState.invalid} className="flex flex-col">
+                                            <FieldLabel>Date *</FieldLabel>
+                                            <Popover>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        variant={"outline"}
+                                                        disabled={isDateLocked}
+                                                        className={cn(
+                                                            "w-full pl-3 text-left font-normal",
+                                                            !field.value && "text-muted-foreground"
+                                                        )}
+                                                    >
+                                                        {field.value ? (
+                                                            format(new Date(field.value + "T00:00:00"), "dd/MM/yyyy")
+                                                        ) : (
+                                                            <span>Pick a date</span>
+                                                        )}
+                                                        <CalendarIcon className="ml-auto opacity-50" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-auto p-0" align="start">
+                                                    <Calendar
+                                                        mode="single"
+                                                        selected={field.value ? new Date(field.value + "T00:00:00") : undefined}
+                                                        onSelect={(date) => {
+                                                            if (date) {
+                                                                const y = date.getFullYear();
+                                                                const m = String(date.getMonth() + 1).padStart(2, '0');
+                                                                const d = String(date.getDate()).padStart(2, '0');
+                                                                field.onChange(`${y}-${m}-${d}`);
+                                                            }
+                                                        }}
+                                                        disabled={allowAnyDate ? undefined : { before: new Date() }}
+                                                        className="[--cell-size:--spacing(7.5)]"
+                                                    />
+                                                </PopoverContent>
+                                            </Popover>
+                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                        </Field>
                                     )}
                                 />
-                                <div className="grid grid-cols-2 gap-3">
-
-                                    {/* Branch */}
-                                    <FormField
-                                        control={form.control}
-                                        name="branch"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Branch *</FormLabel>
-                                                <Select onValueChange={field.onChange} value={field.value}>
-                                                    <FormControl className="w-full">
-                                                        <SelectTrigger aria-invalid={!!form.formState.errors.branch}>
-                                                            <SelectValue placeholder="Select branch" />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        {BRANCH_OPTIONS.map((branch) => (
-                                                            <SelectItem key={branch} value={branch}>
-                                                                {branch}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
-                                </div>
-
-                                {/* Optional Fields Row */}
-                                <div className="grid grid-cols-2 gap-3">
-                                    <FormField
-                                        control={form.control}
-                                        name="minutes"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Minutes</FormLabel>
-                                                <FormControl>
-                                                    <Input placeholder="Optional" {...field} />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
-                                    <FormField
-                                        control={form.control}
-                                        name="units"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Units</FormLabel>
-                                                <FormControl>
-                                                    <Input placeholder="Optional" {...field} />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
-                                </div>
-                            </div>
-                        )}
-
-                        {step === 2 && (
-                            <div className="space-y-4">
-                                <ScheduleInfo
-                                    schedule={{
-                                        program: form.getValues("program"),
-                                        start_time: form.getValues("start_time"),
-                                        end_time: form.getValues("end_time"),
-                                        instructor: form.getValues("instructor") || "No Instructor",
-                                    }}
-                                />
-                                <IncidenceFormContent
-                                    form={form}
-                                    uniqueInstructors={uniqueInstructors}
-                                    canEdit={true}
-                                />
-                            </div>
-                        )}
-
-                        <DialogFooter>
-                            {step === 1 ? (
-                                <>
-                                    <div className="w-full flex justify-between gap-2">
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            onClick={() => onOpenChange(false)}
-                                            disabled={isSubmitting}
-                                        >
-                                            Cancel
-                                        </Button>
-                                        <div className="flex gap-2">
-                                            <Button
-                                                type="button"
-                                                variant="secondary"
-                                                onClick={handleNext}
-                                                disabled={isSubmitting}
-                                            >
-                                                Next: Incidence <ArrowRight />
-                                            </Button>
-                                            <Button type="submit" disabled={isSubmitting}>
-                                                {isSubmitting && <Loader2 className="animate-spin" />}
-                                                Add Entry
-                                            </Button>
-                                        </div>
+                                {/* Time Range */}
+                                <div className="space-y-3">
+                                    <Label className={cn("h-4.5", (form.formState.errors.start_time || form.formState.errors.end_time) && "text-destructive")}>
+                                        Time *
+                                    </Label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <Controller
+                                            name="start_time"
+                                            control={form.control}
+                                            render={({ field, fieldState }) => (
+                                                <InputGroup>
+                                                    <InputGroupInput
+                                                        type="time"
+                                                        className="appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
+                                                        {...field}
+                                                        aria-invalid={fieldState.invalid}
+                                                    />
+                                                    <InputGroupAddon>
+                                                        <Clock2 className="text-muted-foreground" />
+                                                    </InputGroupAddon>
+                                                </InputGroup>
+                                            )}
+                                        />
+                                        <Controller
+                                            name="end_time"
+                                            control={form.control}
+                                            render={({ field, fieldState }) => (
+                                                <InputGroup>
+                                                    <InputGroupInput
+                                                        type="time"
+                                                        className="appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
+                                                        {...field}
+                                                        aria-invalid={fieldState.invalid}
+                                                    />
+                                                    <InputGroupAddon>
+                                                        <Clock2 className="text-muted-foreground" />
+                                                    </InputGroupAddon>
+                                                </InputGroup>
+                                            )}
+                                        />
                                     </div>
-                                </>
-                            ) : (
-                                <>
+                                    {(form.formState.errors.start_time ||
+                                        form.formState.errors.end_time) && (
+                                            <FieldError
+                                                errors={[
+                                                    form.formState.errors.start_time ||
+                                                    form.formState.errors.end_time,
+                                                ]}
+                                            />
+                                        )}
+                                </div>
+                            </div>
+
+                            {/* Code & Instructor */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <Controller
+                                    name="code"
+                                    control={form.control}
+                                    render={({ field, fieldState }) => (
+                                        <Field data-invalid={fieldState.invalid}>
+                                            <FieldLabel htmlFor={field.name}>Code</FieldLabel>
+                                            <Input {...field} id={field.name} placeholder="Optional" aria-invalid={fieldState.invalid} />
+                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                        </Field>
+                                    )}
+                                />
+                                <Controller
+                                    name="instructor"
+                                    control={form.control}
+                                    render={({ field, fieldState }) => (
+                                        <Field data-invalid={fieldState.invalid}>
+                                            <FieldLabel>Instructor</FieldLabel>
+                                            <div className="flex gap-1 items-center w-full">
+                                                <InstructorSelector
+                                                    value={field.value}
+                                                    onChange={(value) => field.onChange(value)}
+                                                    instructors={uniqueInstructors}
+                                                    aria-invalid={fieldState.invalid}
+                                                    className="flex-1"
+                                                    popoverClassName="max-w-[220px]"
+                                                />
+                                                {field.value && (
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-9 w-9 shrink-0"
+                                                        onClick={() => field.onChange("")}
+                                                        title="Clear instructor"
+                                                    >
+                                                        <X className="h-4 w-4" />
+                                                    </Button>
+                                                )}
+                                            </div>
+                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                        </Field>
+                                    )}
+                                />
+                            </div>
+
+                            {/* Program */}
+                            <Controller
+                                name="program"
+                                control={form.control}
+                                render={({ field, fieldState }) => (
+                                    <Field data-invalid={fieldState.invalid}>
+                                        <FieldLabel htmlFor={field.name}>Program *</FieldLabel>
+                                        <Input {...field} id={field.name} placeholder="e.g. English Level 5" aria-invalid={fieldState.invalid} />
+                                        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                    </Field>
+                                )}
+                            />
+                            <div className="grid grid-cols-2 gap-3">
+                                {/* Branch */}
+                                <Controller
+                                    name="branch"
+                                    control={form.control}
+                                    render={({ field, fieldState }) => (
+                                        <Field data-invalid={fieldState.invalid}>
+                                            <FieldLabel>Branch *</FieldLabel>
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <SelectTrigger className="w-full" aria-invalid={fieldState.invalid}>
+                                                    <SelectValue placeholder="Select branch" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {BRANCH_OPTIONS.map((branch) => (
+                                                        <SelectItem key={branch} value={branch}>
+                                                            {branch}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                        </Field>
+                                    )}
+                                />
+                            </div>
+
+                            {/* Optional Fields Row */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <Controller
+                                    name="minutes"
+                                    control={form.control}
+                                    render={({ field, fieldState }) => (
+                                        <Field data-invalid={fieldState.invalid}>
+                                            <FieldLabel htmlFor={field.name}>Minutes</FieldLabel>
+                                            <Input {...field} id={field.name} placeholder="Optional" aria-invalid={fieldState.invalid} />
+                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                        </Field>
+                                    )}
+                                />
+                                <Controller
+                                    name="units"
+                                    control={form.control}
+                                    render={({ field, fieldState }) => (
+                                        <Field data-invalid={fieldState.invalid}>
+                                            <FieldLabel htmlFor={field.name}>Units</FieldLabel>
+                                            <Input {...field} id={field.name} placeholder="Optional" aria-invalid={fieldState.invalid} />
+                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                        </Field>
+                                    )}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {step === 2 && (
+                        <div className="overflow-y-auto">
+                            <IncidenceFormContent
+                                form={form}
+                                uniqueInstructors={uniqueInstructors}
+                                canEdit={true}
+                            />
+                        </div>
+                    )}
+                </form>
+                <DialogFooter>
+                    {step === 1 ? (
+                        <>
+                            <div className="w-full flex justify-between gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => onOpenChange(false)}
+                                    disabled={isSubmitting}
+                                >
+                                    Cancel
+                                </Button>
+                                <div className="flex gap-2">
                                     <Button
                                         type="button"
                                         variant="secondary"
-                                        onClick={() => setStep(1)}
+                                        onClick={handleNext}
                                         disabled={isSubmitting}
                                     >
-                                        <ArrowLeft /> Back
+                                        Next: Incidence <ArrowRight />
                                     </Button>
-                                    <Button type="submit" disabled={isSubmitting}>
+                                    <Button type="submit" disabled={isSubmitting} form="add-schedule-form">
                                         {isSubmitting && <Loader2 className="animate-spin" />}
-                                        Save with Incidence
+                                        Add Entry
                                     </Button>
-                                </>
-                            )}
-                        </DialogFooter>
-                    </form>
-                </Form>
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => setStep(1)}
+                                disabled={isSubmitting}
+                            >
+                                <ArrowLeft /> Back
+                            </Button>
+                            <Button type="submit" disabled={isSubmitting}>
+                                {isSubmitting && <Loader2 className="animate-spin" />}
+                                Save with Incidence
+                            </Button>
+                        </>
+                    )}
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     );

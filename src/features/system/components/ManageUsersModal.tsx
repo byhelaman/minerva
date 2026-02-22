@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -292,7 +292,7 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
     return (
         <>
             <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent className="sm:max-w-[600px]">
+                <DialogContent className="sm:max-w-3xl gap-6">
                     <DialogHeader>
                         <DialogTitle>Manage Users</DialogTitle>
                         <DialogDescription>
@@ -456,7 +456,7 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
 
             {/* Create User Dialog */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="sm:max-w-md gap-6">
                     <DialogHeader>
                         <DialogTitle>Create User</DialogTitle>
                         <DialogDescription>
@@ -465,58 +465,83 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
                     </DialogHeader>
                     <form onSubmit={createForm.handleSubmit(handleCreateUser)} noValidate>
                         <FieldGroup>
-                            <Field data-invalid={!!createForm.formState.errors.email}>
-                                <FieldLabel htmlFor="user-email">Email</FieldLabel>
-                                <Input
-                                    id="user-email"
-                                    type="email"
-                                    placeholder="user@example.com"
-                                    {...createForm.register("email")}
-                                    aria-invalid={!!createForm.formState.errors.email}
-                                    disabled={isCreating}
-                                />
-                                <FieldError errors={[createForm.formState.errors.email]} />
-                            </Field>
-                            <Field data-invalid={!!createForm.formState.errors.password}>
-                                <FieldLabel htmlFor="user-password">Password</FieldLabel>
-                                <Input
-                                    id="user-password"
-                                    type="password"
-                                    {...createForm.register("password")}
-                                    aria-invalid={!!createForm.formState.errors.password}
-                                    disabled={isCreating}
-                                />
-                                <FieldError errors={[createForm.formState.errors.password]} />
-                            </Field>
-                            <Field>
-                                <FieldLabel htmlFor="user-displayname">Display Name (optional)</FieldLabel>
-                                <Input
-                                    id="user-displayname"
-                                    placeholder="John Doe"
-                                    {...createForm.register("displayName")}
-                                    disabled={isCreating}
-                                />
-                            </Field>
-                            <Field data-invalid={!!createForm.formState.errors.role}>
-                                <FieldLabel htmlFor="user-role">Role</FieldLabel>
-                                <Select
-                                    value={createForm.watch("role")}
-                                    onValueChange={(value) => createForm.setValue("role", value)}
-                                    disabled={isCreating}
-                                >
-                                    <SelectTrigger id="user-role">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {getAssignableRoles().map((role) => (
-                                            <SelectItem key={role.name} value={role.name}>
-                                                {role.name} (Level {role.hierarchy_level})
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <FieldError errors={[createForm.formState.errors.role]} />
-                            </Field>
+                            <Controller
+                                name="email"
+                                control={createForm.control}
+                                render={({ field, fieldState }) => (
+                                    <Field data-invalid={fieldState.invalid}>
+                                        <FieldLabel htmlFor={field.name}>Email</FieldLabel>
+                                        <Input
+                                            {...field}
+                                            id={field.name}
+                                            type="email"
+                                            placeholder="user@example.com"
+                                            aria-invalid={fieldState.invalid}
+                                            disabled={isCreating}
+                                        />
+                                        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                    </Field>
+                                )}
+                            />
+                            <Controller
+                                name="password"
+                                control={createForm.control}
+                                render={({ field, fieldState }) => (
+                                    <Field data-invalid={fieldState.invalid}>
+                                        <FieldLabel htmlFor={field.name}>Password</FieldLabel>
+                                        <Input
+                                            {...field}
+                                            id={field.name}
+                                            type="password"
+                                            aria-invalid={fieldState.invalid}
+                                            disabled={isCreating}
+                                        />
+                                        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                    </Field>
+                                )}
+                            />
+                            <Controller
+                                name="displayName"
+                                control={createForm.control}
+                                render={({ field, fieldState }) => (
+                                    <Field data-invalid={fieldState.invalid}>
+                                        <FieldLabel htmlFor={field.name}>Display Name (optional)</FieldLabel>
+                                        <Input
+                                            {...field}
+                                            id={field.name}
+                                            placeholder="John Doe"
+                                            aria-invalid={fieldState.invalid}
+                                            disabled={isCreating}
+                                        />
+                                    </Field>
+                                )}
+                            />
+                            <Controller
+                                name="role"
+                                control={createForm.control}
+                                render={({ field, fieldState }) => (
+                                    <Field data-invalid={fieldState.invalid}>
+                                        <FieldLabel htmlFor={field.name}>Role</FieldLabel>
+                                        <Select
+                                            value={field.value}
+                                            onValueChange={field.onChange}
+                                            disabled={isCreating}
+                                        >
+                                            <SelectTrigger id={field.name}>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {getAssignableRoles().map((role) => (
+                                                    <SelectItem key={role.name} value={role.name}>
+                                                        {role.name} (Level {role.hierarchy_level})
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                    </Field>
+                                )}
+                            />
                         </FieldGroup>
                         <DialogFooter className="mt-6">
                             <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>

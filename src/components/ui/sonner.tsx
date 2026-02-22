@@ -1,3 +1,5 @@
+"use client"
+
 import {
   CircleCheckIcon,
   InfoIcon,
@@ -28,7 +30,6 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
           "--border-radius": "var(--radius)",
-          fontFamily: "var(--font-sans)",
         } as React.CSSProperties
       }
       {...props}

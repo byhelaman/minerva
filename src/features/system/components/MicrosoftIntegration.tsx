@@ -578,7 +578,7 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
                         setWorksheetTables(new Map());
                     }
                 }}>
-                    <DialogContent className="max-h-[85vh] flex flex-col">
+                    <DialogContent className="max-h-[85vh] flex flex-col gap-6">
                         <DialogHeader>
                             <DialogTitle>
                                 {configMode === 'schedules_folder' ? 'Select Folder' : 'Configure Incidences File'}

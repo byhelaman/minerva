@@ -173,7 +173,7 @@ export function ManageRolesModal({ open, onOpenChange }: ManageRolesModalProps) 
     return (
         <>
             <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent className="sm:max-w-[760px] gap-6">
+                <DialogContent className="sm:max-w-3xl gap-6">
                     <DialogHeader>
                         <DialogTitle>Roles & Permissions</DialogTitle>
                         <DialogDescription>

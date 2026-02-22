@@ -180,7 +180,7 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
 
     return (
         <Dialog open={open} onOpenChange={(val) => !isSaving && onOpenChange(val)}>
-            <DialogContent className="max-w-7xl! max-h-[85vh] flex flex-col">
+            <DialogContent className="max-w-7xl! max-h-[85vh] flex flex-col gap-6">
                 <DialogHeader>
                     <DialogTitle>Preview Data</DialogTitle>
                     <DialogDescription>

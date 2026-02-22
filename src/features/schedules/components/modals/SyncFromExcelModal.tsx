@@ -271,7 +271,7 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
     return (
         <Dialog open={open} onOpenChange={(val) => step !== 'importing' && onOpenChange(val)}>
             <DialogContent className={cn(
-                "flex flex-col max-h-[85vh]",
+                "flex flex-col max-h-[85vh] gap-6",
                 step === 'filter' ? 'max-w-md' : 'max-w-7xl!',
                 step === 'preview' && 'max-w-7xl!'
             )}>
@@ -293,18 +293,14 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
 
                 {/* Date Range Picker */}
                 {step === 'filter' && (
-                    <div className="py-4">
-                        {/* Date Picker Range */}
-                        <Calendar
-                            mode="range"
-                            defaultMonth={dateRange?.from}
-                            selected={dateRange}
-                            onSelect={setDateRange}
-                            numberOfMonths={2}
-                            className="[--cell-size:--spacing(7.5)]"
-                        />
-
-                    </div>
+                    <Calendar
+                        mode="range"
+                        defaultMonth={dateRange?.from}
+                        selected={dateRange}
+                        onSelect={setDateRange}
+                        numberOfMonths={2}
+                        className="[--cell-size:--spacing(7.5)]"
+                    />
                 )}
 
                 {/* Loading State */}

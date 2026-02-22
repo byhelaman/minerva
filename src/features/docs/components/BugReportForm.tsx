@@ -3,7 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { Controller, useForm } from "react-hook-form"
 import { toast } from "sonner"
 import * as z from "zod"
-import { Bug, BookOpen, Loader2, LifeBuoy, CircleQuestionMark } from "lucide-react"
+import { Loader2, CircleQuestionMark } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { DocsDialog } from "./DocsDialog"
@@ -157,10 +157,10 @@ export function BugReportButton() {
                 <DropdownMenuTrigger asChild>
                     <Button
                         size="icon"
-                        className="h-11 w-11 rounded-xl"
+                        className="rounded-full"
                         variant="outline"
                     >
-                        <CircleQuestionMark className="h-8 w-8" />
+                        <CircleQuestionMark />
                         <span className="sr-only">Help & Resources</span>
                     </Button>
                 </DropdownMenuTrigger>
@@ -169,11 +169,20 @@ export function BugReportButton() {
                     align="start"
                     className="rounded-lg"
                 >
+                    <DropdownMenuItem className="cursor-pointer">
+                        Release Notes
+                    </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => setDocsOpen(true)} className="cursor-pointer">
                         Documentation
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => setBugOpen(true)} className="cursor-pointer">
                         Report a Bug
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="cursor-pointer">
+                        Contact Support
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="cursor-pointer">
+                        Change language
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
@@ -181,7 +190,7 @@ export function BugReportButton() {
             <DocsDialog open={docsOpen} onOpenChange={setDocsOpen} />
 
             <Dialog open={bugOpen} onOpenChange={setBugOpen}>
-                <DialogContent className="sm:max-w-105">
+                <DialogContent className="sm:max-w-md gap-6">
                     <DialogHeader>
                         <DialogTitle>Bug Report</DialogTitle>
                         <DialogDescription>

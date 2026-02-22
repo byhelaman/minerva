@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import type { Schedule } from "@schedules/types";
 import { parseExcelFile } from "@schedules/utils/excel-parser";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface FileInfo {
     file: File;
@@ -200,7 +201,7 @@ export function UploadModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className="flex max-h-[85vh] flex-col gap-6">
                 <DialogHeader>
                     <DialogTitle>Upload Excel Files</DialogTitle>
                     <DialogDescription>
@@ -208,14 +209,14 @@ export function UploadModal({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="flex flex-col gap-4 py-4">
+                <div className="flex min-h-0 flex-1 flex-col gap-4">
                     {/* Dropzone-style upload area */}
                     <div
                         onDragEnter={handleDragEnter}
                         onDragLeave={handleDragLeave}
                         onDragOver={handleDragOver}
                         onDrop={handleDrop}
-                        className={`relative flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed h-[240px] transition-colors ${isDragging
+                        className={`p-6 relative flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed h-60 transition-colors ${isDragging
                             ? "border-primary bg-primary/5"
                             : "border-muted-foreground/25 bg-muted/30 hover:border-muted-foreground/50 hover:bg-muted/50"
                             } ${isProcessing ? "pointer-events-none opacity-50" : ""}`}
@@ -253,7 +254,7 @@ export function UploadModal({
 
                     {/* Selected files list */}
                     {selectedFiles.length > 0 && (
-                        <div className="flex flex-col gap-3">
+                        <div className="flex flex-col gap-3 min-h-0">
                             <div className="flex items-center justify-between">
                                 <h4 className="text-sm font-medium">
                                     Files ({selectedFiles.length})
@@ -267,33 +268,35 @@ export function UploadModal({
                                     Remove all
                                 </Button>
                             </div>
-                            <div className="flex flex-col gap-2">
-                                {selectedFiles.map((file) => (
-                                    <div
-                                        key={file.name}
-                                        className="flex items-center gap-2 rounded-md border p-2 pl-4 group hover:bg-muted/50"
-                                    >
-                                        <FileSpreadsheet className="size-4" />
-                                        <div className="flex justify-between gap-4 w-full items-center">
-                                            <div className="flex flex-col">
-                                                <span className="truncate text-sm font-medium">{file.name}</span>
-                                                <span className="text-xs text-muted-foreground">
-                                                    {formatBytes(file.file.size)}
-                                                </span>
+                            <ScrollArea className="overflow-y-auto">
+                                <div className="flex flex-col gap-2">
+                                    {selectedFiles.map((file) => (
+                                        <div
+                                            key={file.name}
+                                            className="flex items-center gap-2 rounded-md border p-2 pl-4 group hover:bg-muted/50"
+                                        >
+                                            <FileSpreadsheet className="size-4" />
+                                            <div className="flex justify-between gap-4 w-full items-center">
+                                                <div className="flex flex-col">
+                                                    <span className="truncate text-sm font-medium">{file.name}</span>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {formatBytes(file.file.size)}
+                                                    </span>
+                                                </div>
+                                                <Button
+                                                    size="icon-sm"
+                                                    variant="ghost"
+                                                    onClick={() => handleRemoveFile(file.name)}
+                                                    disabled={isProcessing}
+                                                    className="border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
+                                                >
+                                                    <Trash2 />
+                                                </Button>
                                             </div>
-                                            <Button
-                                                size="icon-sm"
-                                                variant="ghost"
-                                                onClick={() => handleRemoveFile(file.name)}
-                                                disabled={isProcessing}
-                                                className="border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
-                                            >
-                                                <Trash2 />
-                                            </Button>
                                         </div>
-                                    </div>
-                                ))}
-                            </div>
+                                    ))}
+                                </div>
+                            </ScrollArea>
                         </div>
                     )}
                 </div>

@@ -1,17 +1,10 @@
 import { useState } from "react";
-import { UseFormReturn } from "react-hook-form";
-import {
-    FormControl,
-    FormField,
-    FormItem,
-    FormLabel,
-    FormMessage,
-} from "@/components/ui/form";
+import { Controller, UseFormReturn } from "react-hook-form";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import type { Instructor } from "@/features/schedules/types";
 import { InstructorSelector } from "./InstructorSelector";
 import { INCIDENCE_PRESETS } from "../../constants/incidence-presets";
@@ -48,8 +41,6 @@ export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: Incid
             form.setValue("subtype", "", { shouldValidate: true });
             form.setValue("description", "", { shouldValidate: true });
             form.setValue("department", "", { shouldValidate: true });
-            // Keep substitute as is or clear? IncidenceModal kept it:
-            // form.setValue("substitute", form.getValues("substitute")); 
             setSelectedPreset(null);
         } else {
             form.setValue("status", preset.status || "Yes", { shouldValidate: true });
@@ -62,34 +53,33 @@ export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: Incid
     };
 
     return (
-        <ScrollArea className="h-100 pr-3 -mr-3">
-            <div className="space-y-6 px-1 pb-2">
-                <FormField
-                    control={form.control}
+        <ScrollArea className="overflow-y-auto">
+            <FieldGroup className="p-1">
+                <Controller
                     name="status"
-                    render={({ field }) => (
-                        <FormItem className="">
-                            <FormLabel className="text-xs">Was the class taught?</FormLabel>
-                            <FormControl>
-                                <div className="flex items-center gap-2">
-                                    <Switch
-                                        disabled={!canEdit}
-                                        checked={field.value === "Yes"}
-                                        onCheckedChange={(checked) => {
-                                            field.onChange(checked ? "Yes" : "No");
-                                        }}
-                                        className="h-5 w-9 [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
-                                    />
-                                    <span className="text-sm text-muted-foreground">{field.value}</span>
-                                </div>
-                            </FormControl>
-                        </FormItem>
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                        <Field data-invalid={fieldState.invalid}>
+                            <FieldLabel>Was the class taught?</FieldLabel>
+                            <div className="flex items-center gap-2">
+                                <Switch
+                                    disabled={!canEdit}
+                                    checked={field.value === "Yes"}
+                                    onCheckedChange={(checked) => {
+                                        field.onChange(checked ? "Yes" : "No");
+                                    }}
+                                // className="h-5 w-9 [&_span[data-slot=switch-thumb]]:size-4 [&_span[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4"
+                                />
+                                <span className="text-sm text-muted-foreground">{field.value}</span>
+                            </div>
+                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                        </Field>
                     )}
                 />
 
                 {/* Quick Presets */}
                 <div className="space-y-2">
-                    <Label className="text-xs">Quick Presets</Label>
+                    <FieldLabel>Quick Presets</FieldLabel>
                     <ToggleGroup
                         type="single"
                         disabled={!canEdit}
@@ -98,10 +88,6 @@ export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: Incid
                         className="flex flex-wrap justify-start"
                         onValueChange={(value) => {
                             if (!value) {
-                                // Deselecting via clicking same item handled by ToggleGroup logic usually gives empty string?
-                                // Actually ToggleGroup with type="single" provides the value or empty string if unselected.
-                                // We handle explicit clear in applyPreset if matched, but here we just check value.
-                                // Let's replicate manual reset if value is empty
                                 form.setValue("status", "Yes", { shouldValidate: true });
                                 form.setValue("type", "", { shouldValidate: true });
                                 form.setValue("subtype", "", { shouldValidate: true });
@@ -112,8 +98,6 @@ export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: Incid
                             }
 
                             if (value === selectedPreset) {
-                                // This block might be redundant if ToggleGroup unselects automatically,
-                                // but safe to keep for logic symmetry
                                 form.setValue("status", "Yes", { shouldValidate: true });
                                 form.setValue("type", "", { shouldValidate: true });
                                 form.setValue("subtype", "", { shouldValidate: true });
@@ -145,53 +129,49 @@ export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: Incid
 
                 {/* Substitute & Type */}
                 <div className="grid grid-cols-2 gap-3">
-                    <FormField
-                        control={form.control}
+                    <Controller
                         name="substitute"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel className="text-xs">Substitute</FormLabel>
-                                <FormControl>
-                                    <div className="flex gap-1 items-center w-full">
-                                        <InstructorSelector
-                                            disabled={!canEdit}
-                                            allowFreeText
-                                            value={field.value || ""}
-                                            onChange={(value, _email, _id) => field.onChange(value)}
-                                            instructors={uniqueInstructors}
-                                            className="flex-1"
-                                            popoverClassName="max-w-[225px]"
-                                        />
-                                        {field.value && (
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-9 w-9 shrink-0"
-                                                onClick={() => field.onChange("")}
-                                                title="Clear instructor"
-                                            >
-                                                <X className="h-4 w-4" />
-                                            </Button>
-                                        )}
-                                    </div>
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
+                        control={form.control}
+                        render={({ field, fieldState }) => (
+                            <Field data-invalid={fieldState.invalid}>
+                                <FieldLabel>Substitute</FieldLabel>
+                                <div className="flex gap-1 items-center w-full">
+                                    <InstructorSelector
+                                        disabled={!canEdit}
+                                        allowFreeText
+                                        value={field.value || ""}
+                                        onChange={(value, _email, _id) => field.onChange(value)}
+                                        instructors={uniqueInstructors}
+                                        className="flex-1"
+                                        popoverClassName="max-w-[225px]"
+                                    />
+                                    {field.value && (
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-9 w-9 shrink-0"
+                                            onClick={() => field.onChange("")}
+                                            title="Clear instructor"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                </div>
+                                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                            </Field>
                         )}
                     />
-                    <FormField
-                        control={form.control}
+                    <Controller
                         name="type"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel className="text-xs">Type</FormLabel>
+                        control={form.control}
+                        render={({ field, fieldState }) => (
+                            <Field data-invalid={fieldState.invalid}>
+                                <FieldLabel>Type</FieldLabel>
                                 <Select disabled={!canEdit} onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
-                                    <FormControl>
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Select" />
-                                        </SelectTrigger>
-                                    </FormControl>
+                                    <SelectTrigger className="w-full" aria-invalid={fieldState.invalid}>
+                                        <SelectValue placeholder="Select" />
+                                    </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="Instructor">Instructor</SelectItem>
                                         <SelectItem value="Novedad">Novedad</SelectItem>
@@ -200,25 +180,23 @@ export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: Incid
                                         <SelectItem value="Sistema">Sistema</SelectItem>
                                     </SelectContent>
                                 </Select>
-                                <FormMessage />
-                            </FormItem>
+                                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                            </Field>
                         )}
                     />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                    <FormField
-                        control={form.control}
+                    <Controller
                         name="subtype"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel className="text-xs">Subtype</FormLabel>
+                        control={form.control}
+                        render={({ field, fieldState }) => (
+                            <Field data-invalid={fieldState.invalid}>
+                                <FieldLabel>Subtype</FieldLabel>
                                 <Select disabled={!canEdit} onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
-                                    <FormControl>
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Select" />
-                                        </SelectTrigger>
-                                    </FormControl>
+                                    <SelectTrigger className="w-full" aria-invalid={fieldState.invalid}>
+                                        <SelectValue placeholder="Select" />
+                                    </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="Problemas de salud">Problemas de salud</SelectItem>
                                         <SelectItem value="Problema eléctrico/Wi-Fi">Problema eléctrico/Wi-Fi</SelectItem>
@@ -239,22 +217,20 @@ export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: Incid
                                         <SelectItem value="Otros">Otros</SelectItem>
                                     </SelectContent>
                                 </Select>
-                                <FormMessage />
-                            </FormItem>
+                                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                            </Field>
                         )}
                     />
-                    <FormField
-                        control={form.control}
+                    <Controller
                         name="department"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel className="text-xs">Department</FormLabel>
+                        control={form.control}
+                        render={({ field, fieldState }) => (
+                            <Field data-invalid={fieldState.invalid}>
+                                <FieldLabel>Department</FieldLabel>
                                 <Select disabled={!canEdit} onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
-                                    <FormControl>
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Select" />
-                                        </SelectTrigger>
-                                    </FormControl>
+                                    <SelectTrigger className="w-full" aria-invalid={fieldState.invalid}>
+                                        <SelectValue placeholder="Select" />
+                                    </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="Q&T">Q&T</SelectItem>
                                         <SelectItem value="Programación Latam">Programación Latam</SelectItem>
@@ -267,33 +243,32 @@ export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: Incid
                                         <SelectItem value="Soporte">Soporte</SelectItem>
                                     </SelectContent>
                                 </Select>
-                                <FormMessage />
-                            </FormItem>
+                                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                            </Field>
                         )}
                     />
                 </div>
 
                 {/* Description */}
-                <FormField
-                    control={form.control}
+                <Controller
                     name="description"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel className="text-xs">Description</FormLabel>
-                            <FormControl>
-                                <Textarea
-                                    disabled={!canEdit}
-                                    placeholder="Add details..."
-                                    rows={3}
-                                    className="resize-none"
-                                    {...field}
-                                />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                        <Field data-invalid={fieldState.invalid}>
+                            <FieldLabel>Description</FieldLabel>
+                            <Textarea
+                                {...field}
+                                disabled={!canEdit}
+                                placeholder="Add details..."
+                                rows={3}
+                                className="resize-none"
+                                aria-invalid={fieldState.invalid}
+                            />
+                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                        </Field>
                     )}
                 />
-            </div>
+            </FieldGroup>
         </ScrollArea>
     );
 }
