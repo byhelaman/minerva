@@ -502,7 +502,7 @@ export function ReportsPage() {
                                         await scheduleEntriesService.batchDeleteScheduleEntries(entriesToDelete);
                                     }
                                     toast.success(`${entriesToDelete.length} ${entriesToDelete.length === 1 ? "entry" : "entries"} deleted`);
-                                    fetchData();
+                                    await fetchData();
                                 } catch (error) {
                                     console.error("Failed to delete:", error);
                                     toast.error("Failed to delete entries");

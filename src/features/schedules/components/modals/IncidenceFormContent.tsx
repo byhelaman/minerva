@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Controller, UseFormReturn } from "react-hook-form";
+import { Controller, useFormContext } from "react-hook-form";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -15,20 +15,20 @@ import { X } from "lucide-react";
 /** Fields used by IncidenceFormContent */
 export interface IncidenceFormValues {
     status?: string;
-    type: string;
-    subtype: string;
+    type?: string;
+    subtype?: string;
     description?: string;
     department?: string;
     substitute?: string;
 }
 
 interface IncidenceFormContentProps {
-    form: UseFormReturn<IncidenceFormValues>;
     uniqueInstructors: Instructor[];
     canEdit: boolean;
 }
 
-export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: IncidenceFormContentProps) {
+export function IncidenceFormContent({ uniqueInstructors, canEdit }: IncidenceFormContentProps) {
+    const form = useFormContext();
     const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
 
     const applyPreset = (preset: typeof INCIDENCE_PRESETS[0]) => {

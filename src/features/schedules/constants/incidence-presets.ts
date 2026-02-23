@@ -25,7 +25,7 @@ export const INCIDENCE_PRESETS: IncidencePreset[] = [
         type: "Instructor",
         subtype: "Problemas de salud",
         description: "Instructor reportó encontrarse mal de salud // se busca reemplazo",
-        department: "Q&T"
+        department: "Q&T (Quality & Training)"
     },
     {
         label: "Emergencia Personal",
@@ -33,7 +33,7 @@ export const INCIDENCE_PRESETS: IncidencePreset[] = [
         type: "Instructor",
         subtype: "Otros",
         description: "Instructor reportó emergencia personal o familiar // se busca reemplazo",
-        department: "Q&T"
+        department: "Q&T (Quality & Training)"
     },
     {
         label: "Beneficio Cancelación",
@@ -49,7 +49,7 @@ export const INCIDENCE_PRESETS: IncidencePreset[] = [
         type: "Instructor",
         subtype: "Problema eléctrico/Wi-Fi",
         description: "Problema eléctrico/Wi-Fi // se busca reemplazo",
-        department: "Q&T"
+        department: "Q&T (Quality & Training)"
     },
     {
         label: "Sin Disponibilidad",

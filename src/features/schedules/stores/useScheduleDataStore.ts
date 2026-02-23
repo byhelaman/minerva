@@ -131,9 +131,12 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
             if (!success) {
                 throw new Error('SCHEDULE_NOT_PUBLISHED');
             }
-            
-            // Confirmar bump de versión si exitoso (para triggear refetch en ReportsPage)
-            set(state => ({ incidencesVersion: state.incidencesVersion + 1 }));
+
+            // No bumpeamos incidencesVersion aquí:
+            // - El optimistic update ya removió la fila del store (línea 103)
+            // - ReportsPage usa pendingDeleteKeys para su estado local
+            // - Un bump causaría un refetch completo que trae la fila de vuelta (flicker)
+            //   porque deleteIncidence hace UPDATE con NULLs, no DELETE real
             toast.success("Incidence removed");
         } catch (error) {
             console.error("Failed to delete incidence:", error);
@@ -161,10 +164,11 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
         const scheduleKey = getSchedulePrimaryKey(schedule);
 
         // Update optimista: remover de base schedules Y de incidencias
+        // No bumpeamos incidencesVersion aquí para evitar que ReportsPage
+        // haga refetch antes de que el DELETE se complete en DB (causa flicker)
         set(state => ({
             baseSchedules: state.baseSchedules.filter(s => getSchedulePrimaryKey(s) !== scheduleKey),
             incidences: state.incidences.filter(i => getSchedulePrimaryKey(i) !== scheduleKey),
-            incidencesVersion: state.incidencesVersion + 1
         }));
 
         try {

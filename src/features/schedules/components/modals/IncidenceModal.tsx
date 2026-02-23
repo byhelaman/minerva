@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useAuth } from "@/components/auth-provider";
@@ -227,13 +227,14 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
                 <ScheduleInfo schedule={schedule} className="px-1" />
 
                 {/* Form */}
-                <form onSubmit={form.handleSubmit(onSubmit)} id="form-incidence" className="flex min-h-0 flex-1 flex-col">
-                    <IncidenceFormContent
-                        form={form}
-                        uniqueInstructors={uniqueInstructors}
-                        canEdit={canEdit}
-                    />
-                </form>
+                <FormProvider {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} id="form-incidence" className="flex min-h-0 flex-1 flex-col">
+                        <IncidenceFormContent
+                            uniqueInstructors={uniqueInstructors}
+                            canEdit={canEdit}
+                        />
+                    </form>
+                </FormProvider>
                 <DialogFooter>
                     {canEdit && existingIncidence ? (
                         <Button
