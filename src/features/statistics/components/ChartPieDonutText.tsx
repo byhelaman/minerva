@@ -1,7 +1,9 @@
-import * as React from "react"
+import { useState, useEffect } from "react"
 import { format } from "date-fns"
 import { TrendingUp, TrendingDown, Minus, Loader2 } from "lucide-react"
 import { Label, Pie, PieChart } from "recharts"
+import { PERIOD_LABELS } from "../hooks/useChartData"
+import { logger } from "@/lib/logger"
 
 import {
     Card,
@@ -33,24 +35,31 @@ const chartConfig = {
     },
 } satisfies ChartConfig
 
+const DAYS_MAP: Record<string, number> = {
+    "7d": 7, "30d": 30, "90d": 90, "180d": 180, "365d": 365,
+}
+
+interface PeriodStats { total: number; incidences: number; rate: number }
+interface PeriodRow { period: string; total: number | string; incidences: number | string; rate: number | string }
+
 interface Props {
     timeRange: string
 }
 
 export function ChartPieDonutText({ timeRange }: Props) {
-    const [currentPeriod, setCurrentPeriod] = React.useState({ total: 0, incidences: 0, rate: 0 })
-    const [previousPeriod, setPreviousPeriod] = React.useState({ total: 0, incidences: 0, rate: 0 })
-    const [loading, setLoading] = React.useState(true)
+    const [currentPeriod, setCurrentPeriod] = useState<PeriodStats>({ total: 0, incidences: 0, rate: 0 })
+    const [previousPeriod, setPreviousPeriod] = useState<PeriodStats>({ total: 0, incidences: 0, rate: 0 })
+    const [loading, setLoading] = useState(true)
 
-    React.useEffect(() => {
+    useEffect(() => {
+        let cancelled = false
+
         async function fetchData() {
             setLoading(true)
             try {
                 const now = new Date()
-                const daysMap: Record<string, number> = { "7d": 7, "30d": 30, "90d": 90, "180d": 180, "365d": 365 }
-                const daysBack = daysMap[timeRange] || 90
+                const daysBack = DAYS_MAP[timeRange] || 90
 
-                // Current period
                 const startDate = new Date(now)
                 startDate.setDate(startDate.getDate() - daysBack)
 
@@ -59,9 +68,8 @@ export function ChartPieDonutText({ timeRange }: Props) {
 
                 const startStr = format(startDate, 'yyyy-MM-dd')
                 const endStr = format(now, 'yyyy-MM-dd')
-
                 const prevStartStr = format(prevStartDate, 'yyyy-MM-dd')
-                const prevEndStr = format(startDate, 'yyyy-MM-dd') // Ends where current starts.setDate(prevStart.getDate() - daysBack)
+                const prevEndStr = format(startDate, 'yyyy-MM-dd')
 
                 const { data, error } = await supabase.rpc("get_period_comparison", {
                     p_cur_start: startStr,
@@ -71,9 +79,10 @@ export function ChartPieDonutText({ timeRange }: Props) {
                 })
 
                 if (error) throw error
+                if (cancelled) return
 
-                for (const row of data || []) {
-                    const stats = {
+                for (const row of (data as PeriodRow[]) || []) {
+                    const stats: PeriodStats = {
                         total: Number(row.total),
                         incidences: Number(row.incidences),
                         rate: Number(row.rate),
@@ -82,12 +91,14 @@ export function ChartPieDonutText({ timeRange }: Props) {
                     else setPreviousPeriod(stats)
                 }
             } catch (e) {
-                console.error("Failed to fetch trend data:", e)
+                logger.error("Failed to fetch trend data:", e)
             } finally {
-                setLoading(false)
+                if (!cancelled) setLoading(false)
             }
         }
+
         fetchData()
+        return () => { cancelled = true }
     }, [timeRange])
 
     const rateDiff = currentPeriod.rate - previousPeriod.rate
@@ -105,8 +116,7 @@ export function ChartPieDonutText({ timeRange }: Props) {
             ? `${rateDiff.toFixed(1)}% vs periodo anterior`
             : "Sin cambio vs periodo anterior"
 
-    const periodLabels: Record<string, string> = { "7d": "últimos 7 días", "30d": "últimos 30 días", "90d": "últimos 3 meses", "180d": "últimos 6 meses", "365d": "último año" }
-    const periodLabel = periodLabels[timeRange] || "últimos 3 meses"
+    const periodLabel = PERIOD_LABELS[timeRange] || "últimos 3 meses"
 
     return (
         <Card className="flex flex-col shadow-none">

@@ -1,9 +1,10 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { Session, User, AuthChangeEvent } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { jwtDecode } from "jwt-decode";
 import { logger } from "@/lib/logger";
 import { toast } from "sonner";
+import { STORAGE_KEYS } from "@/lib/constants";
 
 // Tipos
 export interface Profile {
@@ -36,7 +37,7 @@ interface AuthContextType {
     isAdmin: () => boolean;
     isSuperAdmin: () => boolean;
     sendResetPasswordEmail: (email: string) => Promise<{ error: Error | null }>;
-    verifyOtp: (email: string, token: string, type: "email" | "signup" | "recovery") => Promise<{ data: any; error: Error | null }>;
+    verifyOtp: (email: string, token: string, type: "email" | "signup" | "recovery") => Promise<{ data: unknown; error: Error | null }>;
     updatePassword: (password: string) => Promise<{ error: Error | null }>;
     updateDisplayName: (displayName: string) => Promise<{ error: Error | null }>;
     refreshProfile: () => Promise<void>;
@@ -93,6 +94,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [profile, setProfile] = useState<Profile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const profileRef = useRef<Profile | null>(null);
+
+    // Keep ref in sync so Realtime callback always reads current value
+    useEffect(() => {
+        profileRef.current = profile;
+    }, [profile]);
 
     // Handler centralizado para cambios de sesión
     const handleSessionChange = async (
@@ -202,8 +209,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                     if (payload.eventType === 'UPDATE') {
                         // Rol o permisos cambiaron → refrescar sesión para nuevo JWT
-                        const oldRole = profile?.role;
-                        const newRole = (payload.new as any)?.role;
+                        const oldRole = profileRef.current?.role;
+                        const newPayload = payload.new as Record<string, unknown>;
+                        const newRole = typeof newPayload?.role === 'string' ? newPayload.role : undefined;
 
                         if (oldRole !== newRole) {
                             logger.debug('[Auth] Role changed, refreshing session');
@@ -217,7 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [user?.id, profile?.role]);
+    }, [user?.id]);
 
     // Health check: Verificar que el usuario existe al restaurar sesión
     const verifyUserExists = async (userId: string): Promise<boolean> => {
@@ -253,7 +261,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             'dismissed_schedule_versions',
             'minerva_connection_config',
             'minerva_rate_limit',
-            'current_schedule_version'
+            'current_schedule_version',
+            STORAGE_KEYS.AUTH_LAST_EMAIL,
         ];
 
         keysToRemove.forEach(k => localStorage.removeItem(k));

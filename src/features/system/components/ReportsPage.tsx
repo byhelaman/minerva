@@ -76,10 +76,10 @@ export function ReportsPage() {
     // Estado local para datos de reportes (aislado del store de drafts de Management)
     // Inicializar desde cache si disponible para el rango de fechas actual
     const [reportSchedules, setReportSchedules] = useState<Schedule[]>(
-        hasCachedData ? reportCache!.schedules : []
+        hasCachedData ? reportCache?.schedules ?? [] : []
     );
     const [reportIncidences, setReportIncidences] = useState<DailyIncidence[]>(
-        hasCachedData ? reportCache!.incidences : []
+        hasCachedData ? reportCache?.incidences ?? [] : []
     );
 
     const [isLoading, setIsLoading] = useState(false);

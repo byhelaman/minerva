@@ -1,11 +1,13 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Unplug, Link2, X } from "lucide-react";
 import { BaseDirectory, remove, exists } from "@tauri-apps/plugin-fs";
 import { supabase } from "@/lib/supabase";
+import { getErrorMessage } from "@/lib/utils";
 import { toast } from "sonner";
+import { useOAuthPolling } from "@/hooks/use-oauth-polling";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -33,6 +35,15 @@ import { Badge } from "@/components/ui/badge";
 import { STORAGE_FILES } from "@/lib/constants";
 import { MicrosoftAccount, FileSystemItem } from "../types";
 import { FileTreeNode } from "./MicrosoftFileTree";
+import { logger } from "@/lib/logger";
+
+async function clearExcelMirrorCache() {
+    try {
+        if (await exists(STORAGE_FILES.EXCEL_DATA_MIRROR, { baseDir: BaseDirectory.AppLocalData })) {
+            await remove(STORAGE_FILES.EXCEL_DATA_MIRROR, { baseDir: BaseDirectory.AppLocalData });
+        }
+    } catch (e) { logger.error("Failed to clear cache", e); }
+}
 
 interface MicrosoftIntegrationProps {
     onConfigChange?: () => void;
@@ -41,7 +52,6 @@ interface MicrosoftIntegrationProps {
 export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationProps) {
     const [isLoading, setIsLoading] = useState(true);
     const [account, setAccount] = useState<MicrosoftAccount | null>(null);
-    const [isConnecting, setIsConnecting] = useState(false);
     const [isDisconnecting, setIsDisconnecting] = useState(false);
 
     // Configuration Mode: 'schedules_folder' or 'incidences_file'
@@ -58,7 +68,15 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
     // File tree state - single cache for all levels
     const [folderChildren, setFolderChildren] = useState<Map<string, FileSystemItem[]>>(new Map());
     const [loadingFolders, setLoadingFolders] = useState<Set<string>>(new Set());
-    const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const { isConnecting, connect, startPolling, cancel: handleCancelConnect } = useOAuthPolling({
+        functionName: 'microsoft-auth',
+        pollInterval: 3000,
+        onSuccess: (acct) => {
+            setAccount(acct as unknown as MicrosoftAccount);
+            toast.success("Microsoft connected successfully!");
+        },
+    });
 
     // Load children for a folder (called when Collapsible opens)
     const loadFolderChildren = async (folderId: string | null) => {
@@ -79,11 +97,11 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
 
             if (error) throw error;
 
-            const items: FileSystemItem[] = data.value.map((item: any) => ({
-                id: item.id,
-                name: item.name,
+            const items: FileSystemItem[] = data.value.map((item: Record<string, unknown>) => ({
+                id: item.id as string,
+                name: item.name as string,
                 type: item.folder ? 'folder' : 'file',
-                date: formatTimestampForDisplay(item.lastModifiedDateTime),
+                date: formatTimestampForDisplay(item.lastModifiedDateTime as string),
                 parentId: folderId
             }));
 
@@ -130,13 +148,6 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
         fetchStatus();
     }, []);
 
-    // Cleanup timer
-    useEffect(() => {
-        return () => {
-            if (timerRef.current) clearInterval(timerRef.current);
-        };
-    }, []);
-
     const handleDisconnect = async () => {
         try {
             setIsDisconnecting(true);
@@ -152,11 +163,7 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
             // setBreadcrumbs([{ id: null, name: "Home" }]);
 
             // Clear Cache
-            try {
-                if (await exists(STORAGE_FILES.EXCEL_DATA_MIRROR, { baseDir: BaseDirectory.AppLocalData })) {
-                    await remove(STORAGE_FILES.EXCEL_DATA_MIRROR, { baseDir: BaseDirectory.AppLocalData });
-                }
-            } catch (ignore) { console.error("Failed to clear cache", ignore); }
+            await clearExcelMirrorCache();
 
             if (onConfigChange) onConfigChange();
             toast.success("Microsoft disconnected");
@@ -184,7 +191,7 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
 
             if (error) throw error;
 
-            const sheets = data.value.filter((item: any) => item.type === 'sheet');
+            const sheets = data.value.filter((item: Record<string, unknown>) => item.type === 'sheet');
             setFileWorksheets(prev => new Map(prev).set(fileId, sheets));
         } catch (error) {
             console.error("Failed to load worksheets", error);
@@ -262,11 +269,7 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
             setFileWorksheets(new Map());
             setWorksheetTables(new Map());
 
-            try {
-                if (await exists(STORAGE_FILES.EXCEL_DATA_MIRROR, { baseDir: BaseDirectory.AppLocalData })) {
-                    await remove(STORAGE_FILES.EXCEL_DATA_MIRROR, { baseDir: BaseDirectory.AppLocalData });
-                }
-            } catch (ignore) { console.error("Failed to clear cache", ignore); }
+            await clearExcelMirrorCache();
 
             toast.success(`Linked: ${fileItem.name} > ${worksheet.name} > ${table.name}`);
             if (onConfigChange) onConfigChange();
@@ -304,11 +307,7 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
                 setIsFileDialogOpen(false);
                 setConfigMode(null);
 
-                try {
-                    if (await exists(STORAGE_FILES.EXCEL_DATA_MIRROR, { baseDir: BaseDirectory.AppLocalData })) {
-                        await remove(STORAGE_FILES.EXCEL_DATA_MIRROR, { baseDir: BaseDirectory.AppLocalData });
-                    }
-                } catch (ignore) { console.error("Failed to clear cache", ignore); }
+                await clearExcelMirrorCache();
 
                 toast.success(`Linked Folder: ${item.name}`);
                 if (onConfigChange) onConfigChange();
@@ -321,55 +320,13 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
 
     const handleConnect = async () => {
         try {
-            setIsConnecting(true);
-            const { data, error } = await supabase.functions.invoke('microsoft-auth', {
-                body: { action: 'init' },
-                method: 'POST'
-            });
-
-            if (error) throw error;
-            if (!data?.url) throw new Error("No URL returned");
-
-            await openUrl(data.url);
+            const url = await connect();
+            await openUrl(url);
             toast.info("Please complete sign in your browser...");
-
-            const startTime = Date.now();
-            const POLL_INTERVAL = 3000;
-            const TIMEOUT = 180000; // 3 min
-
-            if (timerRef.current) clearInterval(timerRef.current);
-
-            timerRef.current = setInterval(async () => {
-                if (Date.now() - startTime > TIMEOUT) {
-                    handleCancelConnect();
-                    toast.error("Connection timed out");
-                    return;
-                }
-
-                const { data: status } = await supabase.functions.invoke('microsoft-auth', {
-                    body: { action: 'status' },
-                    method: 'POST'
-                });
-
-                if (status?.connected) {
-                    if (timerRef.current) clearInterval(timerRef.current);
-                    setAccount(status.account);
-                    setIsConnecting(false);
-                    toast.success("Microsoft connected successfully!");
-                }
-            }, POLL_INTERVAL);
-
-        } catch (error: any) {
-            toast.error(error.message || "Failed to start connection");
-            setIsConnecting(false);
+            startPolling();
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error) || "Failed to start connection");
         }
-    };
-
-
-    const handleCancelConnect = () => {
-        if (timerRef.current) clearInterval(timerRef.current);
-        setIsConnecting(false);
-        toast.info("Connection cancelled");
     };
 
     // Helper to open dialog for specific mode
@@ -479,10 +436,9 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
                                 <Button
-                                    variant="outline"
+                                    variant="destructive-outline"
                                     size="sm"
                                     disabled={isDisconnecting}
-                                    className="border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
                                 >
                                     <Unplug />
                                     Disconnect
@@ -592,7 +548,7 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
 
                         {/* File Tree */}
                         <ScrollArea className="border rounded-md flex-1">
-                            <div className="h-75 max-w-[460px] p-2 w-full">
+                            <div className="h-75 w-full max-w-[460px] p-2 ">
                                 {loadingFolders.has('root') && !folderChildren.has('root') ? (
                                     <div className="flex justify-center p-8 text-muted-foreground">
                                         <Loader2 className="animate-spin h-6 w-6" />

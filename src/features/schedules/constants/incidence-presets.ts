@@ -71,8 +71,8 @@ export const INCIDENCE_PRESETS: IncidencePreset[] = [
         label: "Programación Manual",
         status: "Yes",
         type: "Novedad",
-        subtype: "Otros",
-        description: "Programación manual",
+        subtype: "Programación manual",
+        description: "",
         department: ""
     }
 ];

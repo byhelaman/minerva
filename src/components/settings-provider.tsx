@@ -46,8 +46,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                 const fileExists = await exists(STORAGE_FILES.APP_SETTINGS, { baseDir: BaseDirectory.AppLocalData });
                 if (fileExists) {
                     const content = await readTextFile(STORAGE_FILES.APP_SETTINGS, { baseDir: BaseDirectory.AppLocalData });
-                    const parsed = JSON.parse(content);
-                    setSettings({ ...defaultSettings, ...parsed });
+                    const parsed: unknown = JSON.parse(content);
+                    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                        const p = parsed as Record<string, unknown>;
+                        const validated = { ...defaultSettings };
+                        for (const key of Object.keys(defaultSettings) as (keyof AppSettings)[]) {
+                            if (key in p && typeof p[key] === typeof defaultSettings[key]) {
+                                // Safe: validated[key] and p[key] share the same typeof at runtime
+                                Object.assign(validated, { [key]: p[key] });
+                            }
+                        }
+                        setSettings(validated);
+                    }
                 }
             } catch (e) {
                 console.error("Failed to load settings from file:", e);

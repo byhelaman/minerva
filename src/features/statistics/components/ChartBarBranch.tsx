@@ -1,7 +1,6 @@
-import * as React from "react"
-import { format } from "date-fns"
 import { Loader2 } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts"
+import { useChartData, PERIOD_LABELS } from "../hooks/useChartData"
 
 import {
     Card,
@@ -17,19 +16,23 @@ import {
     ChartTooltipContent,
     type ChartConfig,
 } from "@/components/ui/chart"
-import { supabase } from "@/lib/supabase"
 
 const chartConfig = {
     classes: {
         label: "Clases",
         color: "hsl(210, 90%, 75%)",
-
     },
     incidences: {
         label: "Incidencias",
         color: "hsl(217, 91%, 60%)",
     },
 } satisfies ChartConfig
+
+interface BranchRow {
+    branch: string
+    total_classes: number | string
+    incidences: number | string
+}
 
 interface BranchData {
     branch: string
@@ -41,56 +44,23 @@ interface Props {
     timeRange: string
 }
 
+const transform = (rows: BranchRow[]): BranchData[] =>
+    rows.map((row) => {
+        const total = Number(row.total_classes)
+        const incidences = Number(row.incidences)
+        return { branch: row.branch, classes: total - incidences, incidences }
+    })
+
 export function ChartBarBranch({ timeRange }: Props) {
-    const [chartData, setChartData] = React.useState<BranchData[]>([])
-    const [loading, setLoading] = React.useState(true)
-
-    React.useEffect(() => {
-        async function fetchData() {
-            setLoading(true)
-            try {
-                const now = new Date()
-                const daysMap: Record<string, number> = { "7d": 7, "30d": 30, "90d": 90, "180d": 180, "365d": 365 }
-                const daysBack = daysMap[timeRange] || 90
-
-                const startDate = new Date(now)
-                startDate.setDate(startDate.getDate() - daysBack)
-
-                const startStr = format(startDate, 'yyyy-MM-dd')
-                const endStr = format(now, 'yyyy-MM-dd')
-
-                const { data, error } = await supabase.rpc("get_branch_stats", {
-                    p_start_date: startStr,
-                    p_end_date: endStr,
-                })
-
-                if (error) throw error
-
-                const result: BranchData[] = (data || []).map((row: any) => {
-                    const total = Number(row.total_classes)
-                    const incidences = Number(row.incidences)
-                    return {
-                        branch: row.branch,
-                        classes: total - incidences,
-                        incidences,
-                    }
-                })
-
-                setChartData(result)
-            } catch (e) {
-                console.error("Failed to fetch branch stats:", e)
-            } finally {
-                setLoading(false)
-            }
-        }
-        fetchData()
-    }, [timeRange])
+    const { data: chartData, loading } = useChartData<BranchRow, BranchData>(
+        "get_branch_stats",
+        timeRange,
+        transform,
+    )
 
     const totalClasses = chartData.reduce((sum, d) => sum + d.classes + d.incidences, 0)
     const totalIncidences = chartData.reduce((sum, d) => sum + d.incidences, 0)
-
-    const periodLabels: Record<string, string> = { "7d": "últimos 7 días", "30d": "últimos 30 días", "90d": "últimos 3 meses", "180d": "últimos 6 meses", "365d": "último año" }
-    const periodLabel = periodLabels[timeRange] || "últimos 3 meses"
+    const periodLabel = PERIOD_LABELS[timeRange] || "últimos 3 meses"
 
     return (
         <Card className="shadow-none">

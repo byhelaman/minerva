@@ -21,16 +21,12 @@ import {
     FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { OtpStep } from "./OtpStep";
 
 const emailSchema = z.object({
     email: z.string().email("Invalid email address"),
-});
-
-const otpSchema = z.object({
-    otp: z.string().min(6, "Code must be at least 6 characters"),
 });
 
 const passwordSchema = z.object({
@@ -59,38 +55,7 @@ export function ForgotPasswordDialog({
     const [step, setStep] = useState<Step>("email");
     const [email, setEmail] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    const [resendCountdown, setResendCountdown] = useState(0);
     const isSuccess = useRef(false);
-
-
-    // Temporizador para reenvío
-    useEffect(() => {
-        if (resendCountdown > 0) {
-            const timer = setInterval(() => {
-                setResendCountdown((prev) => prev - 1);
-            }, 1000);
-            return () => clearInterval(timer);
-        }
-    }, [resendCountdown]);
-
-    const handleResendCode = async () => {
-        if (resendCountdown > 0) return;
-
-        setIsLoading(true);
-        try {
-            const { error } = await sendResetPasswordEmail(email);
-            if (error) {
-                toast.error(error.message);
-            } else {
-                setResendCountdown(30);
-                toast.success("Verification code resent");
-            }
-        } catch {
-            toast.error("Failed to resend code");
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     // Formulario de Email
     const emailForm = useForm<z.infer<typeof emailSchema>>({
@@ -104,6 +69,12 @@ export function ForgotPasswordDialog({
             emailForm.setValue("email", defaultEmail);
         }
     }, [defaultEmail, emailForm]);
+
+    // Formulario de Password
+    const passwordForm = useForm<z.infer<typeof passwordSchema>>({
+        resolver: zodResolver(passwordSchema),
+        defaultValues: { password: "", confirmPassword: "" },
+    });
 
     // Limpieza al cerrar
     const handleOpenChange = (newOpen: boolean) => {
@@ -122,7 +93,6 @@ export function ForgotPasswordDialog({
                 setStep("email");
                 setEmail("");
                 emailForm.reset();
-                otpForm.reset();
                 passwordForm.reset();
                 isSuccess.current = false;
             }, 300);
@@ -135,12 +105,10 @@ export function ForgotPasswordDialog({
         try {
             const { error } = await sendResetPasswordEmail(data.email);
             if (error) {
-
                 toast.error(error.message);
             } else {
                 setEmail(data.email);
                 setStep("otp");
-                setResendCountdown(30);
                 toast.success("Verification code sent to your email");
             }
         } catch {
@@ -150,16 +118,11 @@ export function ForgotPasswordDialog({
         }
     };
 
-    // Formulario de OTP
-    const otpForm = useForm<z.infer<typeof otpSchema>>({
-        resolver: zodResolver(otpSchema),
-        defaultValues: { otp: "" },
-    });
-
-    const handleOtpSubmit = async (data: z.infer<typeof otpSchema>) => {
+    // Verificar OTP
+    const handleOtpSubmit = async (otp: string) => {
         setIsLoading(true);
         try {
-            const { error } = await verifyOtp(email, data.otp, "recovery");
+            const { error } = await verifyOtp(email, otp, "recovery");
             if (error) {
                 toast.error("Invalid code");
             } else {
@@ -172,11 +135,24 @@ export function ForgotPasswordDialog({
         }
     };
 
-    // Formulario de Password
-    const passwordForm = useForm<z.infer<typeof passwordSchema>>({
-        resolver: zodResolver(passwordSchema),
-        defaultValues: { password: "", confirmPassword: "" },
-    });
+    // Reenviar código — returns true on success for countdown reset
+    const handleResend = async (): Promise<boolean> => {
+        setIsLoading(true);
+        try {
+            const { error } = await sendResetPasswordEmail(email);
+            if (error) {
+                toast.error(error.message);
+                return false;
+            }
+            toast.success("Verification code resent");
+            return true;
+        } catch {
+            toast.error("Failed to resend code");
+            return false;
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const handlePasswordSubmit = async (data: z.infer<typeof passwordSchema>) => {
         setIsLoading(true);
@@ -187,7 +163,7 @@ export function ForgotPasswordDialog({
             } else {
                 isSuccess.current = true;
                 await refreshProfile(); // Asegurar que el perfil esté cargado
-                toast.success("Password updated successfully! 🎉");
+                toast.success("Password updated successfully!");
                 handleOpenChange(false);
                 navigate("/");
             }
@@ -244,74 +220,15 @@ export function ForgotPasswordDialog({
                 )}
 
                 {step === "otp" && (
-                    <>
-                        <DialogHeader>
-                            <DialogTitle>Enter Verification Code</DialogTitle>
-                            <DialogDescription>
-                                We sent a 6-digit code to {email}.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <form onSubmit={otpForm.handleSubmit(handleOtpSubmit)} className="space-y-4">
-                            <div className="space-y-2 text-center py-3">
-                                <div className="flex justify-center">
-                                    <InputOTP
-                                        maxLength={6}
-                                        value={otpForm.watch("otp")}
-                                        onChange={(value) => {
-                                            otpForm.setValue("otp", value);
-                                            if (value.length < 6) {
-                                                otpForm.clearErrors("otp");
-                                            }
-                                        }}
-                                        disabled={isLoading}
-                                    >
-                                        <InputOTPGroup className="gap-2 *:data-[slot=input-otp-slot]:rounded-md *:data-[slot=input-otp-slot]:border">
-                                            <InputOTPSlot index={0} className="w-10 h-10" />
-                                            <InputOTPSlot index={1} className="w-10 h-10" />
-                                            <InputOTPSlot index={2} className="w-10 h-10" />
-                                            <InputOTPSlot index={3} className="w-10 h-10" />
-                                            <InputOTPSlot index={4} className="w-10 h-10" />
-                                            <InputOTPSlot index={5} className="w-10 h-10" />
-                                        </InputOTPGroup>
-                                    </InputOTP>
-                                </div>
-                                <p className="text-center text-sm text-muted-foreground">
-                                    Enter your one-time password
-                                </p>
-                                <FieldError errors={[otpForm.formState.errors.otp]} className="text-center" />
-                            </div>
-                            <DialogFooter>
-                                {/* <Button
-                                    type="button"
-                                    variant="ghost"
-                                    onClick={() => setStep("email")}
-                                    disabled={isLoading}
-                                >
-                                    Back
-                                </Button> */}
-                                <Button type="submit" disabled={isLoading} className="w-full max-w-[320px] mx-auto">
-                                    {isLoading && <Loader2 className="animate-spin" />}
-                                    Verify Code
-                                </Button>
-                            </DialogFooter>
-
-                            <div className="text-center text-sm text-muted-foreground">
-                                Didn't receive the code? {" "}
-                                {resendCountdown > 0 ? (
-                                    <span>Resend in {resendCountdown}s</span>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={handleResendCode}
-                                        disabled={isLoading}
-                                        className="underline underline-offset-4 hover:text-primary"
-                                    >
-                                        Resend
-                                    </button>
-                                )}
-                            </div>
-                        </form>
-                    </>
+                    <OtpStep
+                        email={email}
+                        title="Enter Verification Code"
+                        helperText="Enter your one-time password"
+                        submitLabel="Verify Code"
+                        isLoading={isLoading}
+                        onSubmit={handleOtpSubmit}
+                        onResend={handleResend}
+                    />
                 )}
 
                 {step === "password" && (

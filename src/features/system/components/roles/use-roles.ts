@@ -4,6 +4,7 @@
  */
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { getErrorMessage } from "@/lib/utils";
 import { Role, Permission } from "./types";
 
 interface UseRolesDataReturn {
@@ -45,9 +46,9 @@ export function useRolesData(open: boolean): UseRolesDataReturn {
             }
 
             setRoles(rolesData || []);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error fetching data:', err);
-            setError(err.message || 'Failed to load roles');
+            setError(getErrorMessage(err) || 'Failed to load roles');
         } finally {
             if (showLoading) setIsLoading(false);
         }
@@ -124,7 +125,7 @@ export function useRolePermissions(roleName: string | null, isSystemRole: boolea
                 if (error) throw error;
                 setRolePermissions(prev => [...prev, permName]);
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error toggling permission:', err);
             throw err;
         } finally {

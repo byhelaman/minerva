@@ -29,6 +29,7 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/lib/supabase";
+import { getErrorMessage } from "@/lib/utils";
 import {
     Role,
     CreateRoleFormData,
@@ -100,9 +101,9 @@ export function ManageRolesModal({ open, onOpenChange }: ManageRolesModalProps) 
             toast.success('Role created successfully');
             setIsCreateOpen(false);
             refetch(false);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error creating role:', err);
-            toast.error(err.message || 'Failed to create role');
+            toast.error(getErrorMessage(err) || 'Failed to create role');
         } finally {
             setIsCreating(false);
         }
@@ -123,9 +124,9 @@ export function ManageRolesModal({ open, onOpenChange }: ManageRolesModalProps) 
             toast.success('Role updated successfully');
             setIsEditOpen(false);
             refetch(false);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error updating role:', err);
-            toast.error(err.message || 'Failed to update role');
+            toast.error(getErrorMessage(err) || 'Failed to update role');
         } finally {
             setIsEditing(false);
         }
@@ -149,9 +150,9 @@ export function ManageRolesModal({ open, onOpenChange }: ManageRolesModalProps) 
 
             toast.success('Role deleted successfully');
             refetch(false);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error deleting role:', err);
-            toast.error(err.message || 'Failed to delete role');
+            toast.error(getErrorMessage(err) || 'Failed to delete role');
         }
     };
 
@@ -163,8 +164,8 @@ export function ManageRolesModal({ open, onOpenChange }: ManageRolesModalProps) 
     const handleTogglePermission = async (permName: string, hasPermission: boolean) => {
         try {
             await togglePermission(permName, hasPermission);
-        } catch (err: any) {
-            toast.error(err.message || 'Failed to update permission');
+        } catch (err: unknown) {
+            toast.error(getErrorMessage(err) || 'Failed to update permission');
         }
     };
 

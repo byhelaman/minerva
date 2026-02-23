@@ -253,11 +253,16 @@ export class MatchingService {
         }
 
         // Match encontrado
-        const meeting = evaluation.bestMatch!.candidate;
+        if (!evaluation.bestMatch) {
+            result.status = 'not_found';
+            result.reason = 'No best match found';
+            return result;
+        }
+        const meeting = evaluation.bestMatch.candidate;
         result.meeting_id = meeting.meeting_id;
         result.matchedCandidate = meeting;
         result.bestMatch = meeting;
-        result.score = evaluation.bestMatch!.finalScore;
+        result.score = evaluation.bestMatch.finalScore;
 
         // ---------------------------------------------------------------------
         // PASO 4: Validar Anfitrión
@@ -293,7 +298,7 @@ export class MatchingService {
      */
     public findMatchByTopic(topic: string, options?: MatchOptions): MatchResult {
         // Crear un horario falso con solo el programa
-        const fakeSchedule = { program: topic, instructor: '' } as any;
+        const fakeSchedule = { program: topic, instructor: '' } as Pick<Schedule, 'program' | 'instructor'> as Schedule;
 
         const result: MatchResult = {
             schedule: fakeSchedule,
@@ -340,12 +345,16 @@ export class MatchingService {
         }
 
         // Coincidencia encontrada - asignar sin validación de instructor
-        const meeting = evaluation.bestMatch!.candidate;
+        if (!evaluation.bestMatch) {
+            result.reason = 'No best match found';
+            return result;
+        }
+        const meeting = evaluation.bestMatch.candidate;
         result.status = 'assigned';
         result.meeting_id = meeting.meeting_id;
         result.matchedCandidate = meeting;
         result.bestMatch = meeting;
-        result.score = evaluation.bestMatch!.finalScore;
+        result.score = evaluation.bestMatch.finalScore;
         result.reason = `Score: ${result.score}`;
 
         return result;

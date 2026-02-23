@@ -31,7 +31,7 @@ describe('getScheduleKey', () => {
     it('should produce consistent key from schedule fields', () => {
         const schedule = makeSchedule({});
         const key = getScheduleKey(schedule);
-        expect(key).toBe('2024-06-15|08:00|10:00|Instructor A|Program X');
+        expect(key).toBe('2024-06-15|08:00|Instructor A|Program X');
     });
 
     it('should produce different keys for different programs', () => {

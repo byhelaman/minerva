@@ -1,8 +1,7 @@
-import * as React from "react"
-import { format } from "date-fns"
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
 import { Loader2 } from "lucide-react"
 import { formatChartDate } from "../utils/date-formatter"
+import { useChartData } from "../hooks/useChartData"
 
 import {
     Card,
@@ -26,7 +25,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { supabase } from "@/lib/supabase"
 
 const chartConfig = {
     schedules: {
@@ -39,6 +37,12 @@ const chartConfig = {
     },
 } satisfies ChartConfig
 
+interface DailyStatsRow {
+    date: string
+    total_classes: number | string
+    incidences: number | string
+}
+
 interface DailyStats {
     date: string
     schedules: number
@@ -50,53 +54,19 @@ interface Props {
     onTimeRangeChange: (value: string) => void
 }
 
+const transform = (rows: DailyStatsRow[]): DailyStats[] =>
+    rows.map((row) => ({
+        date: row.date,
+        schedules: Number(row.total_classes),
+        incidences: Number(row.incidences),
+    }))
+
 export function ChartAreaInteractive({ timeRange, onTimeRangeChange }: Props) {
-    const [chartData, setChartData] = React.useState<DailyStats[]>([])
-    const [loading, setLoading] = React.useState(true)
-
-    React.useEffect(() => {
-        async function fetchData() {
-            setLoading(true)
-            try {
-                const now = new Date()
-                const daysMap: Record<string, number> = { "7d": 7, "30d": 30, "90d": 90, "180d": 180, "365d": 365 }
-                const daysBack = daysMap[timeRange] || 90
-
-                const startDate = new Date(now)
-                startDate.setDate(startDate.getDate() - daysBack)
-
-                // Use local date strings to match database dates exactly (YYYY-MM-DD)
-                const startStr = format(startDate, 'yyyy-MM-dd')
-                const endStr = format(now, 'yyyy-MM-dd')
-
-                console.log(`[ChartArea] Fetching from ${startStr} to ${endStr}`)
-
-                const { data, error } = await supabase.rpc("get_daily_stats", {
-                    p_start_date: startStr,
-                    p_end_date: endStr,
-                })
-
-                if (error) throw error
-
-                const result: DailyStats[] = (data || []).map((row: any) => {
-                    const total = Number(row.total_classes)
-                    const inc = Number(row.incidences)
-                    return {
-                        date: row.date,
-                        schedules: total,
-                        incidences: inc,
-                    }
-                })
-
-                setChartData(result)
-            } catch (e) {
-                console.error("Failed to fetch area chart data:", e)
-            } finally {
-                setLoading(false)
-            }
-        }
-        fetchData()
-    }, [timeRange])
+    const { data: chartData, loading } = useChartData<DailyStatsRow, DailyStats>(
+        "get_daily_stats",
+        timeRange,
+        transform,
+    )
 
     return (
         <Card className="pt-0 shadow-none">

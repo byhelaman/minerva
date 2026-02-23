@@ -186,7 +186,7 @@ export function ActivityLog() {
                     </Button>
                 </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="max-h-80 flex flex-col min-h-0">
                 {isLoading ? (
                     <div className="space-y-4">
                         {Array.from({ length: 4 }).map((_, i) => (
@@ -204,7 +204,7 @@ export function ActivityLog() {
                         No recent activity.
                     </div>
                 ) : (
-                    <ScrollArea className="h-[320px] -mr-3 pr-3">
+                    <ScrollArea className="overflow-auto pr-2">
                         <div className="space-y-1">
                             {items.map((item) => {
                                 const Icon = ACTIVITY_ICONS[item.type];

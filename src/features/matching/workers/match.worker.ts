@@ -1,4 +1,5 @@
 import { MatchingService } from '../services/matcher';
+import { getErrorMessage } from '@/lib/utils';
 import type { WorkerMessage } from '../types';
 
 let matcher: MatchingService | null = null;
@@ -25,7 +26,7 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
 
             self.postMessage({ type: 'MATCH_RESULT', results });
         }
-    } catch (error: any) {
-        self.postMessage({ type: 'ERROR', error: error.message });
+    } catch (error: unknown) {
+        self.postMessage({ type: 'ERROR', error: getErrorMessage(error) });
     }
 };

@@ -38,4 +38,5 @@ export type EditRoleFormData = z.infer<typeof editRoleSchema>;
 export const SYSTEM_ROLES = ['super_admin', 'admin', 'operator', 'viewer', 'guest'] as const;
 
 // Helpers
-export const isSystemRole = (roleName: string) => SYSTEM_ROLES.includes(roleName as any);
+export const isSystemRole = (roleName: string) =>
+    (SYSTEM_ROLES as ReadonlyArray<string>).includes(roleName);

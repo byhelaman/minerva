@@ -28,7 +28,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         <TabsTrigger value="preferences">Preferences</TabsTrigger>
                         <TabsTrigger value="security">Security</TabsTrigger>
                     </TabsList>
-                    <ScrollArea className="overflow-y-auto px-2 py-4 min-h-100">
+                    <ScrollArea className="overflow-auto px-2 py-4 min-h-100">
                         <TabsContent value="account">
                             <AccountTab onClose={() => onOpenChange(false)} />
                         </TabsContent>

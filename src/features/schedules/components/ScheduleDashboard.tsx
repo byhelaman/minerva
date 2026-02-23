@@ -180,7 +180,8 @@ export function ScheduleDashboard() {
                 return;
             }
 
-            const filteredSchedules = schedules.filter(s => {
+            const currentSchedules = useScheduleDataStore.getState().getComputedSchedules();
+            const filteredSchedules = currentSchedules.filter(s => {
                 const matchesDate = s.date === currentDate;
                 const matchesHour = s.start_time?.substring(0, 2) === currentHour;
                 return matchesDate && matchesHour;
@@ -211,7 +212,7 @@ export function ScheduleDashboard() {
         } finally {
             setIsLiveLoading(false);
         }
-    }, [schedules, fetchActiveMeetings]);
+    }, [fetchActiveMeetings]);
 
     // Auto-refresh del Live: cada minuto actualizar filtro de hora y re-ejecutar matching local
     useEffect(() => {
@@ -257,7 +258,7 @@ export function ScheduleDashboard() {
 
         const interval = setInterval(tick, 60_000);
         return () => clearInterval(interval);
-    }, [showLiveMode]);
+    }, [showLiveMode, fetchActiveMeetings]);
 
     const handleUploadComplete = (newData: Schedule[]) => {
         const internalKeys = new Set<string>();

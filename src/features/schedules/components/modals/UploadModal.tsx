@@ -268,7 +268,7 @@ export function UploadModal({
                                     Remove all
                                 </Button>
                             </div>
-                            <ScrollArea className="overflow-y-auto">
+                            <ScrollArea className="overflow-auto">
                                 <div className="flex flex-col gap-2">
                                     {selectedFiles.map((file) => (
                                         <div
@@ -285,10 +285,9 @@ export function UploadModal({
                                                 </div>
                                                 <Button
                                                     size="icon-sm"
-                                                    variant="ghost"
+                                                    variant="destructive-outline"
                                                     onClick={() => handleRemoveFile(file.name)}
                                                     disabled={isProcessing}
-                                                    className="border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
                                                 >
                                                     <Trash2 />
                                                 </Button>

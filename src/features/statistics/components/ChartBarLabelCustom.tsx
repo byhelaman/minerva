@@ -1,7 +1,6 @@
-import * as React from "react"
-import { format } from "date-fns"
 import { Loader2 } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from "recharts"
+import { useChartData, PERIOD_LABELS } from "../hooks/useChartData"
 
 import {
     Card,
@@ -17,7 +16,6 @@ import {
     ChartTooltipContent,
     type ChartConfig,
 } from "@/components/ui/chart"
-import { supabase } from "@/lib/supabase"
 
 const chartConfig = {
     count: {
@@ -29,6 +27,11 @@ const chartConfig = {
     },
 } satisfies ChartConfig
 
+interface TypeRow {
+    type: string
+    count: number | string
+}
+
 interface TypeData {
     type: string
     count: number
@@ -38,49 +41,18 @@ interface Props {
     timeRange: string
 }
 
+const transform = (rows: TypeRow[]): TypeData[] =>
+    rows.map((row) => ({ type: row.type, count: Number(row.count) }))
+
 export function ChartBarLabelCustom({ timeRange }: Props) {
-    const [chartData, setChartData] = React.useState<TypeData[]>([])
-    const [loading, setLoading] = React.useState(true)
-
-    React.useEffect(() => {
-        async function fetchData() {
-            setLoading(true)
-            try {
-                const now = new Date()
-                const daysMap: Record<string, number> = { "7d": 7, "30d": 30, "90d": 90, "180d": 180, "365d": 365 }
-                const daysBack = daysMap[timeRange] || 90
-
-                const startDate = new Date(now)
-                startDate.setDate(startDate.getDate() - daysBack)
-
-                const startStr = format(startDate, 'yyyy-MM-dd')
-                const endStr = format(now, 'yyyy-MM-dd')
-
-                const { data, error } = await supabase.rpc("get_incidence_types", {
-                    p_start_date: startStr,
-                    p_end_date: endStr,
-                })
-
-                if (error) throw error
-
-                const result: TypeData[] = (data || []).map((row: any) => ({
-                    type: row.type,
-                    count: Number(row.count),
-                }))
-
-                setChartData(result)
-            } catch (e) {
-                console.error("Failed to fetch incidence types:", e)
-            } finally {
-                setLoading(false)
-            }
-        }
-        fetchData()
-    }, [timeRange])
+    const { data: chartData, loading } = useChartData<TypeRow, TypeData>(
+        "get_incidence_types",
+        timeRange,
+        transform,
+    )
 
     const total = chartData.reduce((sum, d) => sum + d.count, 0)
-    const periodLabels: Record<string, string> = { "7d": "últimos 7 días", "30d": "últimos 30 días", "90d": "últimos 3 meses", "180d": "últimos 6 meses", "365d": "último año" }
-    const periodLabel = periodLabels[timeRange] || "últimos 3 meses"
+    const periodLabel = PERIOD_LABELS[timeRange] || "últimos 3 meses"
 
     return (
         <Card className="shadow-none">

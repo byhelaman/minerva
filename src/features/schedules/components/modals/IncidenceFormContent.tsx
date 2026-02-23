@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Controller, UseFormReturn } from "react-hook-form";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -15,16 +15,15 @@ import { X } from "lucide-react";
 /** Fields used by IncidenceFormContent */
 export interface IncidenceFormValues {
     status?: string;
-    type?: string;
-    subtype?: string;
+    type: string;
+    subtype: string;
     description?: string;
     department?: string;
     substitute?: string;
 }
 
 interface IncidenceFormContentProps {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    form: UseFormReturn<any>;
+    form: UseFormReturn<IncidenceFormValues>;
     uniqueInstructors: Instructor[];
     canEdit: boolean;
 }
@@ -53,7 +52,7 @@ export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: Incid
     };
 
     return (
-        <ScrollArea className="overflow-y-auto">
+        <ScrollArea className="overflow-auto">
             <FieldGroup className="p-1">
                 <Controller
                     name="status"
@@ -199,23 +198,32 @@ export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: Incid
                                         <SelectValue placeholder="Select" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="Problemas de salud">Problemas de salud</SelectItem>
-                                        <SelectItem value="Problema eléctrico/Wi-Fi">Problema eléctrico/Wi-Fi</SelectItem>
-                                        <SelectItem value="Cancelación manual">Cancelación manual</SelectItem>
-                                        <SelectItem value="Beneficio cancelación">Beneficio cancelación</SelectItem>
-                                        <SelectItem value="No fue programada">No fue programada</SelectItem>
-                                        <SelectItem value="No debió ser programada">No debió ser programada</SelectItem>
-                                        <SelectItem value="Fuera de disponibilidad">Fuera de disponibilidad</SelectItem>
-                                        <SelectItem value="Instructor sin competencias">Instructor sin competencias</SelectItem>
-                                        <SelectItem value="Tardanza/Ausencia">Tardanza/Ausencia</SelectItem>
-                                        <SelectItem value="Instructor con bloqueo">Instructor con bloqueo</SelectItem>
-                                        <SelectItem value="Error en modalidad">Error en modalidad</SelectItem>
-                                        <SelectItem value="Omisión de horario fijo">Omisión de horario fijo</SelectItem>
-                                        <SelectItem value="Cruce de programación">Cruce de programación</SelectItem>
-                                        <SelectItem value="Error en inicio">Error en inicio</SelectItem>
-                                        <SelectItem value="Error aplicación de pool">Error aplicación de pool</SelectItem>
-                                        <SelectItem value="Programación en otro horario">Programación en otro horario</SelectItem>
-                                        <SelectItem value="Otros">Otros</SelectItem>
+                                        <SelectGroup>
+                                            <SelectLabel>Instructor</SelectLabel>
+                                            <SelectItem value="Tardanza/Ausencia">Tardanza/Ausencia</SelectItem>
+                                            <SelectItem value="Problemas de salud">Problemas de salud</SelectItem>
+                                            <SelectItem value="Problema eléctrico/Wi-Fi">Problema eléctrico/Wi-Fi</SelectItem>
+                                        </SelectGroup>
+                                        <SelectGroup>
+                                            <SelectLabel>Programación</SelectLabel>
+                                            <SelectItem value="Instructor sin competencias">Instructor sin competencias</SelectItem>
+                                            <SelectItem value="Fuera de disponibilidad">Fuera de disponibilidad</SelectItem>
+                                            <SelectItem value="Instructor con bloqueo">Instructor con bloqueo</SelectItem>
+                                            <SelectItem value="Cruce de programación">Cruce de programación</SelectItem>
+                                            <SelectItem value="Error aplicación de pool">Error aplicación de pool</SelectItem>
+                                            <SelectItem value="No fue programada">No fue programada</SelectItem>
+                                            <SelectItem value="No debió ser programada">No debió ser programada</SelectItem>
+                                            <SelectItem value="Error de horario">Error de horario</SelectItem>
+                                        </SelectGroup>
+
+                                        <SelectGroup>
+                                            <SelectLabel>Servicios</SelectLabel>
+                                            <SelectItem value="Error en inicio">Error en inicio</SelectItem>
+                                            <SelectItem value="Beneficio cancelación">Beneficio cancelación</SelectItem>
+                                            <SelectItem value="Programación manual">Programación manual</SelectItem>
+                                            <SelectItem value="Cancelación manual">Cancelación manual</SelectItem>
+                                            <SelectItem value="Otros">Otros</SelectItem>
+                                        </SelectGroup>
                                     </SelectContent>
                                 </Select>
                                 {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
@@ -233,13 +241,14 @@ export function IncidenceFormContent({ form, uniqueInstructors, canEdit }: Incid
                                         <SelectValue placeholder="Select" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="Q&T">Q&T</SelectItem>
+                                        <SelectItem value="Q&T (Quality & Training)">Q&T (Quality & Training)</SelectItem>
                                         <SelectItem value="Programación Latam">Programación Latam</SelectItem>
-                                        <SelectItem value="Coordinacion B2C (Consumidor)">Coordinacion B2C (Consumidor)</SelectItem>
-                                        <SelectItem value="Coordinacion B2B (Corporativo)">Coordinacion B2B (Corporativo)</SelectItem>
-                                        <SelectItem value="Coordinacion Kids & Teens">Coordinacion Kids & Teens</SelectItem>
+                                        <SelectItem value="Coordinación B2C (Consumidor)">Coordinación B2C (Consumidor)</SelectItem>
+                                        <SelectItem value="Coordinación B2B (Corporativo)">Coordinación B2B (Corporativo)</SelectItem>
+                                        <SelectItem value="Coordinación ESNA">Coordinación ESNA</SelectItem>
+                                        <SelectItem value="Coordinación Kids & Teens">Coordinación Kids & Teens</SelectItem>
                                         <SelectItem value="Admisiones/TBO"> Admisiones/TBO</SelectItem>
-                                        <SelectItem value="Ventas B2C">Ventas B2C</SelectItem>
+                                        <SelectItem value="Ventas B2C (Consumidor)">Ventas B2C (Consumidor)</SelectItem>
                                         <SelectItem value="Recursos Humanos">Recursos Humanos</SelectItem>
                                         <SelectItem value="Soporte">Soporte</SelectItem>
                                     </SelectContent>

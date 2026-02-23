@@ -7,8 +7,32 @@ import { normalizeString, getSchedulePrimaryKey } from "../utils/string-utils";
  * Servicio para operaciones CRUD de entradas de horario en Supabase.
  */
 
+/** Shape of a row returned by the schedule_entries table / RPC. */
+interface ScheduleEntryRow {
+    date: string;
+    program: string;
+    start_time: string;
+    instructor: string;
+    shift: string;
+    branch: string;
+    end_time: string;
+    code: string;
+    minutes: string;
+    units: string;
+    status?: string | null;
+    substitute?: string | null;
+    type?: string | null;
+    subtype?: string | null;
+    description?: string | null;
+    department?: string | null;
+    feedback?: string | null;
+    published_by?: string | null;
+    synced_at?: string | null;
+    updated_at?: string | null;
+}
+
 // Helper para mapear fila de BD a tipo Schedule
-const mapEntryToSchedule = (row: any): Schedule => ({
+const mapEntryToSchedule = (row: ScheduleEntryRow): Schedule => ({
     date: row.date,
     program: row.program,
     start_time: ensureTimeFormat(row.start_time),
@@ -23,7 +47,7 @@ const mapEntryToSchedule = (row: any): Schedule => ({
 });
 
 // Helper para mapear fila de BD a DailyIncidence (si tiene type o status)
-const mapEntryToIncidence = (row: any): DailyIncidence | null => {
+const mapEntryToIncidence = (row: ScheduleEntryRow): DailyIncidence | null => {
     // Considerar como incidencia si tiene 'type' (incidencia completa)
     // O si tiene 'status' (marcado via switch/Live mode)
     if (!row.type && !row.status) return null;
@@ -68,7 +92,7 @@ export const scheduleEntriesService = {
         const schedules: Schedule[] = [];
         const incidences: DailyIncidence[] = [];
 
-        data?.forEach(row => {
+        (data as ScheduleEntryRow[] | null)?.forEach(row => {
             schedules.push(mapEntryToSchedule(row));
             const incidence = mapEntryToIncidence(row);
             if (incidence) {
@@ -95,12 +119,9 @@ export const scheduleEntriesService = {
         const schedules: Schedule[] = [];
         const incidences: DailyIncidence[] = [];
 
-        // El RPC retorna un array JSON directamente por el json_agg.
-        // Supabase .rpc() con retorno JSON usualmente entrega la data directamente.
-        // Casteo a any[] por seguridad.
-        const rows = Array.isArray(data) ? data : (data as any) || [];
+        const rows: ScheduleEntryRow[] = Array.isArray(data) ? data : [];
 
-        rows.forEach((row: any) => {
+        rows.forEach((row) => {
             schedules.push(mapEntryToSchedule(row));
             const incidence = mapEntryToIncidence(row);
             if (incidence) {
@@ -120,7 +141,7 @@ export const scheduleEntriesService = {
         if (schedules.length === 0) return;
 
         const uniqueKeys = new Set<string>();
-        const rows: any[] = [];
+        const rows: Omit<ScheduleEntryRow, 'updated_at'>[] = [];
 
         for (const s of schedules) {
             // Deduplicar dentro del lote
@@ -176,8 +197,8 @@ export const scheduleEntriesService = {
         if (schedules.length === 0) return { upsertedCount: 0, duplicatesSkipped: 0 };
 
         const uniqueKeys = new Set<string>();
-        const baseOnlyRows: any[] = [];
-        const incidenceRows: any[] = [];
+        const baseOnlyRows: Omit<ScheduleEntryRow, 'updated_at'>[] = [];
+        const incidenceRows: Omit<ScheduleEntryRow, 'updated_at'>[] = [];
         let duplicatesSkipped = 0;
 
         for (const s of schedules) {
@@ -190,7 +211,7 @@ export const scheduleEntriesService = {
             }
             uniqueKeys.add(key);
 
-            const baseRow: any = {
+            const baseRow: Omit<ScheduleEntryRow, 'updated_at'> = {
                 // Campos clave compuesta (normalizados)
                 date: s.date,
                 program: normalizeString(s.program),
@@ -334,25 +355,7 @@ export const scheduleEntriesService = {
 
         if (error) throw error;
 
-        return (data || []).map(row => ({
-            date: row.date,
-            program: row.program,
-            start_time: ensureTimeFormat(row.start_time),
-            instructor: row.instructor,
-            shift: row.shift,
-            branch: row.branch,
-            end_time: ensureTimeFormat(row.end_time),
-            code: row.code,
-            minutes: row.minutes,
-            units: row.units,
-            status: row.status || undefined,
-            substitute: row.substitute || undefined,
-            type: row.type || undefined,
-            subtype: row.subtype || undefined,
-            description: row.description || undefined,
-            department: row.department || undefined,
-            feedback: row.feedback || undefined,
-        }));
+        return ((data || []) as ScheduleEntryRow[]).map(row => mapEntryToIncidence(row)).filter((inc): inc is DailyIncidence => inc !== null);
     },
 
     /**

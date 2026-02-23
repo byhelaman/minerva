@@ -10,6 +10,15 @@ import { useScheduleUIStore } from './useScheduleUIStore';
 import { registerSignOutCleanup } from '@/components/auth-provider';
 // import { mergeSchedulesWithIncidences } from '../utils/merge-utils';
 
+/** JWT custom claims injected by Supabase Auth Hook */
+interface JwtClaims {
+    user_role?: string;
+    hierarchy_level?: number;
+    permissions?: string[];
+    sub: string;
+    email?: string;
+}
+
 interface ScheduleSyncState {
     // MS Config State
     msConfig: SchedulesConfig;
@@ -75,7 +84,7 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
         if (!session) return;
 
         try {
-            const claims: any = jwtDecode(session.access_token);
+            const claims = jwtDecode<JwtClaims>(session.access_token);
             const permissions = claims.permissions || [];
             if (!permissions.includes('reports.manage')) return;
         } catch (e) {
@@ -155,10 +164,11 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
             toast.success('Schedule published to Database');
             return { success: true };
 
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error("Publish to DB failed", e);
-            toast.error(e.message || "Failed to publish schedule to database");
-            return { success: false, error: e.message };
+            const message = e instanceof Error ? e.message : "Failed to publish schedule to database";
+            toast.error(message);
+            return { success: false, error: message };
         } finally {
             set({ isPublishing: false });
         }
@@ -206,8 +216,9 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
             // 4. Mark date as synced in DB
             await scheduleEntriesService.markDateAsSynced(targetDate);
 
-        } catch (e: any) {
-            toast.error(`Sync failed: ${e.message}`, { id: toastId });
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : "Unknown error";
+            toast.error(`Sync failed: ${message}`, { id: toastId });
         } finally {
             set({ isSyncing: false });
         }
@@ -247,7 +258,7 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
 
             toast.success(`Loaded schedule for ${formatDateForDisplay(schedule.schedule_date)}`, { id: toastId });
 
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error("Failed to load schedule", e);
             toast.error("Failed to load schedule", { id: toastId });
         }
@@ -263,7 +274,7 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
         if (!session) return;
 
         try {
-            const claims: any = jwtDecode(session.access_token);
+            const claims = jwtDecode<JwtClaims>(session.access_token);
             const permissions = claims.permissions || [];
             if (!permissions.includes('schedules.read')) return;
         } catch (e) {
@@ -345,9 +356,9 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
 
             if (error) throw error;
             return { data: (data ?? []) as PublishedSchedule[] };
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error("Error fetching cloud versions:", e);
-            return { data: [], error: e.message };
+            return { data: [], error: e instanceof Error ? e.message : "Unknown error" };
         }
     },
 
@@ -374,9 +385,9 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
             if (!data) return { exists: false };
 
             return { exists: true, data: data as PublishedSchedule };
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error("Error fetching cloud version:", e);
-            return { exists: false, error: e.message };
+            return { exists: false, error: e instanceof Error ? e.message : "Unknown error" };
         }
     }
 }));

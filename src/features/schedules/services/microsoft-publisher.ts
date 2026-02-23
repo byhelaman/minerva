@@ -79,15 +79,6 @@ export async function publishIncidencesToExcel(
 
     const values = [headers, ...dataRows];
 
-    // DEBUG: Log first row to verify format
-    if (dataRows.length > 0) {
-        console.log('🔍 DEBUG - First row being sent to Excel:');
-        console.log('  Date:', dataRows[0][0], '(type:', typeof dataRows[0][0], ')');
-        console.log('  Program:', dataRows[0][7], '(type:', typeof dataRows[0][7], ')');
-        console.log('  Start Time:', dataRows[0][3], '(type:', typeof dataRows[0][3], ')');
-        console.log('  Instructor:', dataRows[0][6], '(type:', typeof dataRows[0][6], ')');
-    }
-
     // Prioritize Table ID from config, then File ID
     const fileId = config.incidencesFileId;
     const targetTableId = config.incidencesTableId;

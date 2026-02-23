@@ -11,6 +11,8 @@ describe('ScheduleSchema - Valid data', () => {
             date: '2024-06-15',
             start_time: '08:00',
             end_time: '10:00',
+            branch: 'main',
+            instructor: 'John Doe',
             program: 'English Advanced L5',
             minutes: '120',
             units: '2',
@@ -19,20 +21,22 @@ describe('ScheduleSchema - Valid data', () => {
         expect(result.success).toBe(true);
     });
 
-    it('should apply defaults for optional fields', () => {
+    it('should apply defaults and transforms for optional/empty fields', () => {
         const input = {
             date: '2024-01-01',
             start_time: '09:00',
             end_time: '11:00',
+            branch: '',
+            instructor: '',
             program: 'Math 101',
         };
         const result = ScheduleSchema.safeParse(input);
         expect(result.success).toBe(true);
         if (result.success) {
             expect(result.data.shift).toBe('');
-            expect(result.data.branch).toBe('');
+            expect(result.data.branch).toBe('none');       // empty → 'none' via transform
             expect(result.data.code).toBe('');
-            expect(result.data.instructor).toBe('');
+            expect(result.data.instructor).toBe('none');    // empty → 'none' via transform
             expect(result.data.minutes).toBe('0');
             expect(result.data.units).toBe('0');
         }
@@ -43,6 +47,8 @@ describe('ScheduleSchema - Valid data', () => {
             date: '2024-06-15',
             start_time: '08:00',
             end_time: '10:00',
+            branch: 'main',
+            instructor: 'Teacher A',
             program: 'English',
             status: 'suspended',
             substitute: 'Jane',
@@ -68,6 +74,8 @@ describe('ScheduleSchema - Invalid data', () => {
             date: '15/06/2024',  // Formato incorrecto
             start_time: '08:00',
             end_time: '10:00',
+            branch: 'main',
+            instructor: 'Teacher',
             program: 'English',
         };
         const result = ScheduleSchema.safeParse(input);
@@ -79,6 +87,8 @@ describe('ScheduleSchema - Invalid data', () => {
             date: '2024-02-30',  // 30 de febrero no existe
             start_time: '08:00',
             end_time: '10:00',
+            branch: 'main',
+            instructor: 'Teacher',
             program: 'English',
         };
         const result = ScheduleSchema.safeParse(input);
@@ -90,6 +100,8 @@ describe('ScheduleSchema - Invalid data', () => {
             date: '2024-06-15',
             start_time: '8:00 AM',  // No es formato de hora ISO
             end_time: '10:00',
+            branch: 'main',
+            instructor: 'Teacher',
             program: 'English',
         };
         const result = ScheduleSchema.safeParse(input);
@@ -101,6 +113,8 @@ describe('ScheduleSchema - Invalid data', () => {
             date: '2024-06-15',
             start_time: '08:00',
             end_time: '10:00',
+            branch: 'main',
+            instructor: 'Teacher',
             // programa faltante
         };
         const result = ScheduleSchema.safeParse(input);
@@ -112,6 +126,8 @@ describe('ScheduleSchema - Invalid data', () => {
             date: '2024-06-15',
             start_time: '08:00',
             end_time: '10:00',
+            branch: 'main',
+            instructor: 'Teacher',
             program: '',
         };
         const result = ScheduleSchema.safeParse(input);
@@ -123,6 +139,8 @@ describe('ScheduleSchema - Invalid data', () => {
             date: '2024-06-15',
             start_time: '08:00',
             end_time: '10:00',
+            branch: 'main',
+            instructor: 'Teacher',
             program: 'English',
             minutes: 'abc',
         };
@@ -135,6 +153,8 @@ describe('ScheduleSchema - Invalid data', () => {
             date: '2024-06-15',
             start_time: '08:00',
             end_time: '10:00',
+            branch: 'main',
+            instructor: 'Teacher',
             program: 'English',
             units: 'two',
         };
@@ -147,6 +167,8 @@ describe('ScheduleSchema - Invalid data', () => {
             date: '2024-06-15',
             start_time: '08:00:00',  // precision: -1 significa sin segundos
             end_time: '10:00',
+            branch: 'main',
+            instructor: 'Teacher',
             program: 'English',
         };
         const result = ScheduleSchema.safeParse(input);

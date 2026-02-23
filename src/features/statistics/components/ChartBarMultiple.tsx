@@ -1,8 +1,9 @@
-import * as React from "react"
-import { format } from "date-fns"
+import { useState, useEffect } from "react"
 import { Loader2 } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, XAxis, Cell } from "recharts"
 import { formatChartDate } from "../utils/date-formatter"
+import { getDateRange, PERIOD_LABELS } from "../hooks/useChartData"
+import { logger } from "@/lib/logger"
 
 import {
     Card,
@@ -34,6 +35,9 @@ interface MonthlyRate {
     incidences: number
 }
 
+interface DailyRow { date: string; total_classes: number | string; incidences: number | string }
+interface MonthlyRow { month: string; rate: number | string; total: number | string; incidences: number | string }
+
 interface Props {
     timeRange: string
 }
@@ -41,78 +45,69 @@ interface Props {
 const MONTH_NAMES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
 export function ChartBarMultiple({ timeRange }: Props) {
-    const [chartData, setChartData] = React.useState<MonthlyRate[]>([])
-    const [loading, setLoading] = React.useState(true)
+    const [chartData, setChartData] = useState<MonthlyRate[]>([])
+    const [loading, setLoading] = useState(true)
 
-    React.useEffect(() => {
+    useEffect(() => {
+        let cancelled = false
+
         async function fetchData() {
             setLoading(true)
             try {
-                const now = new Date()
-                const daysMap: Record<string, number> = { "7d": 7, "30d": 30, "90d": 90, "180d": 180, "365d": 365 }
-                const daysBack = daysMap[timeRange] || 90
-
-                const startDate = new Date(now)
-                startDate.setDate(startDate.getDate() - daysBack)
-
-                const startStr = format(startDate, 'yyyy-MM-dd')
-                const endStr = format(now, 'yyyy-MM-dd')
+                const { startStr, endStr } = getDateRange(timeRange)
 
                 if (timeRange === "7d") {
-                    // For 7 days, use daily stats instead of monthly
                     const { data, error } = await supabase.rpc("get_daily_stats", {
                         p_start_date: startStr,
                         p_end_date: endStr,
                     })
-
                     if (error) throw error
+                    if (cancelled) return
 
-                    const result: MonthlyRate[] = (data || []).map((row: any) => {
+                    setChartData((data as DailyRow[] || []).map((row) => {
                         const total = Number(row.total_classes)
                         const incidences = Number(row.incidences)
-                        const rate = total > 0 ? Math.round((incidences / total) * 100) : 0
                         return {
                             month: row.date,
-                            rate,
+                            rate: total > 0 ? Math.round((incidences / total) * 100) : 0,
                             total,
                             incidences,
                         }
-                    })
-                    setChartData(result)
+                    }))
                 } else {
                     const { data, error } = await supabase.rpc("get_monthly_incidence_rate", {
                         p_start_date: startStr,
                         p_end_date: endStr,
                     })
-
                     if (error) throw error
+                    if (cancelled) return
 
-                    const result: MonthlyRate[] = (data || []).map((row: any) => {
-                        const [, m] = (row.month as string).split("-")
+                    setChartData((data as MonthlyRow[] || []).map((row) => {
+                        const [, m] = String(row.month).split("-")
                         return {
                             month: MONTH_NAMES[parseInt(m, 10) - 1],
                             rate: Math.round(Number(row.rate)),
                             total: Number(row.total),
                             incidences: Number(row.incidences),
                         }
-                    })
-                    setChartData(result)
+                    }))
                 }
             } catch (e) {
-                console.error("Failed to fetch rate data:", e)
+                logger.error("Failed to fetch rate data:", e)
             } finally {
-                setLoading(false)
+                if (!cancelled) setLoading(false)
             }
         }
+
         fetchData()
+        return () => { cancelled = true }
     }, [timeRange])
 
     const avgRate = chartData.length > 0
         ? Math.round(chartData.reduce((sum, d) => sum + d.rate, 0) / chartData.length)
         : 0
 
-    const periodLabels: Record<string, string> = { "7d": "últimos 7 días", "30d": "últimos 30 días", "90d": "últimos 3 meses", "180d": "últimos 6 meses", "365d": "último año" }
-    const periodLabel = periodLabels[timeRange] || "últimos 3 meses"
+    const periodLabel = PERIOD_LABELS[timeRange] || "últimos 3 meses"
 
     return (
         <Card className="shadow-none">
@@ -135,8 +130,6 @@ export function ChartBarMultiple({ timeRange }: Props) {
                                 tickMargin={10}
                                 axisLine={false}
                                 tickFormatter={(value) => {
-                                    // If it's formatted like "12 feb", leave it. 
-                                    // If it's YYYY-MM-DD (daily view), format it.
                                     return value.includes("-") && value.length > 5
                                         ? formatChartDate(value, "d MMM")
                                         : value
@@ -153,9 +146,9 @@ export function ChartBarMultiple({ timeRange }: Props) {
                                 }
                             />
                             <Bar dataKey="rate" radius={4}>
-                                {chartData.map((entry, index) => (
+                                {chartData.map((entry) => (
                                     <Cell
-                                        key={index}
+                                        key={entry.month}
                                         fill={entry.rate > 20 ? "hsl(220, 70%, 35%)" : "hsl(217, 91%, 60%)"}
                                     />
                                 ))}

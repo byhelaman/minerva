@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import type { ZoomMeetingCandidate, ZoomUserCandidate, MatchResult } from '../types';
 import type { Schedule } from '@/features/schedules/types';
 import { logger } from '@/lib/logger';
+import { getErrorMessage } from '@/lib/utils';
 
 interface ZoomState {
     // Datos
@@ -226,11 +227,11 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
                 lastSyncedAt: new Date().toISOString()
             });
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Fallo en sincronización:', error);
             set({
                 isSyncing: false,
-                syncError: error.message || 'Unknown error during synchronization'
+                syncError: getErrorMessage(error) || 'Unknown error during synchronization'
             });
             throw error;
         }
@@ -691,8 +692,37 @@ function getZoomWeekday(dateStr: string): number {
     }
 }
 
+/** A single request item in a batch sent to the zoom-api Edge Function */
+interface BatchRequest {
+    action: 'create' | 'update' | 'delete';
+    meeting_id?: string;
+    schedule_for?: string;
+    topic?: string;
+    type?: number;
+    start_time?: string;
+    duration?: number;
+    timezone?: string;
+    recurrence?: {
+        type: number;
+        repeat_interval: number;
+        weekly_days: string;
+        end_date_time: string;
+    };
+    settings?: {
+        join_before_host?: boolean;
+        waiting_room?: boolean;
+    };
+}
+
+/** Result item returned from a batch operation */
+interface BatchResultItem {
+    meeting_id: string;
+    success: boolean;
+    error?: string;
+}
+
 // Helper para procesar batch chunks común
-async function processBatchChunks(allRequests: any[]): Promise<{ succeeded: number; failed: number; errors: string[]; results: any[] }> {
+async function processBatchChunks(allRequests: BatchRequest[]): Promise<{ succeeded: number; failed: number; errors: string[]; results: BatchResultItem[] }> {
     const CHUNK_SIZE = 50;
     const DELAY_BETWEEN_CHUNKS_MS = 1500;
     const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));

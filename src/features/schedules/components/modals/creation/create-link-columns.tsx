@@ -1,6 +1,6 @@
 import { forwardRef } from "react";
 import { format } from "date-fns";
-import { type ColumnDef } from "@tanstack/react-table";
+import { type ColumnDef, type Row } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "@schedules/components/table/data-table-column-header";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -343,8 +343,8 @@ export const getCreateLinkColumns = (
                     Meeting Details
                 </div>
             ),
-            cell: ({ row }: { row: any }) => {
-                const result = row.original as ValidationResult;
+            cell: ({ row }: { row: Row<ValidationResult> }) => {
+                const result = row.original;
 
                 if (result.status !== 'to_create') {
                     return <div className="text-center text-muted-foreground">—</div>;

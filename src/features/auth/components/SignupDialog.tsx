@@ -21,9 +21,9 @@ import {
     FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { OtpStep } from "./OtpStep";
 
 // Schema para el formulario de registro
 const signupFormSchema = z.object({
@@ -34,10 +34,6 @@ const signupFormSchema = z.object({
 }).refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
-});
-
-const otpSchema = z.object({
-    otp: z.string().min(6, "Code must be 6 digits"),
 });
 
 type Step = "form" | "otp";
@@ -61,17 +57,6 @@ export function SignupDialog({
     const [step, setStep] = useState<Step>(initialStep);
     const [email, setEmail] = useState(initialEmail || "");
     const [isLoading, setIsLoading] = useState(false);
-    const [resendCountdown, setResendCountdown] = useState(0);
-
-    // Temporizador para reenvío
-    useEffect(() => {
-        if (resendCountdown > 0) {
-            const timer = setInterval(() => {
-                setResendCountdown((prev) => prev - 1);
-            }, 1000);
-            return () => clearInterval(timer);
-        }
-    }, [resendCountdown]);
 
     // Formulario de registro
     const signupForm = useForm<z.infer<typeof signupFormSchema>>({
@@ -82,12 +67,6 @@ export function SignupDialog({
             password: "",
             confirmPassword: "",
         },
-    });
-
-    // Formulario de OTP
-    const otpForm = useForm<z.infer<typeof otpSchema>>({
-        resolver: zodResolver(otpSchema),
-        defaultValues: { otp: "" },
     });
 
     // Sincronizar con props iniciales cuando cambian
@@ -107,32 +86,9 @@ export function SignupDialog({
                 setStep(initialStep || "form");
                 setEmail(initialEmail || "");
                 signupForm.reset();
-                otpForm.reset();
             }, 300);
         }
         onOpenChange(newOpen);
-    };
-
-    // Reenviar OTP
-    const handleResendCode = async () => {
-        if (resendCountdown > 0) return;
-
-        setIsLoading(true);
-        try {
-            // Re-registro activa nuevo email OTP
-            const formData = signupForm.getValues();
-            const { error } = await signUp(formData.email, formData.password, formData.name);
-            if (error) {
-                toast.error(error.message);
-            } else {
-                setResendCountdown(30);
-                toast.success("Verification code resent");
-            }
-        } catch {
-            toast.error("Failed to resend code");
-        } finally {
-            setIsLoading(false);
-        }
     };
 
     // Enviar formulario de registro
@@ -145,7 +101,6 @@ export function SignupDialog({
             } else {
                 setEmail(data.email);
                 setStep("otp");
-                setResendCountdown(30);
                 toast.success("Verification code sent to your email");
             }
         } catch {
@@ -155,20 +110,40 @@ export function SignupDialog({
         }
     };
 
-    // Enviar OTP
-    const handleOtpSubmit = async (data: z.infer<typeof otpSchema>) => {
+    // Verificar OTP
+    const handleOtpSubmit = async (otp: string) => {
         setIsLoading(true);
         try {
-            const { error } = await verifyOtp(email, data.otp, "signup");
+            const { error } = await verifyOtp(email, otp, "signup");
             if (error) {
                 toast.error("Invalid verification code");
             } else {
-                toast.success("Welcome to Minerva! 🎉");
+                toast.success("Welcome to Minerva!");
                 handleOpenChange(false);
                 navigate("/");
             }
         } catch {
             toast.error("Failed to verify code");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Reenviar OTP — returns true on success for countdown reset
+    const handleResend = async (): Promise<boolean> => {
+        setIsLoading(true);
+        try {
+            const formData = signupForm.getValues();
+            const { error } = await signUp(formData.email, formData.password, formData.name);
+            if (error) {
+                toast.error(error.message);
+                return false;
+            }
+            toast.success("Verification code resent");
+            return true;
+        } catch {
+            toast.error("Failed to resend code");
+            return false;
         } finally {
             setIsLoading(false);
         }
@@ -275,66 +250,15 @@ export function SignupDialog({
                 )}
 
                 {step === "otp" && (
-                    <>
-                        <DialogHeader>
-                            <DialogTitle>Verify Your Email</DialogTitle>
-                            <DialogDescription>
-                                We sent a 6-digit code to {email}.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <form onSubmit={otpForm.handleSubmit(handleOtpSubmit)} className="space-y-4">
-                            <div className="space-y-2 text-center py-3">
-                                <div className="flex justify-center">
-                                    <InputOTP
-                                        maxLength={6}
-                                        value={otpForm.watch("otp")}
-                                        onChange={(value) => {
-                                            otpForm.setValue("otp", value);
-                                            if (value.length < 6) {
-                                                otpForm.clearErrors("otp");
-                                            }
-                                        }}
-                                        disabled={isLoading}
-                                    >
-                                        <InputOTPGroup className="gap-2 *:data-[slot=input-otp-slot]:rounded-md *:data-[slot=input-otp-slot]:border">
-                                            <InputOTPSlot index={0} className="w-10 h-10" />
-                                            <InputOTPSlot index={1} className="w-10 h-10" />
-                                            <InputOTPSlot index={2} className="w-10 h-10" />
-                                            <InputOTPSlot index={3} className="w-10 h-10" />
-                                            <InputOTPSlot index={4} className="w-10 h-10" />
-                                            <InputOTPSlot index={5} className="w-10 h-10" />
-                                        </InputOTPGroup>
-                                    </InputOTP>
-                                </div>
-                                <p className="text-center text-sm text-muted-foreground">
-                                    Enter the verification code from your email
-                                </p>
-                                <FieldError errors={[otpForm.formState.errors.otp]} className="text-center" />
-                            </div>
-                            <DialogFooter>
-                                <Button type="submit" disabled={isLoading} className="w-full max-w-[320px] mx-auto">
-                                    {isLoading && <Loader2 className="animate-spin" />}
-                                    Verify Email
-                                </Button>
-                            </DialogFooter>
-
-                            <div className="text-center text-sm text-muted-foreground">
-                                Didn't receive the code?{" "}
-                                {resendCountdown > 0 ? (
-                                    <span>Resend in {resendCountdown}s</span>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={handleResendCode}
-                                        disabled={isLoading}
-                                        className="underline underline-offset-4 hover:text-primary"
-                                    >
-                                        Resend
-                                    </button>
-                                )}
-                            </div>
-                        </form>
-                    </>
+                    <OtpStep
+                        email={email}
+                        title="Verify Your Email"
+                        helperText="Enter the verification code from your email"
+                        submitLabel="Verify Email"
+                        isLoading={isLoading}
+                        onSubmit={handleOtpSubmit}
+                        onResend={handleResend}
+                    />
                 )}
             </DialogContent>
         </Dialog>

@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Search, Loader2, Trash2, CircleAlert, Plus, Pencil, Check, X } from "lucide-react";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { supabase } from "@/lib/supabase";
+import { getErrorMessage } from "@/lib/utils";
 import { useAuth } from "@/components/auth-provider";
 import {
     Field,
@@ -107,7 +108,7 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
         if (!isCreateOpen) {
             createForm.reset();
         }
-    }, [isCreateOpen]);
+    }, [isCreateOpen, createForm]);
 
     // Fetch users and roles when modal opens
     useEffect(() => {
@@ -131,9 +132,9 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
 
             setUsers(usersData || []);
             setRoles(rolesData || []);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error fetching data:', err);
-            setError(err.message || 'Failed to load users');
+            setError(getErrorMessage(err) || 'Failed to load users');
         } finally {
             setIsLoading(false);
         }
@@ -156,9 +157,9 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
             ));
 
             toast.success('Role updated successfully');
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error updating role:', err);
-            toast.error(err.message || 'Failed to update role');
+            toast.error(getErrorMessage(err) || 'Failed to update role');
         }
     };
 
@@ -192,9 +193,9 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
             setEditingUserId(null);
             setEditingDisplayName('');
             toast.success('Display name updated successfully');
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error updating display name:', err);
-            toast.error(err.message || 'Failed to update display name');
+            toast.error(getErrorMessage(err) || 'Failed to update display name');
         } finally {
             setIsSavingDisplayName(false);
         }
@@ -214,9 +215,9 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
             // Remove from local state
             setUsers(prev => prev.filter(u => u.id !== deleteConfirmUser.id));
             toast.success('User deleted successfully');
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error deleting user:', err);
-            toast.error(err.message || 'Failed to delete user');
+            toast.error(getErrorMessage(err) || 'Failed to delete user');
         } finally {
             setIsDeleting(false);
             setDeleteConfirmUser(null);
@@ -251,9 +252,9 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
             toast.success('User created successfully');
             setIsCreateOpen(false);
             fetchData(); // Refrescar lista
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error creating user:', err);
-            toast.error(err.message || 'Failed to create user');
+            toast.error(getErrorMessage(err) || 'Failed to create user');
         } finally {
             setIsCreating(false);
         }
@@ -416,10 +417,9 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
                                             {/* Delete Button (users.manage permission + lower rank) */}
                                             {canDeleteUsers(user.hierarchy_level) && user.id !== profile?.id && (
                                                 <Button
-                                                    variant="secondary"
+                                                    variant="destructive-outline"
                                                     size="icon-sm"
                                                     onClick={() => setDeleteConfirmUser(user)}
-                                                    className="border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
                                                 >
                                                     <Trash2 />
                                                 </Button>

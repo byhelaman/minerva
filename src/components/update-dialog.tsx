@@ -48,7 +48,7 @@ export function UpdateDialog() {
 
     return (
         <AlertDialog open={!!update}>
-            <AlertDialogContent>
+            <AlertDialogContent className="sm:max-w-100!">
                 <AlertDialogHeader>
                     <AlertDialogTitle>
                         New version available: {displayUpdate.version}

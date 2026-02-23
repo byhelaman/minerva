@@ -1,11 +1,13 @@
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Unplug, Link2, RefreshCw, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { getErrorMessage } from "@/lib/utils";
 import { toast } from "sonner";
+import { useOAuthPolling } from "@/hooks/use-oauth-polling";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -28,11 +30,19 @@ interface ZoomAccount {
 export function ZoomIntegration() {
     const [isLoading, setIsLoading] = useState(true);
     const [account, setAccount] = useState<ZoomAccount | null>(null);
-    const [isConnecting, setIsConnecting] = useState(false);
     const [isDisconnecting, setIsDisconnecting] = useState(false);
 
     // Store de Zoom para lógica de sincronización
     const { triggerSync, isSyncing } = useZoomStore();
+
+    const { isConnecting, connect, startPolling, cancel: handleCancelConnect } = useOAuthPolling({
+        functionName: 'zoom-auth',
+        pollInterval: 2000,
+        onSuccess: (acct) => {
+            setAccount(acct as unknown as ZoomAccount);
+            toast.success("Zoom connected successfully!");
+        },
+    });
 
     const fetchStatus = async () => {
         try {
@@ -60,87 +70,14 @@ export function ZoomIntegration() {
         fetchStatus();
     }, []);
 
-    const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-    const handleCancelConnect = () => {
-        if (timerRef.current) {
-            clearInterval(timerRef.current);
-            timerRef.current = null;
-        }
-        setIsConnecting(false);
-        toast.info("Connection cancelled");
-    };
-
     const handleConnect = async () => {
         try {
-            setIsConnecting(true);
-
-            // 1. Obtener URL de autenticación desde la Edge Function
-            const { data, error } = await supabase.functions.invoke('zoom-auth', {
-                body: { action: 'init' },
-                method: 'POST'
-            });
-
-            if (error) throw error;
-            if (!data?.url) throw new Error("No URL returned");
-
-            // 2. Abrir navegador (Tauri - Predeterminado del sistema)
-            // @ts-ignore
-            await openUrl(data.url);
-
+            const url = await connect();
+            await openUrl(url);
             toast.info("Please complete authentication in your browser...");
-
-            // 3. Iniciar sondeo (polling) para verificar éxito
-            const startTime = Date.now();
-            const POLL_INTERVAL = 2000; // 2s
-            const TIMEOUT = 180000; // 3 min
-            let connectionHandled = false; // Flag para evitar toast duplicado
-
-            // Limpiar cualquier timer previo por seguridad
-            if (timerRef.current) clearInterval(timerRef.current);
-
-            timerRef.current = setInterval(async () => {
-                // Si ya manejamos la conexión o fue cancelada, detener
-                if (connectionHandled || !timerRef.current) return;
-
-                if (Date.now() - startTime > TIMEOUT) {
-                    if (timerRef.current) {
-                        clearInterval(timerRef.current);
-                        timerRef.current = null;
-                    }
-                    setIsConnecting(false);
-                    toast.error("Connection timed out. Please try again.");
-                    return;
-                }
-
-                try {
-                    const { data: statusData } = await supabase.functions.invoke('zoom-auth', {
-                        body: { action: 'status' },
-                        method: 'POST'
-                    });
-
-                    if (statusData?.connected && !connectionHandled) {
-                        connectionHandled = true; // Marcar como manejado ANTES de cualquier acción
-                        if (timerRef.current) {
-                            clearInterval(timerRef.current);
-                            timerRef.current = null;
-                        }
-                        setAccount(statusData.account);
-                        setIsConnecting(false);
-                        toast.success("Zoom connected successfully!");
-                    }
-                } catch {
-                    // Ignorar — polling silencioso
-                }
-            }, POLL_INTERVAL);
-
-        } catch (error: any) {
-            toast.error(error.message || "Failed to start connection");
-            setIsConnecting(false);
-            if (timerRef.current) {
-                clearInterval(timerRef.current);
-                timerRef.current = null;
-            }
+            startPolling();
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error) || "Failed to start connection");
         }
     };
 
@@ -167,7 +104,7 @@ export function ZoomIntegration() {
             // Pero dado que 'setAccount(null)' elimina el diálogo completamente del DOM (renderizando el botón 'Connect' en su lugar),
             // no importa si prevenimos el default o no respecto al cierre.
             // La parte importante es deshabilitar el botón mientras la petición está en vuelo.
-        } catch (error: any) {
+        } catch (error: unknown) {
             toast.error("Failed to disconnect");
         } finally {
             setIsDisconnecting(false);
@@ -178,9 +115,9 @@ export function ZoomIntegration() {
         try {
             await triggerSync();
             toast.success("Zoom data synced successfully");
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Sync failed", error);
-            toast.error(error.message || "Failed to sync Zoom data");
+            toast.error(getErrorMessage(error) || "Failed to sync Zoom data");
         }
     };
 
@@ -249,10 +186,9 @@ export function ZoomIntegration() {
                             <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                     <Button
-                                        variant="outline"
+                                        variant="destructive-outline"
                                         size="sm"
                                         disabled={isDisconnecting}
-                                        className="border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
                                     >
                                         {isDisconnecting ? <Loader2 className="animate-spin" /> : <Unplug />}
                                         {isDisconnecting ? "Waiting..." : "Disconnect"}
