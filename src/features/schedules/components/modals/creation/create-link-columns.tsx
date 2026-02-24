@@ -98,7 +98,7 @@ export const getCreateLinkColumns = (
             id: "select",
             size: 36,
             header: ({ table }) => (
-                <div className="flex justify-center items-center mb-1 w-[36px]">
+                <div className="flex justify-center items-center mb-1 w-9">
                     <Checkbox
                         checked={table.getIsAllPageRowsSelected()}
                         onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
@@ -108,7 +108,7 @@ export const getCreateLinkColumns = (
                 </div>
             ),
             cell: ({ row }) => (
-                <div className="flex justify-center w-[36px]">
+                <div className="flex justify-center w-9">
                     <Checkbox
                         checked={row.getIsSelected()}
                         disabled={!row.getCanSelect()}
@@ -307,14 +307,14 @@ export const getCreateLinkColumns = (
                 <DataTableColumnHeader column={column} title="Program" />
             ),
             cell: ({ row }) => (
-                <div className="truncate max-w-[300px]">{row.getValue("inputName")}</div>
+                <div className="truncate max-w-75">{row.getValue("inputName")}</div>
             ),
         },
         {
             accessorKey: "meeting_id",
             size: 130,
             header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Meeting ID" className="justify-center" />
+                <DataTableColumnHeader column={column} title="Meeting ID" className="justify-center text-center" />
             ),
             cell: ({ row }) => {
                 const meetingId = row.getValue("meeting_id") as string | undefined;
@@ -366,7 +366,7 @@ export const getCreateLinkColumns = (
                                 variant="outline"
                                 size="sm"
                                 className={cn(
-                                    "h-8 w-full justify-between text-left font-normal",
+                                    "h-9 w-full justify-between text-left font-normal",
                                     !hasDate && !hasTime && "text-muted-foreground"
                                 )}
                             >
@@ -443,7 +443,8 @@ export const getCreateLinkColumns = (
                                         value={result.selected_host || ''}
                                         onChange={(host, email, id) => onHostChange?.(result.id, host, email, id)}
                                         instructors={hostsList || []}
-                                        popoverClassName="max-w-[200px]"
+                                        className="h-9"
+                                        popoverClassName="max-w-50"
                                     />
                                 </Field>
                             </div>

@@ -225,15 +225,16 @@ export function ToolbarFilters<TData>({
                     {overlapCount > 0 && (
                         <Button
                             variant="outline"
-                            size="sm"
+                            size="icon-sm"
                             onClick={() => setShowOverlapsOnly(!showOverlapsOnly)}
                             className={cn(
                                 "h-8 border-dashed border-destructive/50 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
                             )}
+                            title="Show Overlaps"
                         >
                             <AlertTriangle />
-                            Overlaps
-                            {showOverlapsOnly && ` (${overlapCount})`}
+                            {/* Overlaps
+                            {showOverlapsOnly && ` (${overlapCount})`} */}
                         </Button>
                     )}
                 </>

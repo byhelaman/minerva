@@ -141,6 +141,7 @@ export function DataTableToolbar<TData>({
                             size="icon-sm"
                             onClick={onRefresh}
                             disabled={disableRefresh}
+                            title="Refresh data"
                         >
                             <RefreshCw />
                         </Button>

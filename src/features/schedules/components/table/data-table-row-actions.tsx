@@ -3,6 +3,7 @@ import { type Row } from "@tanstack/react-table";
 import { MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 
+import { useAuth } from "@/components/auth-provider";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -30,6 +31,8 @@ export function DataTableRowActions({
     onDelete,
 }: DataTableRowActionsProps) {
     const schedule = row.original;
+    const { hasPermission } = useAuth();
+    const canManage = hasPermission("schedules.manage");
     const [viewDetailsOpen, setViewDetailsOpen] = useState(false);
     const [incidenceOpen, setIncidenceOpen] = useState(false);
     const [initialValues, setInitialValues] = useState<Record<string, string> | undefined>(undefined);
@@ -77,23 +80,27 @@ export function DataTableRowActions({
                     >
                         Copy Details
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleEditIncidence}>
-                        Edit Incidence
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuSub>
-                        <DropdownMenuSubTrigger>Quick Status</DropdownMenuSubTrigger>
-                        <DropdownMenuSubContent className="w-50">
-                            {QUICK_STATUS_PRESETS.map((preset) => (
-                                <DropdownMenuItem
-                                    key={preset.label}
-                                    onClick={() => handleQuickStatus(preset)}
-                                >
-                                    {preset.label}
-                                </DropdownMenuItem>
-                            ))}
-                        </DropdownMenuSubContent>
-                    </DropdownMenuSub>
+                    {canManage && (
+                        <>
+                            <DropdownMenuItem onClick={handleEditIncidence}>
+                                Edit Incidence
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuSub>
+                                <DropdownMenuSubTrigger>Quick Status</DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent className="w-50">
+                                    {QUICK_STATUS_PRESETS.map((preset) => (
+                                        <DropdownMenuItem
+                                            key={preset.label}
+                                            onClick={() => handleQuickStatus(preset)}
+                                        >
+                                            {preset.label}
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuSubContent>
+                            </DropdownMenuSub>
+                        </>
+                    )}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem variant="destructive" onClick={() => onDelete?.(schedule)}>
                         Delete

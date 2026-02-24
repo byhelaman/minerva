@@ -201,6 +201,7 @@ export function IncidenceFormContent({ uniqueInstructors, canEdit }: IncidenceFo
                                         <SelectGroup>
                                             <SelectLabel>Instructor</SelectLabel>
                                             <SelectItem value="Tardanza/Ausencia">Tardanza/Ausencia</SelectItem>
+                                            <SelectItem value="Emergencia Personal">Emergencia Personal</SelectItem>
                                             <SelectItem value="Problemas de salud">Problemas de salud</SelectItem>
                                             <SelectItem value="Problema eléctrico/Wi-Fi">Problema eléctrico/Wi-Fi</SelectItem>
                                         </SelectGroup>
@@ -243,6 +244,7 @@ export function IncidenceFormContent({ uniqueInstructors, canEdit }: IncidenceFo
                                     <SelectContent>
                                         <SelectItem value="Q&T (Quality & Training)">Q&T (Quality & Training)</SelectItem>
                                         <SelectItem value="Programación Latam">Programación Latam</SelectItem>
+                                        <SelectItem value="Matrículas Latam">Matrículas Latam</SelectItem>
                                         <SelectItem value="Coordinación B2C (Consumidor)">Coordinación B2C (Consumidor)</SelectItem>
                                         <SelectItem value="Coordinación B2B (Corporativo)">Coordinación B2B (Corporativo)</SelectItem>
                                         <SelectItem value="Coordinación ESNA">Coordinación ESNA</SelectItem>

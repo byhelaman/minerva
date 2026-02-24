@@ -355,7 +355,7 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className={cn(
                 "flex flex-col max-h-[85vh] gap-6",
-                step === 'input' ? "sm:max-w-lg" : "max-w-4xl!"
+                step === 'input' ? "sm:max-w-lg" : "max-w-240!"
             )}>
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
@@ -409,9 +409,9 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
                 {/* Step 2: Results */}
                 {step === 'results' && (
                     <>
-                        <div className="flex-1 flex flex-col min-h-0 overflow-hidden pr-2">
+                        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                             {isLoadingData || isValidating || isExecuting ? (
-                                <div className="flex flex-col items-center justify-center gap-2 h-full border border-dashed rounded-lg bg-muted/10 p-8 min-h-[400px]">
+                                <div className="flex flex-col items-center justify-center gap-2 h-full border border-dashed rounded-lg bg-muted/10 p-8 min-h-100">
                                     <div className="relative flex items-center justify-center">
                                         <Loader2 className="h-6 w-6 animate-spin" />
                                     </div>

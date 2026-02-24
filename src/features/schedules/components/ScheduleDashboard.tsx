@@ -432,7 +432,7 @@ export function ScheduleDashboard() {
                 initialPageSize={100}
                 onPublish={() => setIsPublishModalOpen(true)}
                 isPublishing={isPublishing}
-                canPublish={schedules.length > 0}
+                canPublish={schedules.length > 0 && activeDate !== null}
                 onAddRow={() => setIsAddModalOpen(true)}
             />
 

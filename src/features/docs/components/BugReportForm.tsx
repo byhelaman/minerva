@@ -169,7 +169,7 @@ export function BugReportButton() {
                     align="start"
                     className="rounded-lg"
                 >
-                    <DropdownMenuItem className="cursor-pointer">
+                    <DropdownMenuItem className="cursor-pointer" disabled>
                         Release Notes
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => setDocsOpen(true)} className="cursor-pointer">
@@ -178,10 +178,10 @@ export function BugReportButton() {
                     <DropdownMenuItem onSelect={() => setBugOpen(true)} className="cursor-pointer">
                         Report a Bug
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="cursor-pointer">
+                    <DropdownMenuItem className="cursor-pointer" disabled>
                         Contact Support
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="cursor-pointer">
+                    <DropdownMenuItem className="cursor-pointer" disabled>
                         Change language
                     </DropdownMenuItem>
                 </DropdownMenuContent>

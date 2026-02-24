@@ -43,8 +43,8 @@ interface ScheduleDataTableProps<TData, TValue> {
     controlledSelection?: Record<string, boolean>;
     onControlledSelectionChange?: (selection: Record<string, boolean>) => void;
 
-    // Error row highlighting (for sync/import previews)
-    errorRowKeys?: Set<string>;
+    // Custom row className callback (for error highlighting, pending changes, etc.)
+    getRowClassName?: (row: TData) => string | undefined;
 
     // Configuración unificada de filtros
     filterConfig?: {
@@ -421,9 +421,6 @@ export function ScheduleDataTable<TData, TValue>({
                                     const isActiveByProgram = original.program && props.activePrograms?.has(original.program);
                                     const isActive = isActiveByMeetingId || isActiveByProgram;
 
-                                    // Detectar si la fila tiene error de validación
-                                    const hasError = props.errorRowKeys?.has(rowKey);
-
                                     return (
                                         <TableRow
                                             key={row.id}
@@ -431,7 +428,7 @@ export function ScheduleDataTable<TData, TValue>({
                                             className={cn(
                                                 isConflict && "bg-red-50 dark:bg-red-950/20 border-l-2 border-l-red-500",
                                                 isActive && "bg-green-50 dark:bg-green-950/20 border-l-2 border-l-green-500",
-                                                hasError && "bg-red-50 dark:bg-red-950/20 border-l-2 border-l-red-500"
+                                                props.getRowClassName?.(row.original)
                                             )}
                                         >
                                             {row.getVisibleCells().map((cell) => (

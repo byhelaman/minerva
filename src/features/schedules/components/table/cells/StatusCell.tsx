@@ -114,7 +114,7 @@ export function StatusCell({
                                         </div>
                                     </div>
                                 )}
-                                <div className="space-y-2 max-h-[280px] overflow-y-auto no-scrollbar">
+                                <div className="space-y-2 max-h-60 overflow-y-auto no-scrollbar">
                                     {ambiguous.map((cand, i) => {
                                         const isSelected = matched?.meeting_id === cand.meeting_id;
                                         return (

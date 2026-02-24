@@ -1,17 +1,19 @@
 import { useCallback, useMemo, useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ScheduleDataTable } from "@schedules/components/table/ScheduleDataTable";
 import { useZoomStore } from "@/features/matching/stores/useZoomStore";
 import { useAuth } from "@/components/auth-provider";
 import { type ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "@schedules/components/table/data-table-column-header";
-import { Loader2, MoreHorizontal } from "lucide-react";
+import { CircleAlert, Loader2, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { formatTimestampForDisplay } from "@/lib/date-utils";
+import { InstructorSelector } from "../InstructorSelector";
+import { useInstructors } from "@schedules/hooks/useInstructors";
 
 interface SearchLinkModalProps {
     open: boolean;
@@ -31,14 +33,46 @@ interface MeetingRow {
 
 
 export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
-    const { meetings, users, isLoadingData, fetchZoomData, deleteMeeting, deleteMeetings } = useZoomStore();
+    const { meetings, users, isLoadingData, fetchZoomData, deleteMeeting, deleteMeetings, updateMatchings } = useZoomStore();
     const { hasPermission } = useAuth();
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [meetingsToDelete, setMeetingsToDelete] = useState<MeetingRow[]>([]);
     const [isDeleting, setIsDeleting] = useState(false);
     const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
+    const [editingHostIds, setEditingHostIds] = useState<Set<string>>(new Set());
+    const [pendingHostChanges, setPendingHostChanges] = useState<Map<string, { newHost: string; newEmail: string }>>(new Map());
+    const [isApplyingHostChanges, setIsApplyingHostChanges] = useState(false);
+    const [showHostConfirm, setShowHostConfirm] = useState(false);
+    const [showPendingOnly, setShowPendingOnly] = useState(false);
 
     const canDelete = hasPermission('meetings.delete');
+    const canManageHost = hasPermission('system.manage');
+    const uniqueInstructors = useInstructors();
+
+    const handleApplyHostChanges = useCallback(async () => {
+        if (pendingHostChanges.size === 0) return;
+        setIsApplyingHostChanges(true);
+        try {
+            const updates = Array.from(pendingHostChanges.entries()).map(([meetingId, { newEmail }]) => ({
+                meeting_id: meetingId,
+                schedule_for: newEmail,
+            }));
+            const result = await updateMatchings(updates);
+            if (result.failed > 0) {
+                toast.error(`${result.failed} failed`, { description: result.errors[0] });
+            }
+            if (result.succeeded > 0) {
+                toast.success(`${result.succeeded} host${result.succeeded > 1 ? 's' : ''} updated`);
+            }
+            setPendingHostChanges(new Map());
+            setEditingHostIds(new Set());
+            await fetchZoomData({ force: true });
+        } catch {
+            toast.error("Failed to update hosts");
+        } finally {
+            setIsApplyingHostChanges(false);
+        }
+    }, [pendingHostChanges, updateMatchings, fetchZoomData]);
 
     const handleConfirmDelete = async () => {
         if (meetingsToDelete.length === 0) return;
@@ -77,7 +111,7 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
             id: "select",
             size: 36,
             header: ({ table }) => (
-                <div className="flex justify-center items-center mb-1">
+                <div className="flex justify-center items-center mb-1 w-8">
                     <Checkbox
                         checked={
                             table.getIsAllPageRowsSelected() ||
@@ -102,6 +136,7 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
             enableSorting: false,
             enableHiding: false,
         },
+
         {
             accessorKey: "meeting_id",
             size: 120,
@@ -131,9 +166,32 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
         },
         {
             accessorKey: "host_name",
-            size: 130,
+            size: 140,
             header: ({ column }) => <DataTableColumnHeader column={column} title="Host" />,
-            cell: ({ row }) => <div className="truncate max-w-30">{row.getValue("host_name")}</div>,
+            cell: ({ row }) => {
+                const meeting = row.original;
+                const isEditing = editingHostIds.has(meeting.meeting_id);
+                if (!canManageHost) {
+                    return <div className="truncate max-w-30">{meeting.host_name}</div>;
+                }
+                return (
+                    <InstructorSelector
+                        value={meeting.host_name}
+                        onChange={(name, email) => {
+                            if (!email) return;
+                            setPendingHostChanges(prev => {
+                                const next = new Map(prev);
+                                next.set(meeting.meeting_id, { newHost: name, newEmail: email });
+                                return next;
+                            });
+                        }}
+                        instructors={uniqueInstructors}
+                        disabled={!isEditing}
+                        className="w-45"
+                        popoverClassName="max-w-50"
+                    />
+                );
+            },
         },
         {
             accessorKey: "created_at",
@@ -182,6 +240,43 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
                                 <DropdownMenuItem onClick={handleCopyJoinUrl} disabled={!hasJoinUrl}>
                                     Copy join URL
                                 </DropdownMenuItem>
+                                {canManageHost && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            onClick={() => setEditingHostIds(prev => {
+                                                const next = new Set(prev);
+                                                if (next.has(meeting.meeting_id)) {
+                                                    next.delete(meeting.meeting_id);
+                                                } else {
+                                                    next.add(meeting.meeting_id);
+                                                }
+                                                return next;
+                                            })}
+                                        >
+                                            {editingHostIds.has(meeting.meeting_id) ? "Disable manual" : "Enable manual"}
+                                        </DropdownMenuItem>
+                                        {(editingHostIds.has(meeting.meeting_id) && pendingHostChanges.has(meeting.meeting_id)) && (
+                                            <DropdownMenuItem
+                                                disabled={!pendingHostChanges.has(meeting.meeting_id)}
+                                                onClick={() => {
+                                                    setPendingHostChanges(prev => {
+                                                        const next = new Map(prev);
+                                                        next.delete(meeting.meeting_id);
+                                                        return next;
+                                                    });
+                                                    setEditingHostIds(prev => {
+                                                        const next = new Set(prev);
+                                                        next.delete(meeting.meeting_id);
+                                                        return next;
+                                                    });
+                                                }}
+                                            >
+                                                Reset host
+                                            </DropdownMenuItem>
+                                        )}
+                                    </>
+                                )}
                                 {canDelete && (
                                     <>
                                         <DropdownMenuSeparator />
@@ -199,7 +294,7 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
                 );
             },
         },
-    ], [canDelete]);
+    ], [canDelete, canManageHost, uniqueInstructors, editingHostIds, pendingHostChanges]);
 
     // Crear mapa de usuarios para lookup rápido
     const userMap = useMemo(() => {
@@ -210,23 +305,29 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
         return map;
     }, [users]);
 
-    // Transformar meetings a filas de tabla (excluir pending deletes)
+    // Transformar meetings a filas de tabla (excluir pending deletes, aplicar pending host changes)
     const tableData: MeetingRow[] = useMemo(() => {
         return meetings
             .filter(m => !pendingDeleteIds.has(m.meeting_id))
             .map(meeting => {
                 const host = userMap.get(meeting.host_id);
+                const pending = pendingHostChanges.get(meeting.meeting_id);
                 return {
                     id: meeting.meeting_id,
                     meeting_id: meeting.meeting_id,
                     topic: meeting.topic,
-                    host_email: host?.email || 'Unknown',
-                    host_name: host?.display_name || 'Unknown',
+                    host_email: pending?.newEmail || host?.email || 'Unknown',
+                    host_name: pending?.newHost || host?.display_name || 'Unknown',
                     created_at: meeting.created_at || meeting.start_time,
                     join_url: meeting.join_url,
                 };
             });
-    }, [meetings, userMap, pendingDeleteIds]);
+    }, [meetings, userMap, pendingDeleteIds, pendingHostChanges]);
+
+    const filteredData = useMemo(() => {
+        if (!showPendingOnly) return tableData;
+        return tableData.filter(row => pendingHostChanges.has(row.meeting_id));
+    }, [tableData, showPendingOnly, pendingHostChanges]);
 
     // Handler para refresh
     const handleRefresh = async () => {
@@ -261,7 +362,7 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="flex-1 flex flex-col min-h-0 overflow-hidden pr-2 pb-2">
+                    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                         {isLoading ? (
                             <div className="flex flex-col items-center justify-center gap-2 h-full border border-dashed rounded-lg bg-muted/10 p-8 min-h-100">
                                 <div className="relative flex items-center justify-center">
@@ -277,25 +378,84 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
                         ) : (
                             <ScheduleDataTable
                                 columns={searchColumns}
-                                data={tableData}
+                                data={filteredData}
                                 onRefresh={handleRefresh}
                                 hideFilters
                                 hideUpload
                                 hideActions
                                 hideOverlaps
-
+                                customFilterItems={pendingHostChanges.size > 0 ? (
+                                    <Button
+                                        variant="outline"
+                                        size="icon-sm"
+                                        onClick={() => setShowPendingOnly(!showPendingOnly)}
+                                        className="h-8 border-dashed border-amber-500/50 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-400 dark:bg-amber-500/10 dark:hover:bg-amber-500/20 dark:border-amber-500/50"
+                                        title="Show Pending"
+                                    >
+                                        <CircleAlert />
+                                    </Button>
+                                ) : undefined}
                                 initialPageSize={100}
                                 onBulkCopy={handleBulkCopy}
                                 onBulkDelete={canDelete ? (rows) => setMeetingsToDelete(rows as MeetingRow[]) : undefined}
+                                getRowClassName={(row) => pendingHostChanges.has(row.meeting_id) ? "bg-amber-50 dark:bg-amber-950/20 border-l-2 border-l-amber-500" : undefined}
                             />
                         )}
                     </div>
-                    {/* <DialogFooter>
-                        <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-                    </DialogFooter> */}
 
+                    <DialogFooter className="mt-auto flex-col sm:flex-row gap-4">
+                        <div className="flex items-center gap-3 mr-auto text-sm text-muted-foreground">
+                            <span>Pending: <strong className="text-foreground font-medium">{pendingHostChanges.size}</strong></span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                onClick={() => onOpenChange(false)}
+                                disabled={isApplyingHostChanges}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={() => setShowHostConfirm(true)}
+                                disabled={isApplyingHostChanges || pendingHostChanges.size === 0}
+                            >
+                                {isApplyingHostChanges ? (
+                                    <>
+                                        <Loader2 className="animate-spin" />
+                                        Executing...
+                                    </>
+                                ) : (
+                                    pendingHostChanges.size > 0 ? `Execute (${pendingHostChanges.size})` : 'Execute'
+                                )}
+                            </Button>
+                        </div>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Host Change Confirmation */}
+            <AlertDialog open={showHostConfirm} onOpenChange={setShowHostConfirm}>
+                <AlertDialogContent className="sm:max-w-100!">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {`Update ${pendingHostChanges.size} host${pendingHostChanges.size > 1 ? 's' : ''}?`}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will reassign the selected meetings to new hosts in Zoom. This action can be reversed manually.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isApplyingHostChanges}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleApplyHostChanges}
+                            disabled={isApplyingHostChanges}
+                        >
+                            {isApplyingHostChanges ? <Loader2 className="animate-spin" /> : null}
+                            Confirm
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {/* Delete Meeting Confirmation (single + bulk) */}
             <AlertDialog open={meetingsToDelete.length > 0} onOpenChange={(open) => !open && setMeetingsToDelete([])}>
@@ -328,6 +488,7 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
         </>
     );
 }

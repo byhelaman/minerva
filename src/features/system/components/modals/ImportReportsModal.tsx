@@ -201,7 +201,7 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
                         hideActions
                         hideUpload
                         hideOverlaps
-                        errorRowKeys={duplicateKeys}
+                        getRowClassName={(row) => duplicateKeys.has(getScheduleKey(row)) ? "bg-red-50 dark:bg-red-950/20 border-l-2 border-l-red-500" : undefined}
                         initialPageSize={100}
                         initialColumnVisibility={initialVisibility}
                         customFilterItems={<>{duplicatesFilterButton}{resetFilterButton}</>}

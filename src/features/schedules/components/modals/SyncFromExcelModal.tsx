@@ -324,7 +324,7 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
                         <ScheduleDataTable
                             columns={columns}
                             data={displayData}
-                            errorRowKeys={allErrorKeys}
+                            getRowClassName={(row) => allErrorKeys.has(getScheduleKey(row)) ? "bg-red-50 dark:bg-red-950/20 border-l-2 border-l-red-500" : undefined}
                             filterConfig={{
                                 showStatus: false,
                                 showIncidenceType: true,
