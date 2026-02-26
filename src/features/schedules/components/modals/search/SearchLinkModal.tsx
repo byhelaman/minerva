@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { formatTimestampForDisplay } from "@/lib/date-utils";
 import { InstructorSelector } from "../InstructorSelector";
 import { useInstructors } from "@schedules/hooks/useInstructors";
+import { ISSUE_STYLE_AMBER } from "@schedules/utils/issue-styles";
 
 interface SearchLinkModalProps {
     open: boolean;
@@ -43,7 +44,6 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
     const [pendingHostChanges, setPendingHostChanges] = useState<Map<string, { newHost: string; newEmail: string }>>(new Map());
     const [isApplyingHostChanges, setIsApplyingHostChanges] = useState(false);
     const [showHostConfirm, setShowHostConfirm] = useState(false);
-    const [showPendingOnly, setShowPendingOnly] = useState(false);
 
     const canDelete = hasPermission('meetings.delete');
     const canManageHost = hasPermission('system.manage');
@@ -324,10 +324,23 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
             });
     }, [meetings, userMap, pendingDeleteIds, pendingHostChanges]);
 
-    const filteredData = useMemo(() => {
-        if (!showPendingOnly) return tableData;
-        return tableData.filter(row => pendingHostChanges.has(row.meeting_id));
-    }, [tableData, showPendingOnly, pendingHostChanges]);
+    const externalIssueCategories = useMemo(() => {
+        if (pendingHostChanges.size === 0) return undefined;
+        return [{
+            key: 'pending',
+            label: 'Pending',
+            count: pendingHostChanges.size,
+            icon: CircleAlert,
+            activeClassName: ISSUE_STYLE_AMBER
+        }];
+    }, [pendingHostChanges.size]);
+
+    const issueRowKeys = useMemo(() => {
+        if (pendingHostChanges.size === 0) return undefined;
+        return {
+            pending: new Set(pendingHostChanges.keys())
+        };
+    }, [pendingHostChanges]);
 
     // Handler para refresh
     const handleRefresh = async () => {
@@ -378,23 +391,15 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
                         ) : (
                             <ScheduleDataTable
                                 columns={searchColumns}
-                                data={filteredData}
+                                data={tableData}
                                 onRefresh={handleRefresh}
                                 hideFilters
                                 hideUpload
                                 hideActions
                                 hideOverlaps
-                                customFilterItems={pendingHostChanges.size > 0 ? (
-                                    <Button
-                                        variant="outline"
-                                        size="icon-sm"
-                                        onClick={() => setShowPendingOnly(!showPendingOnly)}
-                                        className="h-8 border-dashed border-amber-500/50 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-400 dark:bg-amber-500/10 dark:hover:bg-amber-500/20 dark:border-amber-500/50"
-                                        title="Show Pending"
-                                    >
-                                        <CircleAlert />
-                                    </Button>
-                                ) : undefined}
+                                externalIssueCategories={externalIssueCategories}
+                                issueRowKeys={issueRowKeys}
+                                getRowKey={(row) => row.meeting_id}
                                 initialPageSize={100}
                                 onBulkCopy={handleBulkCopy}
                                 onBulkDelete={canDelete ? (rows) => setMeetingsToDelete(rows as MeetingRow[]) : undefined}

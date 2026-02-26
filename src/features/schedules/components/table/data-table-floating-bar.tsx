@@ -7,6 +7,7 @@ interface DataTableFloatingBarProps {
     selectedCount: number;
     onCopy?: () => void;
     onCopyAsTable?: () => void;
+    onCopyAsExcel?: () => void;
     onDelete?: () => void;
     onClearSelection: () => void;
 }
@@ -15,12 +16,13 @@ export function DataTableFloatingBar({
     selectedCount,
     onCopy,
     onCopyAsTable,
+    onCopyAsExcel,
     onDelete,
     onClearSelection,
 }: DataTableFloatingBarProps) {
-    if (selectedCount === 0 || (!onCopy && !onCopyAsTable && !onDelete)) return null;
+    if (selectedCount === 0 || (!onCopy && !onCopyAsTable && !onCopyAsExcel && !onDelete)) return null;
 
-    const hasCopyOptions = onCopy && onCopyAsTable;
+    const hasCopyOptions = onCopy && (onCopyAsTable || onCopyAsExcel);
 
     return (
         <div className="sticky bottom-4 z-10 mx-auto w-fit flex items-center gap-2 rounded-lg border bg-background px-4 py-2 pr-3 shadow-md animate-in fade-in slide-in-from-bottom-2 duration-200">
@@ -45,6 +47,11 @@ export function DataTableFloatingBar({
                         <DropdownMenuItem onSelect={onCopyAsTable}>
                             Table format
                         </DropdownMenuItem>
+                        {onCopyAsExcel && (
+                            <DropdownMenuItem onSelect={onCopyAsExcel}>
+                                To Excel
+                            </DropdownMenuItem>
+                        )}
                     </DropdownMenuContent>
                 </DropdownMenu>
             ) : onCopy && (

@@ -5,7 +5,7 @@ import { getDataSourceColumns } from "./data-source-columns";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Loader2, CloudUpload, ChevronDown, CalendarIcon, AlertCircle, FileInput, FileOutput } from "lucide-react";
+import { Loader2, CloudUpload, ChevronDown, CalendarIcon, FileInput, FileOutput, CircleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -31,6 +31,8 @@ import { UploadModal } from "@/features/schedules/components/modals/UploadModal"
 import { AddScheduleModal } from "@/features/schedules/components/modals/AddScheduleModal";
 import { SyncFromExcelModal } from "@/features/schedules/components/modals/SyncFromExcelModal";
 import { getSchedulePrimaryKey } from "@/features/schedules/utils/string-utils";
+import { getScheduleKey } from "@/features/schedules/utils/overlap-utils";
+import { ISSUE_STYLE_AMBER, ROW_STYLE_INCIDENCE } from "@/features/schedules/utils/issue-styles";
 import { scheduleEntriesService } from "@/features/schedules/services/schedule-entries-service";
 import { secureSaveFile } from "@/lib/secure-export";
 import { utils, write } from "xlsx";
@@ -65,8 +67,7 @@ export function ReportsPage() {
     const [pendingRange, setPendingRange] = useState<DateRange | undefined>(initialDateRange);
     const [calendarOpen, setCalendarOpen] = useState(false);
 
-    // Estado de filtro
-    const [showOnlyIncidences, setShowOnlyIncidences] = useState(false);
+
 
     const [importModalOpen, setImportModalOpen] = useState(false);
     const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -105,10 +106,28 @@ export function ReportsPage() {
     // Calcular datos de tabla desde estado local (excluir eliminaciones pendientes)
     const tableData = useMemo(() => {
         const merged = mergeSchedulesWithIncidences(reportSchedules, reportIncidences);
-        const filtered = showOnlyIncidences ? merged.filter(row => !!row.type) : merged;
-        if (pendingDeleteKeys.size === 0) return filtered;
-        return filtered.filter(row => !pendingDeleteKeys.has(getSchedulePrimaryKey(row)));
-    }, [reportSchedules, reportIncidences, showOnlyIncidences, pendingDeleteKeys]);
+        if (pendingDeleteKeys.size === 0) return merged;
+        return merged.filter(row => !pendingDeleteKeys.has(getSchedulePrimaryKey(row)));
+    }, [reportSchedules, reportIncidences, pendingDeleteKeys]);
+
+    // Build incidence issue categories for the unified IssueFilter
+    const realIncidenceCount = useMemo(() => {
+        return reportIncidences.filter(i => !!i.type).length;
+    }, [reportIncidences]);
+
+    const externalIssueCategories = useMemo(() => {
+        if (realIncidenceCount === 0) return [];
+        return [{ key: 'incidences', label: 'Incidencias', count: realIncidenceCount, icon: CircleAlert, activeClassName: ISSUE_STYLE_AMBER }];
+    }, [realIncidenceCount]);
+
+    const issueRowKeys = useMemo((): Record<string, Set<string>> => {
+        if (realIncidenceCount === 0) return {};
+        const keys = new Set<string>();
+        for (const row of tableData) {
+            if (row.type) keys.add(getScheduleKey(row));
+        }
+        return { incidences: keys };
+    }, [realIncidenceCount, tableData]);
 
     // Obtener datos cuando cambia el rango de fechas (al estado local, no al store compartido)
     const fetchData = useCallback(async () => {
@@ -204,20 +223,9 @@ export function ReportsPage() {
     // Custom export: receives data already filtered by getActionData() (respects actionsRespectFilters)
     const handleExportData = async (data: Schedule[]) => {
         try {
-            // Helper to prevent CSV Injection
-            const sanitize = (val: unknown): unknown => {
-                if (typeof val === 'string' && /^[=+\-@]/.test(val)) {
-                    return `'${val}`;
-                }
-                return val;
-            };
-
             const dataToExport = data.map((item) => {
                 return {
                     ...item,
-                    instructor: sanitize(item.instructor) as string,
-                    program: sanitize(item.program) as string,
-                    branch: sanitize(item.branch) as string,
                     start_time: item.start_time, // Keep 24h format for re-import compatibility
                     end_time: item.end_time,     // Keep 24h format
                 };
@@ -385,24 +393,13 @@ export function ReportsPage() {
                             hideDefaultActions={true}
                             customExportFn={handleExportData as (data: unknown[]) => Promise<void>}
                             onBulkDelete={(rows) => setSchedulesToDelete(rows as Schedule[])}
-                            customFilterItems={(() => {
-                                // Solo contar incidencias con type (no status-only rows)
-                                const realIncidenceCount = reportIncidences.filter(i => !!i.type).length;
-                                return realIncidenceCount > 0 ? (
-                                    <Button
-                                        variant="outline"
-                                        size="icon-sm"
-                                        onClick={() => setShowOnlyIncidences(!showOnlyIncidences)}
-                                        className="border-dashed
-                                            border-amber-500/50 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 hover:text-amber-600 hover:border-amber-500/50 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20 dark:hover:text-amber-400"
-                                        title="Show Incidences"
-                                    >
-                                        <AlertCircle />
-                                        {/* Incidences
-                                        {showOnlyIncidences && ` (${realIncidenceCount})`} */}
-                                    </Button>
-                                ) : undefined;
-                            })()}
+                            customFilterItems={undefined}
+                            externalIssueCategories={externalIssueCategories}
+                            issueRowKeys={issueRowKeys}
+                            getRowClassName={(row) => {
+                                const s = row as Schedule & { type?: string };
+                                return s.type ? ROW_STYLE_INCIDENCE : undefined;
+                            }}
                             customActionItems={
                                 <>
                                     <RequirePermission permission="reports.manage">

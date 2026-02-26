@@ -6,9 +6,10 @@ import { DataTableColumnHeader } from "./data-table-column-header";
 import { DataTableRowActions } from "./data-table-row-actions";
 import { formatDateForDisplay } from "@/lib/date-utils";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Info } from "lucide-react";
 import { toast } from "sonner";
 import { useScheduleDataStore } from "@/features/schedules/stores/useScheduleDataStore";
+import { Popover, PopoverContent, PopoverDescription, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 
 export const getScheduleColumns = (
     onDelete?: (s: Schedule) => void,
@@ -109,17 +110,43 @@ export const getScheduleColumns = (
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Program" />
             ),
-            cell: ({ row }) => (
-                <div className="flex items-center gap-2">
-                    {row.original.type && (
-                        <Badge variant="outline" className="border-orange-500/50 text-orange-600 bg-orange-500/10 dark:text-orange-400 hover:bg-orange-500/20">
-                            <AlertCircle />
-                            {row.original.type}
-                        </Badge>
-                    )}
-                    <span className="truncate max-w-100">{row.getValue("program")}</span>
-                </div>
-            ),
+            cell: ({ row, table }) => {
+                const issueTooltip = (table.options.meta as { getRowIssueTooltip?: (row: Schedule) => string | undefined })?.getRowIssueTooltip?.(row.original);
+                return (
+                    <div className="flex items-center gap-2">
+                        {row.original.type && (
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Badge variant="outline" className="cursor-pointer border-orange-500/50 text-orange-600 bg-orange-500/10 dark:text-orange-400 hover:bg-orange-500/20">
+                                        <AlertCircle />
+                                        {row.original.type}
+                                    </Badge>
+                                </PopoverTrigger>
+                                <PopoverContent side="bottom" align="start" className="text-xs w-60 space-y-1">
+                                    <PopoverTitle>{row.original.type}</PopoverTitle>
+                                    <PopoverDescription>
+                                        {[row.original.subtype, row.original.description].filter(Boolean).join(' — ') || 'Sin descripción'}
+                                    </PopoverDescription>
+                                </PopoverContent>
+                            </Popover>
+                        )}
+                        {issueTooltip && !row.original.type && (
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Badge variant="outline" className="cursor-pointer">
+                                        <Info/>
+                                        Issue
+                                    </Badge>
+                                </PopoverTrigger>
+                                <PopoverContent side="bottom" align="start" className="text-xs w-60">
+                                    {issueTooltip}
+                                </PopoverContent>
+                            </Popover>
+                        )}
+                        <span className="truncate max-w-100">{row.getValue("program")}</span>
+                    </div>
+                );
+            },
         },
         {
             accessorKey: "minutes",

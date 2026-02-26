@@ -6,12 +6,14 @@ import { cn } from "@/lib/utils";
 import { RequirePermission } from "@/components/RequirePermission";
 import { ToolbarFilters } from "./toolbar/ToolbarFilters";
 import { ToolbarActions } from "./toolbar/ToolbarActions";
+import type { IssueCategory } from "./IssueFilter";
 
 interface DataTableToolbarProps<TData> {
     table: Table<TData>;
-    showOverlapsOnly: boolean;
-    setShowOverlapsOnly: (show: boolean) => void;
-    overlapCount: number;
+    issueCategories: IssueCategory[];
+    selectedIssueKeys: Set<string>;
+    onIssueSelectionChange: (keys: Set<string>) => void;
+    hasActiveIssueFilter: boolean;
     onClearSchedule?: () => void;
     onUploadClick?: () => void;
     onRefresh?: () => void;
@@ -41,9 +43,10 @@ interface DataTableToolbarProps<TData> {
 
 export function DataTableToolbar<TData>({
     table,
-    showOverlapsOnly,
-    setShowOverlapsOnly,
-    overlapCount,
+    issueCategories,
+    selectedIssueKeys,
+    onIssueSelectionChange,
+    hasActiveIssueFilter,
     onClearSchedule,
     onUploadClick,
     onRefresh,
@@ -56,7 +59,7 @@ export function DataTableToolbar<TData>({
     showLiveMode = false,
     setShowLiveMode,
     isLiveLoading = false,
-    activeMeetingsCount = 0,
+    activeMeetingsCount: _activeMeetingsCount = 0,
     onPublish,
     isPublishing = false,
     canPublish = false,
@@ -79,16 +82,16 @@ export function DataTableToolbar<TData>({
                 <ToolbarFilters
                     table={table}
                     fullData={fullData}
-                    showOverlapsOnly={showOverlapsOnly}
-                    setShowOverlapsOnly={setShowOverlapsOnly}
-                    overlapCount={overlapCount}
+                    issueCategories={issueCategories}
+                    selectedIssueKeys={selectedIssueKeys}
+                    onIssueSelectionChange={onIssueSelectionChange}
+                    hasActiveIssueFilter={hasActiveIssueFilter}
                     hideFilters={hideFilters}
                     hideUpload={hideUpload}
                     onUploadClick={onUploadClick}
                     showTypeFilter={showTypeFilter}
                     hideStatusFilter={hideStatusFilter}
                     statusOptions={statusOptions}
-                    setShowLiveMode={setShowLiveMode}
                     showBranch={showBranch}
                     showTime={showTime}
                     customFilterItems={customFilterItems}
@@ -114,7 +117,8 @@ export function DataTableToolbar<TData>({
                                 ) : (
                                     <Radio className={cn("h-4 w-4", showLiveMode && "animate-pulse")} />
                                 )}
-                                {showLiveMode && activeMeetingsCount > 0 ? `Live (${activeMeetingsCount})` : "Live"}
+                                Live
+                                {/* {showLiveMode && activeMeetingsCount > 0 ? `Live (${activeMeetingsCount})` : "Live"} */}
                             </Button>
                         </RequirePermission>
                     )}

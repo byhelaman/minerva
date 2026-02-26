@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from "react";
-import { format } from "date-fns";
 import {
     Dialog,
     DialogContent,
@@ -8,10 +7,20 @@ import {
     DialogFooter,
     DialogDescription,
 } from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-
 import { Calendar } from "@/components/ui/calendar";
-import { Loader2, ArrowLeft, AlertTriangle, X } from "lucide-react";
+import { Loader2, ArrowLeft, Plus, Equal, FilePenLine } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { type DateRange } from "react-day-picker";
@@ -25,19 +34,13 @@ import {
     getRowKey,
 } from "../../services/microsoft-import-service";
 import { supabase } from "@/lib/supabase";
-import type { Schedule } from "../../types";
-import { ensureTimeFormat } from "../../utils/time-utils";
-import { getScheduleKey } from "../../utils/overlap-utils";
+import type { Schedule } from "@schedules/types";
+import { getScheduleKey } from "@schedules/utils/overlap-utils";
+import { getSchedulePrimaryKey } from "@schedules/utils/string-utils";
+import { getFieldDiffs } from "@schedules/utils/diff-utils";
+import { ISSUE_STYLE_GREEN, ISSUE_STYLE_AMBER, ISSUE_STYLE_BLUE, ROW_STYLE_NEW, ROW_STYLE_MODIFIED, ROW_STYLE_DUPLICATE } from "@schedules/utils/issue-styles";
+import { scheduleEntriesService } from "../../services/schedule-entries-service";
 
-/** Trim + collapse internal whitespace for consistent comparison */
-function normalizeField(val: string | undefined | null): string {
-    return (val || '').trim().replace(/\s+/g, ' ');
-}
-
-/** Normalize composite key for a schedule — matches importSchedules logic */
-function normalizeKey(s: Schedule): string {
-    return `${s.date}|${ensureTimeFormat(s.start_time)}|${normalizeField(s.instructor)}|${normalizeField(s.program)}`;
-}
 
 type ModalStep = 'filter' | 'loading' | 'preview' | 'importing';
 
@@ -60,13 +63,19 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
     const [previewData, setPreviewData] = useState<Schedule[]>([]);
     const [errorMap, setErrorMap] = useState<Map<string, string[]>>(new Map());
 
-    const [showDuplicatesOnly, setShowDuplicatesOnly] = useState(false);
     const [selectedForImport, setSelectedForImport] = useState<Schedule[]>([]);
+    const [newCount, setNewCount] = useState<number>(0);
+    const [existingKeys, setExistingKeys] = useState<Set<string>>(new Set());
+    const [modifiedKeys, setModifiedKeys] = useState<Set<string>>(new Set());
+    const [identicalKeys, setIdenticalKeys] = useState<Set<string>>(new Set());
+    const [modifiedReasons, setModifiedReasons] = useState<Map<string, string>>(new Map());
+
+
 
     const { msConfig } = useScheduleSyncStore();
 
     // Columns with delete handler
-    const columns = useMemo(() => getDataSourceColumns(handleDeleteRow), []);
+    const columns = useMemo(() => getDataSourceColumns(handleDeleteRow, { hideIncidenceActions: true }), []);
 
     // Convert errorMap keys to Set for ScheduleDataTable
     const errorRowKeys = useMemo(() => new Set(errorMap.keys()), [errorMap]);
@@ -77,7 +86,7 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
         const keyToScheduleKeys = new Map<string, Set<string>>();
 
         for (const s of previewData) {
-            const nk = normalizeKey(s);
+            const nk = getSchedulePrimaryKey(s);
             keyCounts.set(nk, (keyCounts.get(nk) || 0) + 1);
 
             if (!keyToScheduleKeys.has(nk)) keyToScheduleKeys.set(nk, new Set());
@@ -109,24 +118,47 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
         return merged;
     }, [errorRowKeys, duplicateKeys]);
 
-    // Auto-reset filter when no more duplicates
-    useEffect(() => {
-        if (duplicateCount === 0 && showDuplicatesOnly) {
-            setShowDuplicatesOnly(false);
-        }
-    }, [duplicateCount, showDuplicatesOnly]);
+    // Note: duplicate filtering is now handled by the IssueFilter in ScheduleDataTable,
+    // so we just need the duplicate keys for issue categories.
 
-    // Filtered data for display
-    const displayData = useMemo(() => {
-        if (!showDuplicatesOnly) return previewData;
+    // External issue categories for the unified IssueFilter
+    const externalIssueCategories = useMemo(() => {
+        const cats: { key: string; label: string; count: number; icon?: React.ComponentType<{ className?: string }>; activeClassName?: string }[] = [];
+        if (duplicateCount > 0) cats.push({ key: 'duplicates', label: 'Duplicados', count: duplicateCount });
+        if (newCount > 0) cats.push({ key: 'new', label: 'New', count: newCount, icon: Plus, activeClassName: ISSUE_STYLE_GREEN });
+        if (modifiedKeys.size > 0) cats.push({ key: 'modified', label: 'Modified', count: modifiedKeys.size, icon: FilePenLine, activeClassName: ISSUE_STYLE_AMBER });
+        if (identicalKeys.size > 0) cats.push({ key: 'identical', label: 'Identical', count: identicalKeys.size, icon: Equal, activeClassName: ISSUE_STYLE_BLUE });
+        return cats;
+    }, [duplicateCount, newCount, modifiedKeys.size, identicalKeys.size]);
 
-        const keyCounts = new Map<string, number>();
-        for (const s of previewData) {
-            const nk = normalizeKey(s);
-            keyCounts.set(nk, (keyCounts.get(nk) || 0) + 1);
+    // Issue row keys mapping for the unified IssueFilter
+    const issueRowKeys = useMemo(() => {
+        const map: Record<string, Set<string>> = {};
+        if (duplicateCount > 0) {
+            map.duplicates = duplicateKeys;
         }
-        return previewData.filter(s => (keyCounts.get(normalizeKey(s)) || 0) > 1);
-    }, [previewData, showDuplicatesOnly]);
+
+        const newKeys = new Set<string>();
+        const modKeys = new Set<string>();
+        const idenKeys = new Set<string>();
+
+        if (newCount > 0 || modifiedKeys.size > 0 || identicalKeys.size > 0) {
+            for (const s of previewData) {
+                const pk = getSchedulePrimaryKey(s);
+                const sk = getScheduleKey(s);
+                
+                if (!existingKeys.has(pk)) newKeys.add(sk);
+                else if (modifiedKeys.has(pk)) modKeys.add(sk);
+                else if (identicalKeys.has(pk)) idenKeys.add(sk);
+            }
+        }
+
+        if (newKeys.size > 0) map.new = newKeys;
+        if (modKeys.size > 0) map.modified = modKeys;
+        if (idenKeys.size > 0) map.identical = idenKeys;
+
+        return map;
+    }, [duplicateCount, duplicateKeys, previewData, existingKeys, modifiedKeys, identicalKeys, newCount]);
 
     // Counts
     const validCount = previewData.length - errorMap.size;
@@ -140,8 +172,11 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
             setDateRange({ from: now, to: now });
             setPreviewData([]);
             setErrorMap(new Map());
-            setShowDuplicatesOnly(false);
             setSelectedForImport([]);
+            setNewCount(0);
+            setExistingKeys(new Set());
+            setModifiedKeys(new Set());
+            setIdenticalKeys(new Set());
         }
     }, [open]);
 
@@ -161,6 +196,13 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
 
     const handleLoadData = async () => {
         setStep('loading');
+        setPreviewData([]);
+        setErrorMap(new Map());
+        setSelectedForImport([]);
+        setNewCount(0);
+        setExistingKeys(new Set());
+        setModifiedKeys(new Set());
+        setIdenticalKeys(new Set());
 
         try {
             // Fetch all rows from Excel
@@ -171,8 +213,8 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
 
             // Apply date range filter
             if (dateRange?.from) {
-                const fromStr = format(dateRange.from, "yyyy-MM-dd");
-                const toStr = dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : fromStr;
+                const fromStr = dateRange.from.toISOString().split('T')[0]; // Using ISO string for consistent format
+                const toStr = dateRange.to ? dateRange.to.toISOString().split('T')[0] : fromStr;
 
                 // Filter schedules by date range
                 filteredSchedules = result.schedules.filter(s =>
@@ -186,8 +228,47 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
                 );
             }
 
+            // Compare against existing DB entries (full field comparison)
+            const uniqueDates = [...new Set(filteredSchedules.map(s => s.date))];
+            const dbMap = await scheduleEntriesService.getFullSchedulesByDates(uniqueDates);
+            
+            // Classify rows in a single pass
+            const seenInFile = new Set<string>();
+            const identical = new Set<string>();
+            const modified = new Set<string>();
+            const existing = new Set<string>();
+            let newCountLocal = 0;
+            const reasons = new Map<string, string>();
+
+            for (const s of filteredSchedules) {
+                const pk = getSchedulePrimaryKey(s);
+                
+                // Skip intra-file duplicates for DB comparison stats to avoid double-counting
+                if (seenInFile.has(pk)) continue;
+                seenInFile.add(pk);
+
+                const dbRow = dbMap.get(pk);
+                if (!dbRow) {
+                    newCountLocal++;
+                } else {
+                    existing.add(pk);
+                    const diffs = getFieldDiffs(s, dbRow);
+                    if (diffs.length === 0) {
+                        identical.add(pk);
+                    } else {
+                        modified.add(pk);
+                        reasons.set(pk, `Modified: ${diffs.join(', ')}`);
+                    }
+                }
+            }
+
             setPreviewData(filteredSchedules);
             setErrorMap(filteredErrorMap);
+            setNewCount(newCountLocal);
+            setExistingKeys(existing);
+            setIdenticalKeys(identical);
+            setModifiedKeys(modified);
+            setModifiedReasons(reasons);
             setStep('preview');
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Unknown error';
@@ -233,40 +314,13 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
         code: false,
         minutes: false,
         units: false,
-        substitute: false,
         subtype: false,
         description: false,
         department: false,
         feedback: false,
     };
 
-    // "Duplicados" filter button — same style as overlaps filter
-    const duplicatesFilterButton = duplicateCount > 0 ? (
-        <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowDuplicatesOnly(!showDuplicatesOnly)}
-            className={cn(
-                "h-8 border-dashed border-destructive/50 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
-            )}
-        >
-            <AlertTriangle />
-            Duplicados
-            {showDuplicatesOnly && ` (${duplicateCount})`}
-        </Button>
-    ) : null;
 
-    // Reset button when duplicates filter is active
-    const resetFilterButton = showDuplicatesOnly ? (
-        <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowDuplicatesOnly(false)}
-        >
-            Reset
-            <X />
-        </Button>
-    ) : null;
 
     return (
         <Dialog open={open} onOpenChange={(val) => step !== 'importing' && onOpenChange(val)}>
@@ -280,13 +334,7 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
                     <DialogDescription>
                         {step === 'filter' && "Select the date range to import"}
                         {step === 'loading' && "Fetching data from Excel..."}
-                        {step === 'preview' && (
-                            invalidCount > 0 || duplicateCount > 0
-                                ? `Fix ${invalidCount > 0 ? `${invalidCount} errors` : ''}${invalidCount > 0 && duplicateCount > 0 ? ' and ' : ''}${duplicateCount > 0 ? `${duplicateCount} duplicates` : ''} before importing`
-                                : selectedForImport.length > 0
-                                    ? `${selectedForImport.length} of ${validCount} rows selected`
-                                    : `${validCount} rows loaded — select the rows to import`
-                        )}
+                        {step === 'preview' && "Review and select the rows to import"}
                         {step === 'importing' && "Importing schedules..."}
                     </DialogDescription>
                 </DialogHeader>
@@ -323,8 +371,34 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
                     <div className="flex-1 flex flex-col min-h-0 overflow-hidden pr-2">
                         <ScheduleDataTable
                             columns={columns}
-                            data={displayData}
-                            getRowClassName={(row) => allErrorKeys.has(getScheduleKey(row)) ? "bg-red-50 dark:bg-red-950/20 border-l-2 border-l-red-500" : undefined}
+                            data={previewData}
+                            getRowClassName={(row) => {
+                                const key = getScheduleKey(row);
+                                const pk = getSchedulePrimaryKey(row as Schedule);
+                                // Errors and intra-file duplicates → red (highest priority)
+                                if (allErrorKeys.has(key)) return ROW_STYLE_DUPLICATE; // Assuming ROW_STYLE_DUPLICATE is red or similar for errors/duplicates
+                                // New (key not in DB) → green
+                                if (!existingKeys.has(pk) && step === 'preview') return ROW_STYLE_NEW;
+                                // Modified (key exists, values differ) → amber
+                                if (modifiedKeys.has(pk)) return ROW_STYLE_MODIFIED;
+                                // Identical (key exists, values match) → no highlight
+                                if (identicalKeys.has(pk)) return undefined;
+                                return undefined;
+                            }}
+                            getRowIssueTooltip={(row) => {
+                                // 1. Specific validation errors (from Zod/schema)
+                                const rowErrors = errorMap.get(getRowKey(row as Schedule));
+                                if (rowErrors) return `Errores: ${rowErrors.join(', ')}`;
+                                // 2. Intra-file duplicates
+                                const key = getScheduleKey(row);
+                                if (duplicateKeys.has(key)) return 'Duplicado: clave repetida en el archivo';
+                                // 3. Modified vs DB
+                                const pk = getSchedulePrimaryKey(row as Schedule);
+                                if (modifiedKeys.has(pk)) return { type: 'mod', message: modifiedReasons.get(pk) || '' };
+                                // 4. New record
+                                if (!existingKeys.has(pk) && step === 'preview') return 'New: registro no existe en la base de datos';
+                                return undefined;
+                            }}
                             filterConfig={{
                                 showStatus: false,
                                 showIncidenceType: true,
@@ -336,7 +410,9 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
                             hideOverlaps
                             initialPageSize={100}
                             initialColumnVisibility={initialColumnVisibility}
-                            customFilterItems={<>{duplicatesFilterButton}{resetFilterButton}</>}
+                            externalIssueCategories={externalIssueCategories}
+                            issueRowKeys={issueRowKeys}
+                            enableRowSelection={(row) => !errorMap.has(getRowKey(row as Schedule))}
                             hideBulkCopy
                             onSelectionChange={(rows) => setSelectedForImport(rows as Schedule[])}
                             onBulkDelete={(rows) => {
@@ -388,11 +464,27 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
                         <div className="flex items-center gap-6 w-full">
                             {/* Stats */}
                             <div className="flex items-center gap-3 mr-auto text-sm text-muted-foreground">
-                                <span>Valid: <strong className="text-foreground font-medium">{validCount}</strong></span>
-                                {(invalidCount > 0 || step === 'loading') && (
+                                {step === 'loading' ? (
+                                    <span className="text-muted-foreground">Processing...</span>
+                                ) : (
                                     <>
-                                        <span className="text-border">|</span>
-                                        <span>Invalid: <strong className="text-foreground font-medium">{invalidCount}</strong></span>
+                                        {(newCount > 0 || existingKeys.size > 0) ? (
+                                            <>
+                                                <span>New: <strong className="text-foreground font-medium">{newCount}</strong></span>
+                                                <span className="text-border">|</span>
+                                                <span>Modified: <strong className="text-foreground font-medium">{modifiedKeys.size}</strong></span>
+                                                <span className="text-border">|</span>
+                                                <span>Identical: <strong className="text-foreground font-medium">{identicalKeys.size}</strong></span>
+                                            </>
+                                        ) : (
+                                            <span>Valid: <strong className="text-foreground font-medium">{validCount}</strong></span>
+                                        )}
+                                        {invalidCount > 0 && (
+                                            <>
+                                                <span className="text-border">|</span>
+                                                <span>Invalid: <strong className="text-foreground font-medium">{invalidCount}</strong></span>
+                                            </>
+                                        )}
                                     </>
                                 )}
                             </div>
@@ -403,9 +495,26 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
                                     <ArrowLeft />
                                     Back
                                 </Button>
-                                <Button onClick={handleImport} disabled={!canImport || step === 'loading'}>
-                                    Import {selectedForImport.length > 0 && `(${selectedForImport.length})`}
-                                </Button>
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button disabled={!canImport || step === 'loading'}>
+                                            Import {selectedForImport.length > 0 && `(${selectedForImport.length})`}
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent className="sm:max-w-100!">
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Confirm import</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                You are about to import {selectedForImport.length} records to the database.
+                                                {modifiedKeys.size > 0 ? ` This will overwrite existing records with the modifications.` : ""}
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                            <AlertDialogAction onClick={handleImport}>Confirm</AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
                             </div>
                         </div>
                     )}

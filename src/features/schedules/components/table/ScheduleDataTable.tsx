@@ -28,9 +28,11 @@ import { DataTableToolbar } from "./data-table-toolbar";
 import { DataTableFloatingBar } from "./data-table-floating-bar";
 import { detectOverlaps, getScheduleKey } from "@schedules/utils/overlap-utils";
 import type { Schedule } from "@schedules/types";
+import type { IssueCategory } from "./IssueFilter";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { formatDateForDisplay } from "@/lib/date-utils";
+import { mapScheduleToExcelRow } from "@schedules/utils/export-utils";
 
 interface ScheduleDataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[] | ((addStatusFilter: (status: string) => void) => ColumnDef<TData, TValue>[]);
@@ -45,6 +47,9 @@ interface ScheduleDataTableProps<TData, TValue> {
 
     // Custom row className callback (for error highlighting, pending changes, etc.)
     getRowClassName?: (row: TData) => string | undefined;
+
+    // Issue tooltip callback — returns reason text (shown on hover over highlighted rows)
+    getRowIssueTooltip?: (row: TData) => string | { type: 'issue' | 'mod', message: React.ReactNode | string } | undefined;
 
     // Configuración unificada de filtros
     filterConfig?: {
@@ -61,7 +66,7 @@ interface ScheduleDataTableProps<TData, TValue> {
     hideOverlaps?: boolean;
     disableRefresh?: boolean;
     initialPageSize?: number;
-    statusOptions?: { label: string; value: string; icon?: React.ComponentType<{ className?: string }> }[];
+    statusOptions?: { label: string; value: string; count?: number; icon?: React.ComponentType<{ className?: string }> }[];
     activeMeetingIds?: string[];
     activePrograms?: Set<string>;
     showLiveMode?: boolean;
@@ -86,6 +91,13 @@ interface ScheduleDataTableProps<TData, TValue> {
     onBulkDelete?: (rows: TData[]) => void;
     onBulkCopy?: (rows: TData[]) => void;
     hideBulkCopy?: boolean;
+
+    /** Additional issue categories from parent (e.g. duplicates, modified) */
+    externalIssueCategories?: IssueCategory[];
+    /** Map of issue key → Set of row keys affected by that issue */
+    issueRowKeys?: Record<string, Set<string>>;
+    /** Optional custom row key extractor for independent data models */
+    getRowKey?: (row: TData) => string;
 }
 
 export function ScheduleDataTable<TData, TValue>({
@@ -119,7 +131,7 @@ export function ScheduleDataTable<TData, TValue>({
     );
     const [sorting, setSorting] = React.useState<SortingState>([]);
     const [globalFilter, setGlobalFilter] = React.useState("");
-    const [showOverlapsOnly, setShowOverlapsOnly] = React.useState(false);
+    const [selectedIssueKeys, setSelectedIssueKeys] = React.useState<Set<string>>(new Set());
 
     const [pagination, setPagination] = React.useState({
         pageIndex: 0,
@@ -185,18 +197,72 @@ export function ScheduleDataTable<TData, TValue>({
         return detectOverlaps(data as unknown as Schedule[]);
     }, [data, props.hideOverlaps]);
 
+    // Build unified issue categories: built-in overlaps + external categories
+    const issueCategories = React.useMemo(() => {
+        const cats: IssueCategory[] = [];
+
+        // Built-in: overlaps
+        if (overlapResult.overlapCount > 0) {
+            cats.push({ key: 'overlaps', label: 'Overlaps', count: overlapResult.overlapCount });
+        }
+
+        // External categories from parent
+        if (props.externalIssueCategories) {
+            cats.push(...props.externalIssueCategories);
+        }
+
+        return cats;
+    }, [overlapResult, props.externalIssueCategories]);
+
+    // Combined row keys for all issue types: built-in overlaps + external
+    const allIssueRowKeys = React.useMemo(() => {
+        const map: Record<string, Set<string>> = {
+            overlaps: overlapResult.allOverlaps,
+            ...props.issueRowKeys,
+        };
+        return map;
+    }, [overlapResult, props.issueRowKeys]);
+
+    // Filter data based on selected issue keys
     const tableData = React.useMemo(() => {
-        if (!showOverlapsOnly) return data;
-        return data.filter((item) =>
-            overlapResult.allOverlaps.has(getScheduleKey(item as unknown as Schedule))
-        );
-    }, [data, showOverlapsOnly, overlapResult]);
+        if (selectedIssueKeys.size === 0) return data;
+
+        // Collect all row keys that match any selected issue
+        const matchingRowKeys = new Set<string>();
+        for (const issueKey of selectedIssueKeys) {
+            const rowKeys = allIssueRowKeys[issueKey];
+            if (rowKeys) {
+                for (const rk of rowKeys) matchingRowKeys.add(rk);
+            }
+        }
+
+        return data.filter((item) => {
+            const rowKey = props.getRowKey ? props.getRowKey(item) : getScheduleKey(item as unknown as Schedule);
+            return matchingRowKeys.has(rowKey);
+        });
+    }, [data, selectedIssueKeys, allIssueRowKeys, props.getRowKey]);
 
     const table = useReactTable({
         data: tableData,
         columns: resolvedColumns,
+        meta: {
+            getRowIssueTooltip: (row: TData) => {
+                // External tooltip callback takes priority
+                const external = props.getRowIssueTooltip?.(row);
+                if (external) return external;
+                // Built-in overlap reasons
+                const key = props.getRowKey ? props.getRowKey(row) : getScheduleKey(row as unknown as Schedule);
+                if (overlapResult.timeConflicts.has(key)) {
+                    return `Time conflict: ${(row as Schedule).instructor} has overlapping schedules at this time`;
+                }
+                if (overlapResult.duplicateClasses.has(key)) {
+                    return `Duplicate class: this program has multiple instructors at the same time`;
+                }
+                return undefined;
+            },
+        },
         // Usar ID único por fila para row selection (recomendación oficial de TanStack)
-        getRowId: (row) => (row as { id?: string }).id || String(tableData.indexOf(row)),
+        getRowId: (row, index) => (row as { id?: string }).id || String(index),
         state: {
             pagination,
             sorting,
@@ -307,18 +373,20 @@ export function ScheduleDataTable<TData, TValue>({
         const thStyle = `${tdStyle} font-weight: 700;`;
 
         const getFields = (s: Record<string, unknown>) => [
-            { label: "date", value: formatDateForDisplay(String(s.date || "-")) },
-            { label: "branch", value: String(s.branch || "-") },
-            { label: "start_time", value: String(s.start_time || "-") },
-            { label: "end_time", value: String(s.end_time || "-") },
-            { label: "instructor", value: String(s.instructor || "-") },
-            { label: "program", value: String(s.program || "-") },
-            { label: "status", value: String(s.status || "-") },
-            { label: "substitute", value: String(s.substitute || "-") },
-            { label: "type", value: String(s.type || "-") },
-            { label: "subtype", value: String(s.subtype || "-") },
-            { label: "description", value: String(s.description || "-") },
-            { label: "department", value: String(s.department || "-") },
+            { label: "date", value: formatDateForDisplay(String(s.date || "")) },
+            { label: "branch", value: String(s.branch || "") },
+            { label: "start_time", value: String(s.start_time || "") },
+            { label: "end_time", value: String(s.end_time || "") },
+            { label: "instructor", value: String(s.instructor || "") },
+            { label: "program", value: String(s.program || "") },
+            { label: "minutes", value: String(s.minutes ?? "0") },
+            { label: "units", value: String(s.units ?? "0") },
+            { label: "status", value: String(s.status || "") },
+            { label: "substitute", value: String(s.substitute || "") },
+            { label: "type", value: String(s.type || "") },
+            { label: "subtype", value: String(s.subtype || "") },
+            { label: "description", value: String(s.description || "") },
+            { label: "department", value: String(s.department || "") },
         ];
 
         const headers = getFields({}).map(f => f.label);
@@ -344,14 +412,80 @@ export function ScheduleDataTable<TData, TValue>({
         });
     };
 
+    const handleBulkCopyAsExcel = () => {
+        const selectedRows = table.getFilteredSelectedRowModel().rows;
+
+        const rows = selectedRows.map(row => {
+            return mapScheduleToExcelRow(row.original as Schedule);
+        }).join("\n");
+        
+        navigator.clipboard.writeText(rows).then(() => {
+            toast.success(`${selectedRows.length} rows copied for Excel`);
+        }).catch(() => {
+            toast.error("Failed to copy to Excel");
+        });
+    };
+
+    // Memoize the faceted categories calculation to prevent severe lag during re-renders
+    // To get true faceted counts, we evaluate against data that has passed all 
+    // TanStack column and global filters, but BEFORE the IssueFilter exclusion applies.
+    const dynamicCategories = React.useMemo(() => {
+        const activeFilters = table.getState().columnFilters;
+        const activeGlobalFilter = table.getState().globalFilter as string | undefined;
+
+        const baseVisibleData = data.filter(item => {
+            const row = item as Record<string, unknown>;
+            
+            // 1. Column filters (simplified evaluation for our specific filters: branch, status, time, type)
+            for (const filter of activeFilters) {
+                const cellValue = String(row[filter.id] || '');
+                const filterValues = filter.value as string | string[];
+
+                if (Array.isArray(filterValues)) {
+                   if (!filterValues.includes(cellValue)) return false;
+                } else if (typeof filterValues === 'string') {
+                   if (!cellValue.toLowerCase().startsWith(filterValues.toLowerCase()) && 
+                       !cellValue.toLowerCase().includes(filterValues.toLowerCase())) {
+                       return false;
+                   }
+                }
+            }
+
+            // 2. Global filter
+            if (activeGlobalFilter) {
+                const terms = activeGlobalFilter.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+                if (terms.length > 0) {
+                    const searchableText = Object.values(row).map(v => String(v || '')).join(' ').toLowerCase();
+                    const matchesGlobally = terms.some(term => searchableText.includes(term));
+                    if (!matchesGlobally) return false;
+                }
+            }
+
+            return true;
+        });
+
+        // Recalculate issue counts dynamically using the base visible data
+        return issueCategories.map(cat => {
+            const keysForThisCategory = allIssueRowKeys[cat.key] || new Set();
+            
+            const activeCount = baseVisibleData.filter(item => {
+                const rowKey = props.getRowKey ? props.getRowKey(item) : getScheduleKey(item as unknown as Schedule);
+                return keysForThisCategory.has(rowKey);
+            }).length;
+
+            return { ...cat, count: activeCount };
+        });
+    }, [data, issueCategories, allIssueRowKeys, props.getRowKey, table.getState().columnFilters, table.getState().globalFilter]);
+
     return (
         <div className="flex flex-col flex-1 min-h-0 gap-4 p-1">
             {/* Toolbar with Search, Filters, and View Options */}
             <DataTableToolbar
                 table={table}
-                showOverlapsOnly={showOverlapsOnly}
-                setShowOverlapsOnly={setShowOverlapsOnly}
-                overlapCount={overlapResult.overlapCount}
+                issueCategories={dynamicCategories}
+                selectedIssueKeys={selectedIssueKeys}
+                onIssueSelectionChange={setSelectedIssueKeys}
+                hasActiveIssueFilter={selectedIssueKeys.size > 0}
                 onClearSchedule={onClearSchedule}
                 onUploadClick={onUploadClick}
                 onRefresh={onRefresh}
@@ -464,6 +598,7 @@ export function ScheduleDataTable<TData, TValue>({
                         props.onBulkCopy!(selectedRows);
                     } : handleBulkCopy)}
                     onCopyAsTable={props.hideBulkCopy || props.onBulkCopy ? undefined : handleBulkCopyAsTable}
+                    onCopyAsExcel={props.hideBulkCopy || props.onBulkCopy ? undefined : handleBulkCopyAsExcel}
                     onDelete={props.onBulkDelete ? () => {
                         // Use getSelectedRowModel (not filtered) so rows hidden by filters are also deleted
                         const selectedRows = table.getSelectedRowModel().rows.map(r => r.original);

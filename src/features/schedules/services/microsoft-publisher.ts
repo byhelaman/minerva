@@ -66,8 +66,8 @@ export async function publishIncidencesToExcel(
         inc.code,
         inc.instructor,
         inc.program,
-        String(inc.minutes || ''),         // Ensure string
-        String(inc.units || ''),           // Ensure string
+        inc.minutes ? String(inc.minutes) : '0', // Preserve 0 from empty strings
+        inc.units ? String(inc.units) : '0',       // Preserve 0 from empty strings
         inc.status || '',
         inc.substitute || '',
         inc.type || '',

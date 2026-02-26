@@ -160,7 +160,7 @@ export function DataTableFacetedFilter<TData, TValue>({
                                         <span>{option.label}</span>
                                         {count !== undefined && (
                                             <span className="text-muted-foreground ml-auto flex size-4 items-center justify-center font-mono text-xs">
-                                                {count}
+                                                {Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(count)}
                                             </span>
                                         )}
                                     </CommandItem>

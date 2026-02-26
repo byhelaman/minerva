@@ -234,6 +234,7 @@ export function ActivityLog() {
                                 );
                             })}
                         </div>
+                        {/* <ScrollBar orientation="horizontal" /> */}
                     </ScrollArea>
                 )}
             </CardContent>

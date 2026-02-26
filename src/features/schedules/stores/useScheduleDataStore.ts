@@ -254,6 +254,7 @@ export const useScheduleDataStore = create<ScheduleDataState>((set, get) => ({
             } else {
                 toast.error("Failed to save incidence.");
             }
+            throw error; // Re-throw to caller so IncidenceModal can halt execution
         }
     },
 

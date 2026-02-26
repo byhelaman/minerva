@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import { type Table } from "@tanstack/react-table";
-import { Search, X, AlertTriangle, BadgeCheck, RefreshCw, XCircle, HelpCircle, Hand, Info, User, CalendarCheck, Wrench, MonitorCog, Clock1, Clock2, Clock3, Clock4, Clock5, Clock6, Clock7, Clock8, Clock9, Clock10, Clock11, Clock12 } from "lucide-react";
+import { Search, X, BadgeCheck, RefreshCw, XCircle, HelpCircle, Hand, Info, User, CalendarCheck, Wrench, MonitorCog, Clock1, Clock2, Clock3, Clock4, Clock5, Clock6, Clock7, Clock8, Clock9, Clock10, Clock11, Clock12 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { DataTableFacetedFilter } from "../data-table-faceted-filter";
-import { cn } from "@/lib/utils";
+import { IssueFilter, type IssueCategory } from "../IssueFilter";
 import type { Schedule } from "@schedules/types";
 import { RequirePermission } from "@/components/RequirePermission";
 
@@ -63,16 +63,20 @@ const defaultTimeOptions = [
 interface ToolbarFiltersProps<TData> {
     table: Table<TData>;
     fullData: TData[];
-    showOverlapsOnly: boolean;
-    setShowOverlapsOnly: (show: boolean) => void;
-    overlapCount: number;
+    /** Issue filter categories (overlaps, duplicates, modified, etc.) */
+    issueCategories: IssueCategory[];
+    /** Currently active issue filter keys */
+    selectedIssueKeys: Set<string>;
+    /** Callback when issue filter selection changes */
+    onIssueSelectionChange: (keys: Set<string>) => void;
+    /** Whether any issue filter is active (for isFiltered check) */
+    hasActiveIssueFilter: boolean;
     hideFilters?: boolean;
     hideUpload?: boolean;
     onUploadClick?: () => void;
     showTypeFilter?: boolean;
     hideStatusFilter?: boolean;
     statusOptions?: { label: string; value: string; icon?: React.ComponentType<{ className?: string }> }[];
-    setShowLiveMode?: (show: boolean) => void;
     showBranch?: boolean;
     showTime?: boolean;
     customFilterItems?: React.ReactNode;
@@ -81,16 +85,16 @@ interface ToolbarFiltersProps<TData> {
 export function ToolbarFilters<TData>({
     table,
     fullData,
-    showOverlapsOnly,
-    setShowOverlapsOnly,
-    overlapCount,
+    issueCategories,
+    selectedIssueKeys,
+    onIssueSelectionChange,
+    hasActiveIssueFilter,
     hideFilters = false,
     hideUpload = false,
     onUploadClick,
     showTypeFilter = false,
     hideStatusFilter = false,
     statusOptions = defaultStatusOptions,
-    setShowLiveMode,
     showBranch,
     showTime,
     customFilterItems,
@@ -98,7 +102,7 @@ export function ToolbarFilters<TData>({
     const isFiltered =
         table.getState().columnFilters.length > 0 ||
         !!table.getState().globalFilter ||
-        showOverlapsOnly;
+        hasActiveIssueFilter;
 
     const isTableEmpty = !fullData || fullData.length === 0;
 
@@ -219,26 +223,12 @@ export function ToolbarFilters<TData>({
                 />
             )}
 
-            {!hideFilters && (
-                <>
-                    {/* Overlaps filter */}
-                    {overlapCount > 0 && (
-                        <Button
-                            variant="outline"
-                            size="icon-sm"
-                            onClick={() => setShowOverlapsOnly(!showOverlapsOnly)}
-                            className={cn(
-                                "h-8 border-dashed border-destructive/50 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
-                            )}
-                            title="Show Overlaps"
-                        >
-                            <AlertTriangle />
-                            {/* Overlaps
-                            {showOverlapsOnly && ` (${overlapCount})`} */}
-                        </Button>
-                    )}
-                </>
-            )}
+            {/* Unified Issue Filter — always visible (issues are critical alerts) */}
+            <IssueFilter
+                categories={issueCategories}
+                selectedKeys={selectedIssueKeys}
+                onSelectionChange={onIssueSelectionChange}
+            />
 
             {/* Reset Filter */}
             {isFiltered && (
@@ -248,8 +238,7 @@ export function ToolbarFilters<TData>({
                     onClick={() => {
                         table.resetColumnFilters();
                         table.setGlobalFilter("");
-                        setShowOverlapsOnly(false);
-                        setShowLiveMode?.(false);
+                        onIssueSelectionChange(new Set());
                     }}
                 >
                     Reset

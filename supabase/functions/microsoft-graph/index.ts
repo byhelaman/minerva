@@ -20,9 +20,33 @@ Deno.serve(async (req: Request) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
     try {
+        if (req.method !== 'POST') {
+            return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: corsHeaders })
+        }
+
         const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
         const payload = await req.json()
         const { action, folderId, fileId, sheetId, tableId, range, name, values, keyColumns, columns, style, font, dateFilter } = payload
+
+        // Validate payload — prevent arbitrary actions or empty required params
+        const KNOWN_ACTIONS = [
+            'list-children', 'list-worksheets', 'list-content', 'list-tables', 'read-table-rows',
+            'upsert-rows-by-key', 'replace-table-data',
+            'create-worksheet', 'create-table', 'update-range', 'format-range',
+        ]
+        if (!action || typeof action !== 'string' || !KNOWN_ACTIONS.includes(action)) {
+            return new Response(JSON.stringify({ error: `Invalid action: '${action}'` }), { status: 400, headers: corsHeaders })
+        }
+
+        // Validate fileId/folderId when required — must be non-empty strings
+        const needsFileId = ['list-worksheets', 'list-content', 'list-tables', 'read-table-rows', 'create-worksheet', 'create-table', 'update-range', 'format-range', 'upsert-rows-by-key', 'replace-table-data']
+        if (needsFileId.includes(action) && (!fileId || typeof fileId !== 'string')) {
+            return new Response(JSON.stringify({ error: 'fileId is required and must be a string' }), { status: 400, headers: corsHeaders })
+        }
+        const needsFolderId = ['list-children']
+        if (needsFolderId.includes(action) && (!folderId || typeof folderId !== 'string')) {
+            return new Response(JSON.stringify({ error: 'folderId is required and must be a string' }), { status: 400, headers: corsHeaders })
+        }
 
         // Determinar el permiso requerido según la acción
         const readActions = ['list-children', 'list-worksheets', 'list-content', 'list-tables', 'read-table-rows'];
@@ -87,7 +111,7 @@ Deno.serve(async (req: Request) => {
                 result = await syncControllers.handleReplaceTableData(token, fileId, sheetId, tableId, values, range)
                 break
             case 'upsert-rows-by-key':
-                result = await syncControllers.handleUpsertRowsByKey(token, fileId, tableId, values, keyColumns)
+                result = await syncControllers.handleUpsertRowsByKey(token, fileId, sheetId, tableId, values, keyColumns, range)
                 break
 
             default:

@@ -4,8 +4,11 @@ import type { Schedule } from "@/features/schedules/types";
 import { DataTableColumnHeader } from "@/features/schedules/components/table/data-table-column-header";
 import { DataTableRowActions } from "@/features/schedules/components/table/data-table-row-actions";
 import { formatDateForDisplay } from "@/lib/date-utils";
+import { Badge } from "@/components/ui/badge";
+import { Info } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDef<Schedule>[] => [
+export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, options?: { hideIncidenceActions?: boolean }): ColumnDef<Schedule>[] => [
     {
         id: "select",
         size: 36,
@@ -100,11 +103,40 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDe
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="program" />
         ),
-        cell: ({ row }) => (
-            <div className="truncate max-w-90" title={row.getValue("program")}>
-                {row.getValue("program")}
-            </div>
-        ),
+        cell: ({ row, table }) => {
+            const issueData = (table.options.meta as { getRowIssueTooltip?: (row: Schedule) => string | { type: string; message: React.ReactNode | string } | undefined })?.getRowIssueTooltip?.(row.original);
+            
+            let isMod = false;
+            let tooltipMessage: React.ReactNode | string | undefined = undefined;
+            
+            if (issueData) {
+                if (typeof issueData === 'object' && 'type' in issueData) {
+                    isMod = issueData.type === 'mod';
+                    tooltipMessage = issueData.message;
+                } else {
+                    tooltipMessage = issueData;
+                }
+            }
+
+            return (
+                <div className="flex items-center gap-2">
+                    {tooltipMessage && (
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Badge variant="outline" className={isMod ? "text-amber-600 bg-amber-500/10 border-amber-500/50 cursor-pointer shrink-0" : "cursor-pointer shrink-0"}>
+                                    <Info />
+                                    {isMod ? "Mod" : "Issue"}
+                                </Badge>
+                            </PopoverTrigger>
+                            <PopoverContent side="bottom" align="start" className="text-xs w-auto max-w-md">
+                                {tooltipMessage}
+                            </PopoverContent>
+                        </Popover>
+                    )}
+                    <span className="truncate max-w-90" title={row.getValue("program")}>{row.getValue("program")}</span>
+                </div>
+            );
+        },
     },
     {
         accessorKey: "minutes",
@@ -190,6 +222,6 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDe
     {
         id: "actions",
         size: 50,
-        cell: ({ row }) => <DataTableRowActions row={row} onDelete={onDelete} />,
+        cell: ({ row }) => <DataTableRowActions row={row} onDelete={onDelete} hideIncidenceActions={options?.hideIncidenceActions} />,
     },
 ];

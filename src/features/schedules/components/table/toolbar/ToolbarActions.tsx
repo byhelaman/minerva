@@ -151,8 +151,14 @@ export function ToolbarActions<TData>({
                     item.code,
                     item.instructor,
                     item.program,
-                    item.minutes,
-                    item.units
+                    item.minutes ?? 0,
+                    item.units ?? 0,
+                    item.status || "",
+                    item.type || "",
+                    item.subtype || "",
+                    item.description || "",
+                    item.department || "",
+                    item.substitute || ""
                 ].join("\t");
 
             }).join("\n");
@@ -174,22 +180,13 @@ export function ToolbarActions<TData>({
         }
 
         try {
-            // Helper to prevent CSV Injection
-            const sanitize = (val: unknown): unknown => {
-                if (typeof val === 'string' && /^[=+\-@]/.test(val)) {
-                    return `'${val}`;
-                }
-                return val;
-            };
-
             const dataToExport = data.map((item) => {
                 return {
                     ...item,
-                    instructor: sanitize(item.instructor) as string,
-                    program: sanitize(item.program) as string,
-                    branch: sanitize(item.branch) as string,
                     start_time: formatTimeTo12Hour(item.start_time),
                     end_time: formatTimeTo12Hour(item.end_time),
+                    minutes: item.minutes ?? 0,
+                    units: item.units ?? 0,
                 };
             });
 

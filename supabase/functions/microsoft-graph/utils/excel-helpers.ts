@@ -40,8 +40,10 @@ export function normalizeDate(value: unknown): string {
     }
     const num = Number(value);
     if (!isNaN(num) && num > 25000 && num < 60000) {
-        const excelEpoch = new Date(1900, 0, 1);
-        const date = new Date(excelEpoch.getTime() + (num - 2) * 86400000);
+        // Use UTC epoch: 25569 = days between 1900-01-01 and 1970-01-01
+        // This matches the frontend excel-parser.ts calculation
+        const utcDays = Math.floor(num - 25569);
+        const date = new Date(utcDays * 86400 * 1000);
         return date.toISOString().substring(0, 10);
     }
     return str;
@@ -70,6 +72,6 @@ export function normalizeTime(value: unknown): string {
  * Normaliza líneas de texto, eliminando espacios en blanco finales y límites Unicode invisibles.
  */
 export function normalizeText(value: unknown): string {
-    if (!value) return '';
+    if (value === null || value === undefined || value === '') return '';
     return String(value).trim().replace(/\s+/g, ' ').replace(/[\u200B-\u200D\uFEFF]/g, '');
 }

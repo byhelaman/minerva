@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { Schedule, DailyIncidence } from "../types";
 import { ensureTimeFormat } from "../utils/time-utils";
-import { normalizeString, getSchedulePrimaryKey } from "../utils/string-utils";
+import { normalizeString, emptyToNull, getSchedulePrimaryKey } from "../utils/string-utils";
 
 /**
  * Servicio para operaciones CRUD de entradas de horario en Supabase.
@@ -43,7 +43,6 @@ const mapEntryToSchedule = (row: ScheduleEntryRow): Schedule => ({
     code: row.code,
     minutes: row.minutes,
     units: row.units,
-    status: row.status || undefined
 });
 
 // Helper para mapear fila de BD a DailyIncidence (si tiene type o status)
@@ -237,13 +236,13 @@ export const scheduleEntriesService = {
                 // Incluir TODOS los campos de incidencia para asegurar forma de columnas uniforme
                 incidenceRows.push({
                     ...baseRow,
-                    status: s.status || null,
-                    substitute: s.substitute || null,
-                    type: s.type || null,
-                    subtype: s.subtype || null,
-                    description: s.description || null,
-                    department: s.department || null,
-                    feedback: s.feedback || null,
+                    status: emptyToNull(s.status),
+                    substitute: emptyToNull(s.substitute),
+                    type: emptyToNull(s.type),
+                    subtype: emptyToNull(s.subtype),
+                    description: emptyToNull(s.description),
+                    department: emptyToNull(s.department),
+                    feedback: emptyToNull(s.feedback),
                 });
             } else {
                 baseOnlyRows.push(baseRow);
@@ -288,13 +287,13 @@ export const scheduleEntriesService = {
         const { data, error } = await supabase
             .from('schedule_entries')
             .update({
-                status: changes.status,
-                substitute: changes.substitute,
-                type: changes.type,
-                subtype: changes.subtype,
-                description: changes.description,
-                department: changes.department,
-                feedback: changes.feedback,
+                status: emptyToNull(changes.status),
+                substitute: emptyToNull(changes.substitute),
+                type: emptyToNull(changes.type),
+                subtype: emptyToNull(changes.subtype),
+                description: emptyToNull(changes.description),
+                department: emptyToNull(changes.department),
+                feedback: emptyToNull(changes.feedback),
             })
             .match(normalizedKey)
             .select();
@@ -415,23 +414,64 @@ export const scheduleEntriesService = {
     /**
      * Obtener claves compuestas de entradas existentes en las fechas dadas.
      * Ligero: solo selecciona columnas clave para comparación de superposición.
+     * Usa la RPC get_existing_keys_by_dates para evitar el límite de URLs largas de PostgREST.
      */
     async getExistingKeys(dates: string[]): Promise<Set<string>> {
         if (dates.length === 0) return new Set();
 
-        const { data, error } = await supabase
-            .from('schedule_entries')
-            .select('date, program, start_time, instructor')
-            .in('date', dates);
+        const keys = new Set<string>();
+        
+        const { data, error } = await supabase.rpc('get_existing_keys_by_dates', {
+            p_dates: dates
+        });
 
         if (error) throw error;
+        if (!data) return keys;
 
-        const keys = new Set<string>();
-        data?.forEach(row => {
-            const key = getSchedulePrimaryKey(row);
-            keys.add(key);
+        (data as ScheduleEntryRow[]).forEach(row => {
+            keys.add(getSchedulePrimaryKey(row));
         });
+
         return keys;
+    },
+
+    /**
+     * Obtener filas completas normalizadas de entradas existentes en las fechas dadas.
+     * Retorna Map<compositeKey, normalizedFields> para comparación campo por campo.
+     * Usa la RPC get_schedules_by_dates_v2 para evitar el límite de URLs largas de PostgREST.
+     */
+    async getFullSchedulesByDates(dates: string[]): Promise<Map<string, Record<string, string>>> {
+        if (dates.length === 0) return new Map();
+
+        const map = new Map<string, Record<string, string>>();
+
+        const { data, error } = await supabase.rpc('get_schedules_by_dates_v2', {
+            p_dates: dates
+        });
+
+        if (error) throw error;
+        if (!data) return map;
+
+        (data as ScheduleEntryRow[]).forEach(row => {
+            const key = getSchedulePrimaryKey(row);
+            map.set(key, {
+                shift: normalizeString(row.shift),
+                branch: normalizeString(row.branch),
+                end_time: ensureTimeFormat(row.end_time),
+                code: normalizeString(row.code),
+                minutes: normalizeString(row.minutes) || '0',
+                units: normalizeString(row.units) || '0',
+                status: normalizeString(row.status),
+                substitute: normalizeString(row.substitute),
+                type: normalizeString(row.type),
+                subtype: normalizeString(row.subtype),
+                description: normalizeString(row.description),
+                department: normalizeString(row.department),
+                feedback: normalizeString(row.feedback),
+            });
+        });
+
+        return map;
     },
 
     async addScheduleEntry(schedule: Schedule, publishedBy: string) {
@@ -439,9 +479,9 @@ export const scheduleEntriesService = {
             .from('schedule_entries')
             .insert({
                 date: schedule.date,
-                program: (schedule.program || '').trim(),
+                program: normalizeString(schedule.program),
                 start_time: ensureTimeFormat(schedule.start_time),
-                instructor: (schedule.instructor || '').trim(),
+                instructor: normalizeString(schedule.instructor) || 'none',
                 shift: schedule.shift,
                 branch: schedule.branch,
                 end_time: ensureTimeFormat(schedule.end_time),
@@ -451,12 +491,13 @@ export const scheduleEntriesService = {
                 published_by: publishedBy,
 
                 // Campos de incidencia
-                status: schedule.status || null,
-                type: schedule.type || null,
-                subtype: schedule.subtype || null,
-                substitute: schedule.substitute || null,
-                description: schedule.description || null,
-                department: schedule.department || null,
+                status: emptyToNull(schedule.status),
+                type: emptyToNull(schedule.type),
+                subtype: emptyToNull(schedule.subtype),
+                substitute: emptyToNull(schedule.substitute),
+                description: emptyToNull(schedule.description),
+                department: emptyToNull(schedule.department),
+                feedback: emptyToNull(schedule.feedback),
             });
 
         if (error) throw error;

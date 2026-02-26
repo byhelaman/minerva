@@ -10,14 +10,26 @@ import {
     DialogTitle,
     DialogFooter,
 } from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Loader2, AlertTriangle, X } from "lucide-react";
+import { Loader2, Plus, Equal, FilePenLine } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { scheduleEntriesService } from "@/features/schedules/services/schedule-entries-service";
-import { ensureTimeFormat } from "@/features/schedules/utils/time-utils";
 import { getScheduleKey } from "@/features/schedules/utils/overlap-utils";
-import { cn } from "@/lib/utils";
+import { getSchedulePrimaryKey } from "@/features/schedules/utils/string-utils";
+import { validateAgainstDb, buildIssueRowKeys, type DbValidationResult } from "@/features/schedules/utils/db-validation-utils";
+import { ISSUE_STYLE_GREEN, ISSUE_STYLE_AMBER, ISSUE_STYLE_BLUE, ROW_STYLE_NEW, ROW_STYLE_MODIFIED, ROW_STYLE_DUPLICATE } from "@/features/schedules/utils/issue-styles";
 
 interface ImportReportsModalProps {
     open: boolean;
@@ -26,29 +38,43 @@ interface ImportReportsModalProps {
     onConfirm: () => void;
 }
 
-/** Trim + collapse internal whitespace for consistent comparison */
-function normalizeField(val: string | undefined | null): string {
-    return (val || '').trim().replace(/\s+/g, ' ');
-}
 
-/** Normalize composite key for a schedule — matches importSchedules logic */
-function normalizeKey(s: Schedule): string {
-    return `${s.date}|${ensureTimeFormat(s.start_time)}|${normalizeField(s.instructor)}|${normalizeField(s.program)}`;
-}
 
 export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: ImportReportsModalProps) {
-    const columns = useMemo(() => getDataSourceColumns(), []);
+    const handleDeleteRow = (schedule: Schedule) => {
+        const pk = getSchedulePrimaryKey(schedule);
+        setWorkingData(prev => prev.filter(s => getSchedulePrimaryKey(s) !== pk));
+    };
+
+    const columns = useMemo(() => getDataSourceColumns(handleDeleteRow, { hideIncidenceActions: true }), []);
     const [isSaving, setIsSaving] = useState(false);
-    const [showDuplicatesOnly, setShowDuplicatesOnly] = useState(false);
+    const [isValidating, setIsValidating] = useState(false);
 
     // Working copy of data that the user can modify (remove rows)
     const [workingData, setWorkingData] = useState<Schedule[]>([]);
 
-    // Reset working data when modal opens with new data
+    // DB validation state
+    const [dbValidation, setDbValidation] = useState<DbValidationResult>({
+        newCount: 0, existingKeys: new Set(), modifiedKeys: new Set(), identicalKeys: new Set(), modifiedReasons: new Map(),
+    });
+
+    // Reset working data and run DB validation when modal opens with new data
     useEffect(() => {
         if (open && data?.length > 0) {
             setWorkingData([...data]);
-            setShowDuplicatesOnly(false);
+
+            // Run DB validation via shared utility
+            (async () => {
+                setIsValidating(true);
+                try {
+                    const result = await validateAgainstDb(data);
+                    setDbValidation(result);
+                } catch (error) {
+                    console.error('DB validation failed:', error);
+                } finally {
+                    setIsValidating(false);
+                }
+            })();
         }
     }, [open, data]);
 
@@ -73,7 +99,7 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
         const keyToScheduleKeys = new Map<string, Set<string>>();
 
         for (const s of workingData) {
-            const nk = normalizeKey(s);
+            const nk = getSchedulePrimaryKey(s);
             keyCounts.set(nk, (keyCounts.get(nk) || 0) + 1);
 
             // Map the normalized key to all schedule keys (for row highlighting)
@@ -99,25 +125,22 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
         return { duplicateKeys: duplicateScheduleKeys, duplicateCount: count };
     }, [workingData]);
 
-    // Auto-reset filter when no more duplicates
-    useEffect(() => {
-        if (duplicateCount === 0 && showDuplicatesOnly) {
-            setShowDuplicatesOnly(false);
-        }
-    }, [duplicateCount, showDuplicatesOnly]);
+    // Build issue categories and row keys for the unified IssueFilter
 
-    // Filtered data for display
-    const displayData = useMemo(() => {
-        if (!showDuplicatesOnly) return workingData;
+    const externalIssueCategories = useMemo(() => {
+        const cats: { key: string; label: string; count: number; icon?: React.ComponentType<{ className?: string }>; activeClassName?: string }[] = [];
+        if (duplicateCount > 0) cats.push({ key: 'duplicates', label: 'Duplicados', count: duplicateCount });
+        if (dbValidation.newCount > 0) cats.push({ key: 'new', label: 'New', count: dbValidation.newCount, icon: Plus, activeClassName: ISSUE_STYLE_GREEN });
+        if (dbValidation.modifiedKeys.size > 0) cats.push({ key: 'modified', label: 'Modified', count: dbValidation.modifiedKeys.size, icon: FilePenLine, activeClassName: ISSUE_STYLE_AMBER });
+        if (dbValidation.identicalKeys.size > 0) cats.push({ key: 'identical', label: 'Identical', count: dbValidation.identicalKeys.size, icon: Equal, activeClassName: ISSUE_STYLE_BLUE });
+        return cats;
+    }, [duplicateCount, dbValidation]);
 
-        // Show only rows whose normalized key appears more than once
-        const keyCounts = new Map<string, number>();
-        for (const s of workingData) {
-            const nk = normalizeKey(s);
-            keyCounts.set(nk, (keyCounts.get(nk) || 0) + 1);
-        }
-        return workingData.filter(s => (keyCounts.get(normalizeKey(s)) || 0) > 1);
-    }, [workingData, showDuplicatesOnly]);
+    const issueRowKeys = useMemo((): Record<string, Set<string>> => {
+        return buildIssueRowKeys(workingData, dbValidation, duplicateKeys, duplicateCount);
+    }, [duplicateCount, duplicateKeys, workingData, dbValidation]);
+
+
 
     const handleSave = async () => {
         if (workingData.length === 0) {
@@ -150,34 +173,6 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
 
     if (!data) return null;
 
-    // "Duplicados" filter button — same style as overlaps filter
-    const duplicatesFilterButton = duplicateCount > 0 ? (
-        <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowDuplicatesOnly(!showDuplicatesOnly)}
-            className={cn(
-                "h-8 border-dashed border-destructive/50 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive hover:border-destructive/50 focus-visible:ring-destructive/20 focus-visible:border-destructive dark:border-destructive/50 dark:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive dark:hover:border-destructive/50 dark:focus-visible:ring-destructive/20 dark:focus-visible:border-destructive"
-            )}
-        >
-            <AlertTriangle />
-            Duplicados
-            {showDuplicatesOnly && ` (${duplicateCount})`}
-        </Button>
-    ) : null;
-
-    // Reset button when duplicates filter is active
-    const resetFilterButton = showDuplicatesOnly ? (
-        <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowDuplicatesOnly(false)}
-        >
-            Reset
-            <X />
-        </Button>
-    ) : null;
-
     return (
         <Dialog open={open} onOpenChange={(val) => !isSaving && onOpenChange(val)}>
             <DialogContent className="max-w-7xl! max-h-[85vh] flex flex-col gap-6">
@@ -191,7 +186,7 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
                 <div className="flex-1 flex flex-col min-h-0 overflow-hidden pr-2">
                     <ScheduleDataTable
                         columns={columns}
-                        data={displayData}
+                        data={workingData}
                         filterConfig={{
                             showStatus: false,
                             showIncidenceType: true,
@@ -201,10 +196,30 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
                         hideActions
                         hideUpload
                         hideOverlaps
-                        getRowClassName={(row) => duplicateKeys.has(getScheduleKey(row)) ? "bg-red-50 dark:bg-red-950/20 border-l-2 border-l-red-500" : undefined}
+                        getRowClassName={(row) => {
+                            const key = getScheduleKey(row);
+                            if (duplicateKeys.has(key)) return ROW_STYLE_DUPLICATE;
+                            const pk = getSchedulePrimaryKey(row as Schedule);
+                            if (dbValidation.modifiedKeys.has(pk)) return ROW_STYLE_MODIFIED;
+                            if (dbValidation.identicalKeys.has(pk)) return undefined;
+                            if (!dbValidation.existingKeys.has(pk) && !isValidating) return ROW_STYLE_NEW;
+                            return undefined;
+                        }}
+                        getRowIssueTooltip={(row) => {
+                            const key = getScheduleKey(row);
+                            if (duplicateKeys.has(key)) {
+                                const pk = getSchedulePrimaryKey(row as Schedule);
+                                return `Duplicado: misma clave (${pk})`;
+                            }
+                            const pk = getSchedulePrimaryKey(row as Schedule);
+                            if (dbValidation.modifiedKeys.has(pk)) return { type: 'mod', message: dbValidation.modifiedReasons.get(pk) || '' };
+                            if (!dbValidation.existingKeys.has(pk) && !isValidating && dbValidation.existingKeys.size > 0) return 'New: registro no existe en la base de datos';
+                            return undefined;
+                        }}
                         initialPageSize={100}
                         initialColumnVisibility={initialVisibility}
-                        customFilterItems={<>{duplicatesFilterButton}{resetFilterButton}</>}
+                        externalIssueCategories={externalIssueCategories}
+                        issueRowKeys={issueRowKeys}
                         hideBulkCopy
                         onBulkDelete={(rows) => {
                             const toRemove = new Set(rows);
@@ -216,23 +231,57 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
 
                 <DialogFooter className="mt-auto flex-col sm:flex-row gap-4">
                     <div className="flex items-center gap-6 w-full">
-                        <span className="text-sm text-muted-foreground mr-auto">
-                            Total rows: <strong className="text-foreground font-medium">{workingData.length}</strong>
-                        </span>
+                        <div className="flex items-center gap-3 mr-auto text-sm text-muted-foreground">
+                            {isValidating ? (
+                                <span className="text-muted-foreground">Processing...</span>
+                            ) : (
+                                <>
+                                    {(dbValidation.newCount > 0 || dbValidation.existingKeys.size > 0) ? (
+                                        <>
+                                            <span>New: <strong className="text-foreground font-medium">{dbValidation.newCount}</strong></span>
+                                            <span className="text-border">|</span>
+                                            <span>Modified: <strong className="text-foreground font-medium">{dbValidation.modifiedKeys.size}</strong></span>
+                                            <span className="text-border">|</span>
+                                            <span>Identical: <strong className="text-foreground font-medium">{dbValidation.identicalKeys.size}</strong></span>
+                                        </>
+                                    ) : (
+                                        <span>Total rows: <strong className="text-foreground font-medium">{workingData.length}</strong></span>
+                                    )}
+                                </>
+                            )}
+                        </div>
                         <div className="flex gap-2">
                             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
                                 Cancel
                             </Button>
-                            <Button onClick={handleSave} disabled={isSaving || workingData.length === 0 || duplicateCount > 0}>
-                                {isSaving ? (
-                                    <>
-                                        <Loader2 className="animate-spin" />
-                                        Saving...
-                                    </>
-                                ) : (
-                                    "Save Data"
-                                )}
-                            </Button>
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button disabled={isSaving || isValidating || workingData.length === 0 || duplicateCount > 0}>
+
+                                        {isSaving ? (
+                                            <>
+                                                <Loader2 className="animate-spin" />
+                                                Saving...
+                                            </>
+                                        ) : (
+                                            "Save Data"
+                                        )}
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent className="sm:max-w-100!">
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Confirm import</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            You are about to import {workingData.length} records to the database.
+                                            {dbValidation.modifiedKeys.size > 0 ? ` This will overwrite existing records with modifications.` : ""}
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={handleSave}>Confirm</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
                         </div>
                     </div>
                 </DialogFooter>

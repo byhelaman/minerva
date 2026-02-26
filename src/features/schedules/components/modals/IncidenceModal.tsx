@@ -157,16 +157,8 @@ export function IncidenceModal({ open, onOpenChange, schedule, initialValues }: 
             onOpenChange(false);
         } catch (error) {
             console.error("Failed to save incidence:", error);
-
-            if (error instanceof Error && error.message === 'SCHEDULE_NOT_PUBLISHED') {
-                if (canEdit) {
-                    toast.error("This schedule has not been published. Please publish it first before adding incidences.");
-                } else {
-                    toast.error("Update failed. You lack permission to edit this schedule.");
-                }
-            } else {
-                toast.error("Failed to save incidence");
-            }
+            // The store already handles the specific UI toast for SCHEDULE_NOT_PUBLISHED and generic save errors.
+            // We just catch the re-thrown error here to halt the successful execution path.
         } finally {
             setIsSubmitting(false);
         }

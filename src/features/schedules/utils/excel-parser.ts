@@ -24,7 +24,8 @@ export const PARSER_CONFIG = {
             END_TIME: 3,   // Col D
             GROUP: 17,     // Col R
             BLOCK: 19,     // Col T
-            PROGRAM: 25    // Col Z
+            PROGRAM: 25,   // Col Z
+            EXTRA_INFO: 28 // Col AC (used to find address/travel hints)
         }
     }
 };
@@ -57,11 +58,37 @@ function findMatchingWord(text: string, words: string[]): string | null {
     return null;
 }
 
+/** Verifica si la cadena contiene subcadenas específicas sin importar límites de palabra */
+function containsAnySubstring(text: string, substrings: string[]): boolean {
+    const content = safeString(text).toLowerCase();
+    for (const sub of substrings) {
+        if (content.includes(sub.toLowerCase())) return true;
+    }
+    return false;
+}
+
 // =============================================================================
 // HELPERS ESPECÍFICOS DEL DOMINIO
 // =============================================================================
 
-const BRANCH_KEYWORDS = ["CORPORATE", "HUB", "LA MOLINA", "BAW", "KIDS"] as const;
+// NOTA: "KIDS" ya no se usa como sede para evitar ensuciar los datos de las sucursales reales.
+// Ahora se utiliza la función `isKidsClass` para inyectar el prefijo "[KIDS] - " en el programa.
+const BRANCH_KEYWORDS = ["CORPORATE", "HUB", "LA MOLINA", "BAW"] as const;
+
+const KIDS_PROGRAM_KEYWORDS = ["Look and See", "Time Zones", "KIDS"];
+
+/** Evalúa si la clase es para niños basado en la sede, programa o bloque (descripción). */
+function isKidsClass(...texts: string[]): boolean {
+    for (const text of texts) {
+        if (!text) continue;
+        const normalized = text.toLowerCase();
+        for (const kw of KIDS_PROGRAM_KEYWORDS) {
+            // Buscamos coincidencia parcial para capturar todas las variaciones posibles
+            if (normalized.includes(kw.toLowerCase())) return true;
+        }
+    }
+    return false;
+}
 
 const DURATION_MAP: Record<string, string> = {
     "30": "30",
@@ -69,10 +96,12 @@ const DURATION_MAP: Record<string, string> = {
     "60": "30",
     "CEIBAL": "45",
     "KIDS": "45",
+    "Look and See": "45",
+    "Time Zones": "45"
 };
 
 const SPECIAL_TAGS = new Set(
-    ["@Corp", "@Corporate", "@Lima2", "@LimaCorporate", "@LCBulevarArtigas", "@Argentina"]
+    ["@Corp", "@Corporate", "@Lima2", "@Lima corp", "@LimaCorporate", "@LCBulevarArtigas"]
         .map(tag => tag.toLowerCase().replace(/\s/g, ''))
 );
 
@@ -82,10 +111,29 @@ const ALLOWED_HEADERS = new Set([
     "description", "department", "feedback"
 ]);
 
-function extractParenthesizedContent(text: string): string {
+const TRAVEL_KEYWORDS = ["av.", "presencial", "calle", "direccion", "travel"];
+
+function hasParenthesizedTime(text: string): boolean {
+    if (!text) return false;
+    return /\(.*\)/.test(safeString(text));
+}
+
+function isTravelClass(startTimeRaw: unknown, endTimeRaw: unknown, extraInfoVal: string): boolean {
+    if (hasParenthesizedTime(String(startTimeRaw)) || hasParenthesizedTime(String(endTimeRaw))) {
+        return true;
+    }
+    if (extraInfoVal && containsAnySubstring(extraInfoVal, TRAVEL_KEYWORDS)) {
+        return true;
+    }
+    return false;
+}
+
+/** Extrae el texto que NO está entre paréntesis (el horario real de clase) */
+function extractBaseTime(text: string): string {
     if (!text) return "";
-    const matches = safeString(text).match(/\((.*?)\)/g);
-    return matches ? matches.map((m) => m.slice(1, -1)).join(", ") : safeString(text);
+    const content = safeString(text);
+    // Eliminar todo lo que esté entre paréntesis y limpiar espacios extra
+    return content.replace(/\(.*?\)/g, "").trim().replace(/\s+/g, " ");
 }
 
 function extractBranchKeyword(text: string): string | null {
@@ -153,7 +201,7 @@ export async function parseExcelFile(file: File, options?: { strictValidation?: 
         const firstRow = rawSheet[0] as unknown[];
         const headerCells = firstRow?.slice(0, 20).map(cell => safeString(cell).toLowerCase()) ?? [];
 
-        const requiredHeaders = ['date', 'start_time', 'end_time', 'program', 'instructor'];
+        const requiredHeaders = ['date', 'start_time', 'end_time', 'instructor','program'];
         const matchedHeaders = requiredHeaders.filter(h => headerCells.includes(h));
         const isExportedFormat = matchedHeaders.length >= 5; // Deben existir todos los headers requeridos
         
@@ -187,6 +235,7 @@ export async function parseExcelFile(file: File, options?: { strictValidation?: 
                     start_time: formatTimeTo24h(item.start_time as string | number),
                     end_time: formatTimeTo24h(item.end_time as string | number),
                     // Asegurar que existan los campos requeridos
+                    // Para formatos exportados, la DB ya contiene el string completo y validado
                     program: safeString(item.program),
                     instructor: safeString(item.instructor),
                     code: safeString(item.code),
@@ -256,7 +305,8 @@ export async function parseExcelFile(file: File, options?: { strictValidation?: 
             const endTimeRaw = row[PARSER_CONFIG.DATA.COLS.END_TIME];
             let groupName = safeString(row[PARSER_CONFIG.DATA.COLS.GROUP]);
             const rawBlock = safeString(row[PARSER_CONFIG.DATA.COLS.BLOCK]);
-            const programName = safeString(row[PARSER_CONFIG.DATA.COLS.PROGRAM]);
+            let programName = safeString(row[PARSER_CONFIG.DATA.COLS.PROGRAM]);
+            const extraInfoVal = safeString(row[PARSER_CONFIG.DATA.COLS.EXTRA_INFO]);
 
             if (!startTimeRaw || !endTimeRaw) continue;
 
@@ -267,14 +317,38 @@ export async function parseExcelFile(file: File, options?: { strictValidation?: 
                 else continue;
             }
 
-            const startTimeStr = extractParenthesizedContent(safeString(startTimeRaw));
-            const endTimeStr = extractParenthesizedContent(safeString(endTimeRaw));
+            const startTimeStr = extractBaseTime(safeString(startTimeRaw));
+            const endTimeStr = extractBaseTime(safeString(endTimeRaw));
+            
+            // Si el programa no tiene nombre válido aún, intentamos tomar el grupo
+            // para evaluar duración en los pasos finales
+            const durationTarget = programName || groupName;
+
+            // Ensamblar los prefijos
+            const isKids = isKidsClass(locationVal, programName, groupName);
+            const isTravel = isTravelClass(startTimeRaw, endTimeRaw, extraInfoVal);
+            
+            const prefixes: string[] = [];
+            if (isTravel && !groupName.toUpperCase().includes('[TRAVEL]')) {
+                prefixes.push('[TRAVEL]');
+            }
+            if (isKids && !groupName.toUpperCase().includes('[KIDS]')) {
+                prefixes.push('[KIDS]');
+            }
+
+            let finalProgram = groupName;
+            if (prefixes.length > 0) {
+                // Remove existing prefixes if re-applying to prevent messes
+                let cleanName = groupName
+                    .replace(/\[TRAVEL\]/gi, '')
+                    .replace(/\[KIDS\]/gi, '')
+                    .replace(/^[\s-]+/, '') // Remove leading spaces or dashes
+                    .trim();
+                finalProgram = `${prefixes.join(' ')} - ${cleanName}`;
+            }
 
             // Lógica de sucursal
-            const programKeyword = extractBranchKeyword(programName);
-            const branch = programKeyword === "KIDS" && branchName
-                ? `${branchName}/${programKeyword}`
-                : branchName;
+            const branch = branchName;
 
             // Construcción del objeto crudo
             const rawObj = {
@@ -285,8 +359,8 @@ export async function parseExcelFile(file: File, options?: { strictValidation?: 
                 end_time: formatTimeTo24h(endTimeStr),
                 code: instructorCode,
                 instructor: instructorName,
-                program: groupName,
-                minutes: extractDuration(programName) ?? "0",
+                program: finalProgram,
+                minutes: extractDuration(durationTarget) ?? "0",
                 units: String(groupCounts[groupName] ?? 0)
             };
 

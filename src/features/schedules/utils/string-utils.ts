@@ -12,6 +12,17 @@ export function normalizeString(val: string | undefined | null): string {
 }
 
 /**
+ * Converts empty/whitespace-only strings to null.
+ * Used at the service boundary before sending optional fields to the DB.
+ * Ensures that "no value" is always represented as `null` in the database,
+ * never as `''` or whitespace.
+ */
+export function emptyToNull(val: string | undefined | null): string | null {
+    const normalized = normalizeString(val);
+    return normalized === '' ? null : normalized;
+}
+
+/**
  * Validatable standard Schedule Key. 
  * Standardizes data before combining it into the unique DB primary key format:
  * `${date}|${start_time}|${instructor}|${program}`

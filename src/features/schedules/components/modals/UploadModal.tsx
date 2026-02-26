@@ -180,7 +180,7 @@ export function UploadModal({
             onOpenChange(false);
         } catch (error) {
             console.error("Error processing files:", error);
-            toast.error("Error processing files. Check console.");
+            toast.error("Error processing files");
         } finally {
             setIsProcessing(false);
         }

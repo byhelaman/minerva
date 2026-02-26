@@ -24,11 +24,13 @@ import { QUICK_STATUS_PRESETS } from "@schedules/constants/incidence-presets";
 interface DataTableRowActionsProps {
     row: Row<Schedule>;
     onDelete?: (schedule: Schedule) => void;
+    hideIncidenceActions?: boolean;
 }
 
 export function DataTableRowActions({
     row,
     onDelete,
+    hideIncidenceActions,
 }: DataTableRowActionsProps) {
     const schedule = row.original;
     const { hasPermission } = useAuth();
@@ -80,7 +82,7 @@ export function DataTableRowActions({
                     >
                         Copy Details
                     </DropdownMenuItem>
-                    {canManage && (
+                    {canManage && !hideIncidenceActions && (
                         <>
                             <DropdownMenuItem onClick={handleEditIncidence}>
                                 Edit Incidence

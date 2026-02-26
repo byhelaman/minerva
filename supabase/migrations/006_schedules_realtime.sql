@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS public.schedule_entries (
     feedback TEXT,
 
     -- Metadatos de control
-    published_by UUID REFERENCES auth.users(id),
+    published_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now(),
 

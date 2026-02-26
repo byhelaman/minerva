@@ -44,8 +44,8 @@ export async function handleReplaceTableData(token: string, fileId: string, shee
     return { success: true, count: numRows }
 }
 
-export async function handleUpsertRowsByKey(token: string, fileId: string, tableId: string, values: unknown[][], keyColumns: string[]) {
-    if (!fileId || !tableId || !values || !keyColumns) throw new Error('File ID, Table ID, Values, and Key Columns are required')
+export async function handleUpsertRowsByKey(token: string, fileId: string, sheetId: string, tableId: string, values: unknown[][], keyColumns: string[], startRange?: string) {
+    if (!fileId || !tableId || !sheetId || !values || !keyColumns) throw new Error('File ID, Sheet ID, Table ID, Values, and Key Columns are required')
 
     const headerRow = values[0] as string[];
     const inputRows = values.slice(1);
@@ -73,46 +73,50 @@ export async function handleUpsertRowsByKey(token: string, fileId: string, table
         }).join('|');
     };
 
-    const existingRowMap = new Map<string, { index: number, values: unknown[] }>();
+    // 2. Extraer datos actuales y armar mapa en memoria para el UPSERT
+    const mergedData: unknown[][] = existingRows.map(r => [...(r.values[0] || [])]);
+    const existingRowMap = new Map<string, number>();
 
-    existingRows.forEach((row) => {
-        const rowValues = row.values[0] || [];
+    existingRows.forEach((_row, idx) => {
+        const rowValues = mergedData[idx];
         const key = getKey(rowValues, tableHeaders);
-        existingRowMap.set(key, { index: row.index, values: rowValues });
+        existingRowMap.set(key, idx); // Map key to index in mergedData
     });
 
     let updateCount = 0;
     let insertCount = 0;
-    const errors: string[] = [];
 
+    // 3. Cruzar los registros de entrada con los datos en memoria
     for (let i = 0; i < inputRows.length; i++) {
         const inputRow = inputRows[i];
         const key = getKey(inputRow, headerRow);
-        const existing = existingRowMap.get(key);
+        
+        // Alinear la fila de input exactamente al orden de columnas actual de la tabla en Excel
+        const alignedInputRow = tableHeaders.map(th => {
+            const idx = headerRow.indexOf(th);
+            return idx !== -1 ? inputRow[idx] : ""; 
+        });
 
-        if (existing) {
-            try {
-                const updateUrl = `/me/drive/items/${fileId}/workbook/tables/${tableId}/rows/itemAt(index=${existing.index})`;
-                await graphPatch(updateUrl, token, { values: [inputRow] });
-                updateCount++;
-            } catch (err: unknown) {
-                errors.push(`Update row at index ${existing.index}: ${err instanceof Error ? err.message : String(err)}`);
-            }
+        if (existingRowMap.has(key)) {
+            // Update: Overwrite the existing row in memory
+            const idx = existingRowMap.get(key)!;
+            mergedData[idx] = alignedInputRow;
+            updateCount++;
         } else {
-            try {
-                const addUrl = `/me/drive/items/${fileId}/workbook/tables/${tableId}/rows/add`;
-                await graphPost(addUrl, token, { values: [inputRow] });
-                insertCount++;
-            } catch (err: unknown) {
-                errors.push(`Insert new row: ${err instanceof Error ? err.message : String(err)}`);
-            }
+            // Insert: Add to the end
+            mergedData.push(alignedInputRow);
+            existingRowMap.set(key, mergedData.length - 1); // Protect against duplicate keys in the same payload
+            insertCount++;
         }
     }
 
+    // 4. Escribir toda la tabla consolidada de un solo golpe
+    const fullValues = [tableHeaders, ...mergedData];
+    await handleReplaceTableData(token, fileId, sheetId, tableId, fullValues, startRange);
+
     return {
-        success: errors.length === 0,
+        success: true,
         updated: updateCount,
         inserted: insertCount,
-        errors: errors.length > 0 ? errors : undefined
     };
 }
