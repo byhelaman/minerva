@@ -101,14 +101,6 @@ export async function handleCreateTable(token: string, fileId: string, sheetId: 
     }
 }
 
-export async function handleResizeTable(token: string, fileId: string, tableId: string, range: string) {
-    if (!fileId || !tableId || !range) throw new Error('File ID, Table ID and Range are required')
-
-    const endpoint = `/me/drive/items/${fileId}/workbook/tables/${tableId}/resize`
-
-    await graphPost(endpoint, token, { targetRange: range })
-    return { success: true }
-}
 
 export async function handleFormatColumns(token: string, fileId: string, sheetId: string, columns: Record<string, number>) {
     if (!fileId || !sheetId || !columns) throw new Error('File ID, Sheet ID and Columns Config required')

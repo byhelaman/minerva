@@ -431,7 +431,6 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
                                     hideFilters={false}
                                     filterConfig={{
                                         showStatus: true,
-                                        showIncidenceType: false,
                                     }}
                                     hideUpload
                                     hideActions

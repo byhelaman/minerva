@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { type Table } from "@tanstack/react-table";
-import { Search, X, BadgeCheck, RefreshCw, XCircle, HelpCircle, Hand, Info, User, CalendarCheck, Wrench, MonitorCog, Clock1, Clock2, Clock3, Clock4, Clock5, Clock6, Clock7, Clock8, Clock9, Clock10, Clock11, Clock12 } from "lucide-react";
+import { Search, X, BadgeCheck, RefreshCw, XCircle, HelpCircle, Hand, Clock1, Clock2, Clock3, Clock4, Clock5, Clock6, Clock7, Clock8, Clock9, Clock10, Clock11, Clock12 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
@@ -25,13 +25,7 @@ const defaultStatusOptions = [
     { label: "Manual", value: "manual", icon: Hand },
 ];
 
-const incidenceTypeOptions = [
-    { label: "Instructor", value: "Instructor", icon: User },
-    { label: "Novedad", value: "Novedad", icon: Info },
-    { label: "Programación", value: "Programación", icon: CalendarCheck },
-    { label: "Servicios", value: "Servicios", icon: Wrench },
-    { label: "Sistema", value: "Sistema", icon: MonitorCog },
-];
+
 
 // Mapeo de hora a icono de reloj (usa hora en formato 12h)
 const getClockIcon = (hour: string) => {
@@ -74,7 +68,6 @@ interface ToolbarFiltersProps<TData> {
     hideFilters?: boolean;
     hideUpload?: boolean;
     onUploadClick?: () => void;
-    showTypeFilter?: boolean;
     hideStatusFilter?: boolean;
     statusOptions?: { label: string; value: string; icon?: React.ComponentType<{ className?: string }> }[];
     showBranch?: boolean;
@@ -92,7 +85,6 @@ export function ToolbarFilters<TData>({
     hideFilters = false,
     hideUpload = false,
     onUploadClick,
-    showTypeFilter = false,
     hideStatusFilter = false,
     statusOptions = defaultStatusOptions,
     showBranch,
@@ -129,14 +121,6 @@ export function ToolbarFilters<TData>({
                 value: hour,
                 icon: getClockIcon(hour),
             }));
-    }, [fullData]);
-
-    // Determine if we should show incidence type filter based on data
-    const hasIncidenceData = useMemo(() => {
-        const data = fullData as (Schedule & { type?: string })[];
-        if (!data || data.length === 0) return false;
-
-        return data.some((item) => item.type);
     }, [fullData]);
 
     const resolvedStatusOptions = useMemo(() => {
@@ -194,18 +178,6 @@ export function ToolbarFilters<TData>({
                         column={statusColumn}
                         title="Status"
                         options={resolvedStatusOptions}
-                    />
-                ) : null;
-            })()}
-
-            {/* Type Filter */}
-            {(hasIncidenceData || showTypeFilter) && (() => {
-                const typeColumn = table.getAllColumns().find(c => c.id === "type");
-                return typeColumn && typeColumn.getCanFilter() ? (
-                    <DataTableFacetedFilter
-                        column={typeColumn}
-                        title="Type"
-                        options={incidenceTypeOptions}
                     />
                 ) : null;
             })()}

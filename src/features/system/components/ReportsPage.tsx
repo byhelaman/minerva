@@ -438,7 +438,6 @@ export function ReportsPage() {
                             filterConfig={{
                                 showStatus: false,
                                 showBranch: true,
-                                showIncidenceType: true,
                             }}
                             onAddRow={() => setIsAddModalOpen(true)}
                         />

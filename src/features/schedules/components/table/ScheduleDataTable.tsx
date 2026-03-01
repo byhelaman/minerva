@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { formatDateForDisplay } from "@/lib/date-utils";
 import { mapScheduleToExcelRow } from "@schedules/utils/export-utils";
+import { Blend } from "lucide-react";
 
 interface ScheduleDataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[] | ((addStatusFilter: (status: string) => void) => ColumnDef<TData, TValue>[]);
@@ -54,7 +55,6 @@ interface ScheduleDataTableProps<TData, TValue> {
     // Configuración unificada de filtros
     filterConfig?: {
         showStatus?: boolean;
-        showIncidenceType?: boolean;
         showTime?: boolean;
         showBranch?: boolean; // Futuro
     };
@@ -125,7 +125,7 @@ export function ScheduleDataTable<TData, TValue>({
         : setInternalSelection;
     // Columna shift oculta por defecto, pero permite sobrescribir con props
     const [columnVisibility, setColumnVisibility] =
-        React.useState<VisibilityState>({ shift: false, ...props.initialColumnVisibility });
+        React.useState<VisibilityState>({ shift: false, type: false, ...props.initialColumnVisibility });
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
         []
     );
@@ -203,7 +203,7 @@ export function ScheduleDataTable<TData, TValue>({
 
         // Built-in: overlaps
         if (overlapResult.overlapCount > 0) {
-            cats.push({ key: 'overlaps', label: 'Overlaps', count: overlapResult.overlapCount });
+            cats.push({ key: 'overlaps', label: 'Overlaps', count: overlapResult.overlapCount, icon: Blend });
         }
 
         // External categories from parent
@@ -502,7 +502,6 @@ export function ScheduleDataTable<TData, TValue>({
                 onPublish={onPublish}
                 isPublishing={isPublishing}
                 canPublish={canPublish}
-                showTypeFilter={props.filterConfig?.showIncidenceType ?? props.showTypeFilter}
                 hideStatusFilter={props.filterConfig?.showStatus !== undefined ? !props.filterConfig.showStatus : props.hideStatusFilter}
                 showBranch={props.filterConfig?.showBranch}
                 showTime={props.filterConfig?.showTime}

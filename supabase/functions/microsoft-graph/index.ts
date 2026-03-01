@@ -93,9 +93,6 @@ Deno.serve(async (req: Request) => {
             case 'create-table':
                 result = await writeControllers.handleCreateTable(token, fileId, sheetId, range)
                 break
-            case 'resize-table':
-                result = await writeControllers.handleResizeTable(token, fileId, tableId, range)
-                break
             case 'format-columns':
                 result = await writeControllers.handleFormatColumns(token, fileId, sheetId, columns)
                 break

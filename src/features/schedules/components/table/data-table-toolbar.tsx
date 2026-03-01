@@ -30,7 +30,6 @@ interface DataTableToolbarProps<TData> {
     onPublish?: () => void;
     isPublishing?: boolean;
     canPublish?: boolean;
-    showTypeFilter?: boolean;
     hideStatusFilter?: boolean;
     customActionItems?: React.ReactNode;
     hideDefaultActions?: boolean;
@@ -63,7 +62,6 @@ export function DataTableToolbar<TData>({
     onPublish,
     isPublishing = false,
     canPublish = false,
-    showTypeFilter = false,
     hideStatusFilter = false,
     customActionItems,
     hideDefaultActions = false,
@@ -89,7 +87,6 @@ export function DataTableToolbar<TData>({
                     hideFilters={hideFilters}
                     hideUpload={hideUpload}
                     onUploadClick={onUploadClick}
-                    showTypeFilter={showTypeFilter}
                     hideStatusFilter={hideStatusFilter}
                     statusOptions={statusOptions}
                     showBranch={showBranch}

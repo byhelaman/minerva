@@ -401,7 +401,6 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
                             }}
                             filterConfig={{
                                 showStatus: false,
-                                showIncidenceType: true,
                                 showBranch: false,
                                 showTime: false,
                             }}

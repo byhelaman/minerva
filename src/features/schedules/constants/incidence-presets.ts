@@ -32,7 +32,7 @@ export const INCIDENCE_PRESETS: IncidencePreset[] = [
         status: "Yes",
         type: "Instructor",
         subtype: "Emergencia Personal",
-        description: "Instructor reportó emergencia personal o familiar // se busca reemplazo",
+        description: "Instructor reportó emergencia personal // se busca reemplazo",
         department: "Q&T (Quality & Training)"
     },
     {

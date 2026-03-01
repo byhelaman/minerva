@@ -10,7 +10,28 @@ import { InstructorSelector } from "./InstructorSelector";
 import { INCIDENCE_PRESETS } from "../../constants/incidence-presets";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
+import { Check, ChevronDown, X } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
+
+const DEPARTMENTS = [
+    { label: "Admisiones/TBO", value: "Admisiones/TBO" },
+    { label: "Coordinación B2C (Consumidor)", value: "Coordinación B2C (Consumidor)" },
+    { label: "Coordinación ESNA", value: "Coordinación ESNA" },
+    { label: "Coordinación Kids & Teens", value: "Coordinación Kids & Teens" },
+    { label: "Matrículas Latam", value: "Matrículas Latam" },
+    { label: "Programación Latam", value: "Programación Latam" },
+    { label: "Q&T (Quality & Training)", value: "Q&T (Quality & Training)" },
+    { label: "Recursos Humanos", value: "Recursos Humanos" },
+    { label: "Soporte", value: "Soporte" },
+    { label: "Ventas B2C (Consumidor)", value: "Ventas B2C (Consumidor)" },
+    // Corporate
+    { label: "Coord. de programas B2B", value: "Coord. de programas B2B" },
+    { label: "Customer Experience B2B", value: "Customer Experience B2B" },
+    { label: "Customer Success B2B", value: "Customer Success B2B" },
+    { label: "Recepcion B2B", value: "Recepcion B2B" }
+];
 
 /** Fields used by IncidenceFormContent */
 export interface IncidenceFormValues {
@@ -169,7 +190,7 @@ export function IncidenceFormContent({ uniqueInstructors, canEdit }: IncidenceFo
                             <Field data-invalid={fieldState.invalid}>
                                 <FieldLabel>Type</FieldLabel>
                                 <Select disabled={!canEdit} onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
-                                    <SelectTrigger className="w-full" aria-invalid={fieldState.invalid}>
+                                    <SelectTrigger className="w-full [&>span]:truncate" aria-invalid={fieldState.invalid}>
                                         <SelectValue placeholder="Select" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -194,7 +215,7 @@ export function IncidenceFormContent({ uniqueInstructors, canEdit }: IncidenceFo
                             <Field data-invalid={fieldState.invalid}>
                                 <FieldLabel>Subtype</FieldLabel>
                                 <Select disabled={!canEdit} onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
-                                    <SelectTrigger className="w-full" aria-invalid={fieldState.invalid}>
+                                    <SelectTrigger className="w-full [&>span]:truncate" aria-invalid={fieldState.invalid}>
                                         <SelectValue placeholder="Select" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -234,30 +255,102 @@ export function IncidenceFormContent({ uniqueInstructors, canEdit }: IncidenceFo
                     <Controller
                         name="department"
                         control={form.control}
-                        render={({ field, fieldState }) => (
-                            <Field data-invalid={fieldState.invalid}>
-                                <FieldLabel>Department</FieldLabel>
-                                <Select disabled={!canEdit} onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
-                                    <SelectTrigger className="w-full" aria-invalid={fieldState.invalid}>
-                                        <SelectValue placeholder="Select" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Q&T (Quality & Training)">Q&T (Quality & Training)</SelectItem>
-                                        <SelectItem value="Programación Latam">Programación Latam</SelectItem>
-                                        <SelectItem value="Matrículas Latam">Matrículas Latam</SelectItem>
-                                        <SelectItem value="Coordinación B2C (Consumidor)">Coordinación B2C (Consumidor)</SelectItem>
-                                        <SelectItem value="Coordinación B2B (Corporativo)">Coordinación B2B (Corporativo)</SelectItem>
-                                        <SelectItem value="Coordinación ESNA">Coordinación ESNA</SelectItem>
-                                        <SelectItem value="Coordinación Kids & Teens">Coordinación Kids & Teens</SelectItem>
-                                        <SelectItem value="Admisiones/TBO"> Admisiones/TBO</SelectItem>
-                                        <SelectItem value="Ventas B2C (Consumidor)">Ventas B2C (Consumidor)</SelectItem>
-                                        <SelectItem value="Recursos Humanos">Recursos Humanos</SelectItem>
-                                        <SelectItem value="Soporte">Soporte</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                            </Field>
-                        )}
+                        render={({ field, fieldState }) => {
+                            const [open, setOpen] = useState(false);
+                            const [inputValue, setInputValue] = useState("");
+                            
+                            // Check if typed text perfectly matches any department
+                            const allDepts = DEPARTMENTS;
+                            const selectedDept = allDepts.find(d => d.value === field.value);
+                            const displayValue = selectedDept ? selectedDept.label : field.value;
+
+                            const inputRaw = inputValue.trim().toLowerCase();
+                            const hasPerfectMatch = allDepts.some(d => d.label.toLowerCase() === inputRaw || d.value.toLowerCase() === inputRaw);
+                            const showFreeTextOption = inputValue.trim().length > 0 && !hasPerfectMatch;
+                            
+                            return (
+                                <Field data-invalid={fieldState.invalid}>
+                                    <FieldLabel>Department</FieldLabel>
+                                    <div className="flex gap-1 items-center w-full">
+                                        <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setInputValue(""); }} modal={true}>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    role="combobox"
+                                                    aria-expanded={open}
+                                                    className={cn("w-full justify-between font-normal", !field.value && "text-muted-foreground")}
+                                                    disabled={!canEdit}
+                                                >
+                                                    <span className="truncate">{displayValue || "Select department"}</span>
+                                                    <ChevronDown className="w-4 h-4 text-muted-foreground opacity-50" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-60 p-0 z-200" align="start">
+                                                <Command>
+                                                    <CommandInput 
+                                                        placeholder="Search department..." 
+                                                        value={inputValue}
+                                                        onValueChange={setInputValue}
+                                                    />
+                                                    <CommandList className="max-h-75 overflow-y-auto overflow-x-hidden">
+                                                        {showFreeTextOption && (
+                                                            <CommandGroup heading="Custom">
+                                                                <CommandItem
+                                                                    value={`__freetext__${inputValue}`}
+                                                                    onSelect={() => {
+                                                                        field.onChange(inputValue.trim());
+                                                                        setInputValue("");
+                                                                        setOpen(false);
+                                                                    }}
+                                                                >
+                                                                    <Check className="opacity-0" />
+                                                                    <span className="truncate">Use &ldquo;{inputValue.trim()}&rdquo;</span>
+                                                                </CommandItem>
+                                                            </CommandGroup>
+                                                        )}
+                                                        <CommandEmpty>No results found.</CommandEmpty>
+                                                        <CommandGroup>
+                                                            {DEPARTMENTS.map(dept => (
+                                                                <CommandItem 
+                                                                    key={dept.value} 
+                                                                    value={dept.label} 
+                                                                    onSelect={() => { 
+                                                                        field.onChange(dept.value); 
+                                                                        setInputValue("");
+                                                                        setOpen(false); 
+                                                                    }}
+                                                                >
+                                                                    <Check
+                                                                        className={
+                                                                            field.value === dept.value ? "opacity-100" : "opacity-0"
+                                                                        }
+                                                                    />
+                                                                    {dept.label}
+                                                                </CommandItem>
+                                                            ))}
+                                                        </CommandGroup>
+                                                    </CommandList>
+                                                </Command>
+                                            </PopoverContent>
+                                        </Popover>
+                                        
+                                        {field.value && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-9 w-9 shrink-0"
+                                                onClick={() => field.onChange("")}
+                                                title="Clear department"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                </Field>
+                            );
+                        }}
                     />
                 </div>
 

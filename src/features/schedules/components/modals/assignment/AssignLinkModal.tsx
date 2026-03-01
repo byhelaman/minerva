@@ -380,7 +380,6 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
                             }}
                             filterConfig={{
                                 showStatus: true,
-                                showIncidenceType: false,
                             }}
                             hideUpload
                             hideActions

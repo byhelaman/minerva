@@ -143,7 +143,13 @@ export class MatchingService {
         };
 
         const programNormalized = normalizeString(schedule.program);
-        const instructorNormalized = normalizeString(schedule.instructor);
+
+        // If the schedule has an incidence with a substitute, use the substitute as the instructor
+        // to match against Zoom users (the substitute is the one actually hosting the class)
+        const effectiveInstructor = (schedule.type && schedule.substitute)
+            ? schedule.substitute
+            : schedule.instructor;
+        const instructorNormalized = normalizeString(effectiveInstructor);
 
         // ---------------------------------------------------------------------
         // PASO 1: Encontrar Instructor (ANTES de evaluar meetings)

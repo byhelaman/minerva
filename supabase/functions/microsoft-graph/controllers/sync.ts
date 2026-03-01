@@ -1,4 +1,3 @@
-// Controladores para operaciones de sincronización y por lotes (batch)
 import { graphGet, graphPatch, graphPost } from '../services/graph-client.ts'
 import { parseCell, getColumnLetter, normalizeDate, normalizeTime, normalizeText } from '../utils/excel-helpers.ts'
 
@@ -23,11 +22,7 @@ export async function handleReplaceTableData(token: string, fileId: string, shee
     const writeUrl = `/me/drive/items/${fileId}/workbook/worksheets/${sheetId}/range(address='${calculatedRange}')`
     await graphPatch(writeUrl, token, { values })
 
-    // 4. Redimensionar la tabla
-    const resizeUrl = `/me/drive/items/${fileId}/workbook/tables/${tableId}/resize`
-    await graphPost(resizeUrl, token, { targetRange: calculatedRange })
-
-    // 5. Limpiar filas sobrantes si la tabla anterior era más grande
+    // 4. Limpiar filas sobrantes si la tabla anterior era más grande
     if (oldRowCount > numRows) {
         const clearStartRow = endRow + 1
         const clearEndRow = startRow + oldRowCount - 1

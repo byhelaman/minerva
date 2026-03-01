@@ -121,7 +121,8 @@ export function ToolbarActions<TData>({
     // Helper to get the correct data source based on settings
     const getActionData = (): Schedule[] => {
         if (settings.actionsRespectFilters) {
-            return table.getFilteredRowModel().rows.map((row) => row.original) as Schedule[];
+            // getSortedRowModel includes filtering AND current sort order
+            return table.getSortedRowModel().rows.map((row) => row.original) as Schedule[];
         }
         return fullData as Schedule[];
     };

@@ -3,7 +3,8 @@ import { UploadModal } from "@schedules/components/modals/UploadModal";
 import { ScheduleDataTable } from "@schedules/components/table/ScheduleDataTable";
 import { getScheduleColumns } from "@schedules/components/table/columns";
 import { Schedule } from "@schedules/types";
-import { getUniqueScheduleKey } from "@schedules/utils/overlap-utils";
+import { getUniqueScheduleKey, getScheduleKey } from "@schedules/utils/overlap-utils";
+import { ISSUE_STYLE_AMBER, ROW_STYLE_INCIDENCE } from "@/features/schedules/utils/issue-styles";
 import { BaseDirectory, exists, readTextFile, remove, writeTextFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,7 @@ import { useSettings } from "@/components/settings-provider";
 import { RequirePermission } from "@/components/RequirePermission";
 import { STORAGE_FILES } from "@/lib/constants";
 import { formatDateToISO, formatDateForDisplay } from "@/lib/date-utils";
-import { Bot, CalendarPlus, CalendarSearch } from "lucide-react";
+import { Bot, CalendarPlus, CalendarSearch, CircleAlert } from "lucide-react";
 import { SearchLinkModal } from "./modals/search/SearchLinkModal";
 import { CreateLinkModal } from "./modals/creation/CreateLinkModal";
 import { AssignLinkModal } from "./modals/assignment/AssignLinkModal";
@@ -50,6 +51,25 @@ export function ScheduleDashboard() {
     // Schedules Computados (Mergeados con Incidencias)
     // Memoizar para prevenir loops infinitos en componentes downstream (AssignLinkModal) que dependen de este array
     const schedules = useMemo(() => getComputedSchedules(), [baseSchedules, incidences, getComputedSchedules]);
+
+    // Build incidence issue categories for the unified IssueFilter
+    const realIncidenceCount = useMemo(() => {
+        return schedules.filter(s => !!s.type).length;
+    }, [schedules]);
+
+    const externalIssueCategories = useMemo(() => {
+        if (realIncidenceCount === 0) return [];
+        return [{ key: 'incidences', label: 'Incidencias', count: realIncidenceCount, icon: CircleAlert, activeClassName: ISSUE_STYLE_AMBER }];
+    }, [realIncidenceCount]);
+
+    const issueRowKeys = useMemo((): Record<string, Set<string>> => {
+        if (realIncidenceCount === 0) return {};
+        const keys = new Set<string>();
+        for (const row of schedules) {
+            if (row.type) keys.add(getScheduleKey(row as unknown as Schedule));
+        }
+        return { incidences: keys };
+    }, [realIncidenceCount, schedules]);
 
     const hasLoadedAutosave = useRef(false);
     const autoSaveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -433,7 +453,12 @@ export function ScheduleDashboard() {
                 onPublish={() => setIsPublishModalOpen(true)}
                 isPublishing={isPublishing}
                 canPublish={schedules.length > 0 && activeDate !== null}
-                onAddRow={() => setIsAddModalOpen(true)}
+                externalIssueCategories={externalIssueCategories}
+                issueRowKeys={issueRowKeys}
+                getRowClassName={(row) => {
+                    const s = row as Schedule & { type?: string };
+                    return s.type ? ROW_STYLE_INCIDENCE : undefined;
+                }}
             />
 
             {/* Upload Modal */}

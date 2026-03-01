@@ -189,7 +189,6 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
                         data={workingData}
                         filterConfig={{
                             showStatus: false,
-                            showIncidenceType: true,
                             showBranch: false,
                             showTime: false,
                         }}
