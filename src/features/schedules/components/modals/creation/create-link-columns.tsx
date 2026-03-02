@@ -307,7 +307,7 @@ export const getCreateLinkColumns = (
                 <DataTableColumnHeader column={column} title="Program" />
             ),
             cell: ({ row }) => (
-                <div className="truncate max-w-75">{row.getValue("inputName")}</div>
+                <div className="truncate max-w-75" title={row.getValue("inputName")}>{row.getValue("inputName")}</div>
             ),
         },
         {

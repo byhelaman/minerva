@@ -82,29 +82,27 @@ export function ToolbarActions<TData>({
 
     const handleCheckCloud = async () => {
         setIsCheckingCloud(true);
-        const toastId = toast.loading("Checking cloud versions...");
 
         try {
             const { data, error } = await getCloudVersions();
 
             if (error) {
-                toast.error("Error checking cloud: " + error, { id: toastId });
+                toast.error("Error checking cloud: " + error);
                 return;
             }
 
             if (data.length === 0) {
-                toast.error("No published versions found", { id: toastId });
+                toast.error("No published versions found");
                 return;
             }
 
-            toast.dismiss(toastId);
             setCloudVersions(data);
             setSelectedVersion(data[0]); // pre-select the most recent
             setShowVersionsDialog(true);
 
         } catch (e) {
             console.error(e);
-            toast.error("Failed to check cloud", { id: toastId });
+            toast.error("Failed to check cloud");
         } finally {
             setIsCheckingCloud(false);
         }

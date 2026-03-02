@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Minerva v2 is a **Tauri 2 desktop app** (Rust + React 19 + Vite 7) for managing educational schedules with Zoom meeting matching and Microsoft OneDrive integration. Backend is Supabase (PostgreSQL + Deno Edge Functions). The app supports English, Spanish, and French (i18next with `src/locales/`).
 
-**Current version:** 0.2.3
+**Current version:** 0.2.8
 
 ## Commands
 
@@ -18,6 +18,7 @@ pnpm tauri build      # Production desktop build (MSI/NSIS → src-tauri/target/
 pnpm test             # Vitest watch mode
 pnpm test:run         # Vitest single run
 pnpm test:coverage    # Vitest with coverage
+pnpm test:ui          # Vitest browser UI
 pnpm vitest run -t "test name"  # Run single test by name
 pnpm tsc --noEmit     # Type-check (there is NO lint script)
 ```
@@ -39,6 +40,7 @@ Detailed technical documentation lives in `docs/` (written in Spanish):
 | `docs/ZOOM_SETUP.md` | Zoom integration: OAuth, 4 Edge Functions, webhooks, batch ops, useZoomStore |
 | `docs/MICROSOFT_SETUP.md` | Microsoft integration: OAuth, Graph API, OneDrive config, tokens |
 | `docs/release_guide.md` | Release process, CI/CD, signing, updater, troubleshooting |
+| `docs/PENDING_IMPROVEMENTS.md` | Known issues, pending fixes, evaluation findings |
 
 **Read the relevant doc before modifying a feature.** The docs are the source of truth for architecture decisions.
 
@@ -59,9 +61,12 @@ React.StrictMode
 
 - `/login` — public
 - All other routes wrapped in `<ProtectedRoute>` with `<GlobalSyncManager>` for background sync
+- `/` — `ScheduleDashboard`
+- `/statistics` — `StatisticsPage` (Recharts charts, daily stats)
 - `/system` — `<AdminRoute>` (hierarchy_level >= 80); integrations require level 100
 - `/reports` — requires `reports.view` permission; management actions require `reports.manage`
 - Layout shell: `<MainNav>` + `<UserNav>` + `<Outlet>`
+- Entire App wrapped in `<UpdaterProvider>` + `<ErrorBoundary>`
 
 ### Path Aliases
 
@@ -78,7 +83,6 @@ Defined in both `tsconfig.json` and `vite.config.ts`.
 - **system/** — Admin panel, roles management, reports, `GlobalSyncManager`, integrations UI
 - **statistics/** — Statistics page with Recharts charts (daily stats, incidence breakdowns)
 - **settings/** — User preferences
-- **profile/** — User profile page
 - **docs/** — In-app docs, bug report form
 
 ### State Management
@@ -128,7 +132,7 @@ Three-tier search (exact normalized → Fuse.js fuzzy → token set fallback) wi
 
 ### Database Migrations (`supabase/migrations/`)
 
-9 migration files (001–009). Run via Supabase SQL Editor in order. 001–006 are consolidated; 007 (`delete_account`), 008 (`statistics_rpc`), and 009 (`reports_rpc`) are standalone.
+8 migration files (001–008). Run via Supabase SQL Editor in order. 001–006 are consolidated; 007 (`delete_account`) and 008 (`schedules_optimization`) are standalone.
 
 Key tables: `profiles`, `roles`, `permissions`, `schedule_entries`, `published_schedules`, `zoom_users`, `zoom_meetings`, `zoom_account`, `microsoft_account`, `webhook_events`, `bug_reports`.
 
@@ -178,10 +182,10 @@ Full schema documentation: `docs/SUPABASE_BACKEND.md`
 Tests live in `tests/` at the project root (not co-located). Vitest globals are enabled (`describe`, `it`, `expect` available without imports). Organized in subdirectories:
 
 - `tests/matching/` — matcher_meetings, matcher_schedules, matcher_users, penalties, normalizer, scorer (6 files)
-- `tests/schedules/` — time-utils, overlap-utils, merge-utils, schedule-schema (4 files)
+- `tests/schedules/` — time-utils, overlap-utils, merge-utils, schedule-schema, db-validation-utils, diff-utils, excel-helpers, excel-parser, export-utils, string-utils (10 files)
 - `tests/lib/` — date-utils, rate-limiter (2 files)
 
-**212 tests across 12 files, all passing.**
+**348 tests across 18 files, all passing.**
 
 ## Environment Variables
 

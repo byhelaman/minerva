@@ -13,7 +13,7 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, options?:
         id: "select",
         size: 36,
         header: ({ table }) => (
-            <div className="flex justify-center items-center mb-1 w-8">
+            <div className="flex justify-center items-center mb-1 w-9">
                 <Checkbox
                     checked={
                         table.getIsAllPageRowsSelected() ||
@@ -26,7 +26,7 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, options?:
             </div>
         ),
         cell: ({ row }) => (
-            <div className="flex justify-center w-8">
+            <div className="flex justify-center">
                 <Checkbox
                     checked={row.getIsSelected()}
                     onCheckedChange={(value) => row.toggleSelected(!!value)}
@@ -40,10 +40,11 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, options?:
     },
     {
         accessorKey: "date",
+        size: 120,
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="date" className="justify-center" />
         ),
-        cell: ({ row }) => <div className="w-25 text-center">
+        cell: ({ row }) => <div className="text-center">
             {formatDateForDisplay(row.getValue("date"))}
         </div>,
     },
@@ -53,7 +54,7 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, options?:
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="shift" />
         ),
-        cell: ({ row }) => <div className="w-[100px]">{row.getValue("shift")}</div>,
+        cell: ({ row }) => <div className="w-25">{row.getValue("shift")}</div>,
         filterFn: (row, id, value) => {
             return value.includes(row.getValue(id));
         },
@@ -72,11 +73,12 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, options?:
     },
     {
         accessorKey: "start_time",
+        size: 130,
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="time" className="justify-center" />
         ),
         cell: ({ row }) => (
-            <div className="w-25 mx-auto text-center">
+            <div className="mx-auto text-center">
                 {row.getValue("start_time")} - {row.original.end_time}
             </div>
         ),
@@ -91,11 +93,12 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, options?:
     },
     {
         accessorKey: "instructor",
+        size: 200,
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="instructor" />
         ),
         cell: ({ row }) => (
-            <div className="truncate max-w-40" title={row.getValue("instructor")}>{row.getValue("instructor")}</div>
+            <div className="truncate max-w-45" title={row.getValue("instructor")}>{row.getValue("instructor")}</div>
         ),
     },
     {
@@ -105,10 +108,10 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, options?:
         ),
         cell: ({ row, table }) => {
             const issueData = (table.options.meta as { getRowIssueTooltip?: (row: Schedule) => string | { type: string; message: React.ReactNode | string } | undefined })?.getRowIssueTooltip?.(row.original);
-            
+
             let isMod = false;
             let tooltipMessage: React.ReactNode | string | undefined = undefined;
-            
+
             if (issueData) {
                 if (typeof issueData === 'object' && 'type' in issueData) {
                     isMod = issueData.type === 'mod';
@@ -140,19 +143,17 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, options?:
     },
     {
         accessorKey: "minutes",
-        size: 70,
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="mins" className="justify-center" />
         ),
-        cell: ({ row }) => <div className="w-[50px] text-center">{row.getValue("minutes")}</div>,
+        cell: ({ row }) => <div className="w-12 text-center">{row.getValue("minutes")}</div>,
     },
     {
         accessorKey: "units",
-        size: 70,
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="units" className="justify-center" />
         ),
-        cell: ({ row }) => <div className="w-[50px] text-center">{row.getValue("units")}</div>,
+        cell: ({ row }) => <div className="w-12 text-center">{row.getValue("units")}</div>,
     },
     {
         accessorKey: "status",
@@ -169,11 +170,11 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, options?:
     },
     {
         accessorKey: "substitute",
-        size: 150,
+        size: 160,
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="substitute" />
         ),
-        cell: ({ row }) => <div className="truncate max-w-30">{row.getValue("substitute")}</div>,
+        cell: ({ row }) => <div className="truncate max-w-35">{row.getValue("substitute")}</div>,
     },
     {
         accessorKey: "type",
@@ -196,11 +197,12 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, options?:
     },
     {
         accessorKey: "description",
+        size: 400,
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="description" />
         ),
         cell: ({ row }) => (
-            <div className="truncate max-w-60">{row.getValue("description")}</div>
+            <div className="truncate max-w-90">{row.getValue("description")}</div>
         )
     },
     {

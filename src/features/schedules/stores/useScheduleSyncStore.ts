@@ -30,7 +30,7 @@ interface ScheduleSyncState {
     // Let's keep isPublishing for DB, add isSyncing for Excel
 
     // Core Actions
-    publishToSupabase: (overwrite?: boolean) => Promise<{ success: boolean; error?: string; exists?: boolean }>;
+    publishToSupabase: () => Promise<{ success: boolean; error?: string; exists?: boolean }>;
     syncToExcel: (date?: string, endDate?: string) => Promise<void>;
 
     // Supabase State (Published Schedules Table)
@@ -44,10 +44,11 @@ interface ScheduleSyncState {
     dismissUpdate: (id: string) => void;
     // Download legacy logic removed or adapted? Adapted to just load date
     loadPublishedSchedule: (schedule: PublishedSchedule) => Promise<void>;
-    resetCurrentVersion: () => Promise<void>;
+    resetCurrentVersion: (recheckForUpdates?: boolean) => Promise<void>;
     resetSyncState: () => void;
     getLatestCloudVersion: (date?: string | null) => Promise<{ exists: boolean; data?: PublishedSchedule; error?: string }>;
     getCloudVersions: () => Promise<{ data: PublishedSchedule[]; error?: string }>;
+    deletePublishedScheduleByDate: (date: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 // Helper to get initial state
@@ -112,7 +113,7 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
         }
     },
 
-    publishToSupabase: async (overwrite = false) => {
+    publishToSupabase: async () => {
         const { activeDate } = useScheduleUIStore.getState();
         const { baseSchedules } = useScheduleDataStore.getState();
 
@@ -131,24 +132,38 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
                 .eq('schedule_date', activeDate)
                 .single();
 
-            if (existing && !overwrite) return { success: false, error: 'A schedule is already published for this date', exists: true };
+            if (existing) return { success: false, error: 'A schedule is already published for this date', exists: true };
 
-            // 2. Publish Entries (Upsert)
-            await scheduleEntriesService.publishSchedules(baseSchedules, (await supabase.auth.getUser()).data.user?.id || '');
+            const userId = (await supabase.auth.getUser()).data.user?.id || '';
 
-            // 3. Update 'published_schedules' header (without JSONB)
+            // 2. Create published_schedules header first to block accidental replacements by date
             const { data: published, error } = await supabase
                 .from('published_schedules')
-                .upsert({
+                .insert({
                     schedule_date: activeDate,
                     entries_count: baseSchedules.length,
-                    published_by: (await supabase.auth.getUser()).data.user?.id,
+                    published_by: userId,
                     updated_at: new Date().toISOString()
-                }, { onConflict: 'schedule_date' })
+                })
                 .select()
                 .single();
 
-            if (error) throw error;
+            if (error) {
+                const dbError = error as { code?: string };
+                if (dbError.code === '23505') {
+                    return { success: false, error: 'A schedule is already published for this date', exists: true };
+                }
+                throw error;
+            }
+
+            try {
+                // 3. Publish Entries (Upsert)
+                await scheduleEntriesService.publishSchedules(baseSchedules, userId);
+            } catch (publishError) {
+                // Revert header if entries publishing fails
+                await supabase.from('published_schedules').delete().eq('id', published.id);
+                throw publishError;
+            }
 
             if (published) {
                 const versionData = { id: published.id, updated_at: published.updated_at };
@@ -324,7 +339,7 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
         });
     },
 
-    resetCurrentVersion: async () => {
+    resetCurrentVersion: async (recheckForUpdates = true) => {
         localStorage.removeItem('current_schedule_version');
         set({
             currentVersionId: null,
@@ -332,8 +347,10 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
             latestPublished: null
         });
 
-        // Check for updates to show the toast again if there is a version on server
-        await get().checkForUpdates();
+        if (recheckForUpdates) {
+            // Check for updates to show the toast again if there is a version on server
+            await get().checkForUpdates();
+        }
     },
 
     resetSyncState: () => {
@@ -388,6 +405,31 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
         } catch (e: unknown) {
             console.error("Error fetching cloud version:", e);
             return { exists: false, error: e instanceof Error ? e.message : "Unknown error" };
+        }
+    },
+
+    deletePublishedScheduleByDate: async (date: string) => {
+        if (!date) return { success: false, error: 'Date is required' };
+
+        try {
+            const { error: deleteEntriesError } = await supabase
+                .from('schedule_entries')
+                .delete()
+                .eq('date', date);
+
+            if (deleteEntriesError) throw deleteEntriesError;
+
+            const { error: deletePublishedError } = await supabase
+                .from('published_schedules')
+                .delete()
+                .eq('schedule_date', date);
+
+            if (deletePublishedError) throw deletePublishedError;
+
+            return { success: true };
+        } catch (e: unknown) {
+            console.error('Error deleting published schedule by date:', e);
+            return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
         }
     }
 }));

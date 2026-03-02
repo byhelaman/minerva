@@ -27,12 +27,10 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
 
     const [isLoadingCheck, setIsLoadingCheck] = useState(false);
     const [validationError, setValidationError] = useState<string | null>(null);
-    const [needsOverwrite, setNeedsOverwrite] = useState(false);
 
     useEffect(() => {
         if (open && activeDate) {
             // Reset state on open to prevent flash of stale state
-            setNeedsOverwrite(false);
             setValidationError(null);
 
             checkStatus();
@@ -85,7 +83,11 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
 
             // 5. Check Existence
             const exists = await checkIfScheduleExists(activeDate);
-            setNeedsOverwrite(exists);
+            if (exists) {
+                setValidationError(
+                    "A schedule is already published for this date. Delete that date from System Administration before publishing a new one."
+                );
+            }
 
         } catch (error) {
             console.error("Check failed", error);
@@ -95,20 +97,13 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
     };
 
     const handlePublish = async () => {
-        const result = await publishToSupabase(false);
+        const result = await publishToSupabase();
         if (result.success) {
             onOpenChange(false);
         } else if (result.exists) {
-            setNeedsOverwrite(true);
-        } else if (result.error) {
-            setValidationError(result.error);
-        }
-    };
-
-    const handleOverwrite = async () => {
-        const result = await publishToSupabase(true);
-        if (result.success) {
-            onOpenChange(false);
+            setValidationError(
+                "A schedule is already published for this date. Delete that date from System Administration before publishing a new one."
+            );
         } else if (result.error) {
             setValidationError(result.error);
         }
@@ -119,7 +114,7 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
             <AlertDialogContent className="sm:max-w-100!">
                 <AlertDialogHeader>
                     <AlertDialogTitle>
-                        {isLoadingCheck ? "Checking..." : (validationError ? "Cannot Publish Schedule" : (needsOverwrite ? "Schedule Already Exists" : "Publish Schedule"))}
+                        {isLoadingCheck ? "Checking..." : (validationError ? "Cannot Publish Schedule" : "Publish Schedule")}
                     </AlertDialogTitle>
                     <AlertDialogDescription asChild>
                         <div>
@@ -132,10 +127,6 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
                                     Issue with schedule for <strong>{formatDateForDisplay(activeDate!)}</strong>:
                                     <br />
                                     {validationError}
-                                </span>
-                            ) : needsOverwrite ? (
-                                <span>
-                                    A schedule for <strong>{formatDateForDisplay(activeDate!)}</strong> has already been published. If you proceed, it will replace the existing schedule for all users.
                                 </span>
                             ) : (
                                 <>
@@ -161,20 +152,10 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
                             <AlertDialogCancel disabled={isPublishing} onClick={() => onOpenChange(false)}>
                                 Cancel
                             </AlertDialogCancel>
-                            {needsOverwrite ? (
-                                <AlertDialogAction
-                                    onClick={handleOverwrite}
-                                    disabled={isPublishing}
-                                >
-                                    {isPublishing ? <Loader2 className="animate-spin" /> : null}
-                                    Continue
-                                </AlertDialogAction>
-                            ) : (
-                                <AlertDialogAction onClick={handlePublish} disabled={isPublishing || isLoadingCheck}>
-                                    {isPublishing ? <Loader2 className="animate-spin" /> : null}
-                                    {isLoadingCheck ? "Checking..." : "Publish"}
-                                </AlertDialogAction>
-                            )}
+                            <AlertDialogAction onClick={handlePublish} disabled={isPublishing || isLoadingCheck}>
+                                {isPublishing ? <Loader2 className="animate-spin" /> : null}
+                                {isLoadingCheck ? "Checking..." : "Publish"}
+                            </AlertDialogAction>
                         </>
                     )}
                 </AlertDialogFooter>

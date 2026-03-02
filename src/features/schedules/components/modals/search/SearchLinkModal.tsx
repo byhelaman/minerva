@@ -162,7 +162,7 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
             accessorKey: "topic",
             size: 350,
             header: ({ column }) => <DataTableColumnHeader column={column} title="Topic" />,
-            cell: ({ row }) => <div className="truncate max-w-[320px]">{row.getValue("topic")}</div>,
+            cell: ({ row }) => <div className="truncate max-w-[320px]" title={row.getValue("topic")}>{row.getValue("topic")}</div>,
         },
         {
             accessorKey: "host_name",

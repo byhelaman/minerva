@@ -280,6 +280,12 @@ export function ScheduleDashboard() {
         return () => clearInterval(interval);
     }, [showLiveMode, fetchActiveMeetings]);
 
+    useEffect(() => {
+        if (showLiveMode && schedules.length === 0) {
+            handleLiveModeToggle(false);
+        }
+    }, [showLiveMode, schedules.length, handleLiveModeToggle]);
+
     const handleUploadComplete = (newData: Schedule[]) => {
         const internalKeys = new Set<string>();
         const deduplicatedNewData: Schedule[] = [];
@@ -365,6 +371,7 @@ export function ScheduleDashboard() {
 
     const handleClearSchedule = async () => {
         try {
+            await handleLiveModeToggle(false);
             setBaseSchedules([]);
             setActiveDate(null); // Reset active date
             useZoomStore.setState({ matchResults: [] });
@@ -373,8 +380,8 @@ export function ScheduleDashboard() {
                 await remove(STORAGE_FILES.SCHEDULES_DRAFT, { baseDir: BaseDirectory.AppLocalData });
             }
 
-            // Reset version tracking so toast can reappear if there is a server version
-            await useScheduleSyncStore.getState().resetCurrentVersion();
+            // Reset version tracking without re-checking cloud to avoid re-triggering notification toast
+            await useScheduleSyncStore.getState().resetCurrentVersion(false);
 
             toast.success("Schedule cleared");
         } catch (error) {

@@ -2,7 +2,7 @@
 
 Tauri 2 desktop app (Rust + React 19 + Vite 7) for educational schedule management with Zoom matching and OneDrive integration. Backend: Supabase (PostgreSQL + Deno Edge Functions). Supports en/es/fr via i18next.
 
-**Current version:** 0.2.0
+**Current version:** 0.2.8
 
 ## Build & Test Commands
 
@@ -12,7 +12,9 @@ pnpm tauri dev                     # Full desktop dev (Vite + native window)
 pnpm build                         # tsc && vite build
 pnpm tauri build                   # Production build (MSI/NSIS → src-tauri/target/release/)
 pnpm test                          # Vitest watch mode
-pnpm test:run                      # Vitest single run (212 tests)
+pnpm test:run                      # Vitest single run (348 tests)
+pnpm test:coverage                 # Vitest with coverage
+pnpm test:ui                       # Vitest browser UI
 pnpm vitest run -t "test name"     # Run a single test by name
 pnpm tsc --noEmit                  # Type-check (there is NO lint script)
 ```
@@ -30,23 +32,33 @@ Detailed technical docs (written in Spanish). **Read the relevant doc before mod
 | `docs/AUTH_SYSTEM.md` | Auth (Supabase + MSAL), JWT claims, sessions, rate limiter | Touching auth, login, providers |
 | `docs/EXCEL_SYSTEM.md` | Excel parser (2 formats), Zod schemas, validation, auto-save | Modifying schedule upload/parse |
 | `docs/SUPABASE_BACKEND.md` | Edge Functions, DB schema (6 consolidated migrations), RLS, Vault | Changing DB, RLS, Edge Functions |
-| `docs/matching_logic.md` | Matching engine: normalizer, 3-tier search, 10 penalties | Modifying matching/scoring logic |
+| `docs/MATCHING_LOGIC.md` | Matching engine: normalizer, 3-tier search, 10 penalties | Modifying matching/scoring logic |
 | `docs/ZOOM_SETUP.md` | Zoom: OAuth, 4 Edge Functions, webhooks, batch ops, useZoomStore | Touching Zoom integration |
-| `docs/microsoft_setup.md` | Microsoft: OAuth, Graph API (15+ actions), OneDrive config | Touching Microsoft integration |
+| `docs/MICROSOFT_SETUP.md` | Microsoft: OAuth, Graph API (15+ actions), OneDrive config | Touching Microsoft integration |
 | `docs/release_guide.md` | Release process, CI/CD, signing, updater | Preparing a release |
+| `docs/PENDING_IMPROVEMENTS.md` | Known issues, pending fixes, evaluation findings | Checking known bugs or improvement backlog |
 
 ## Architecture
 
 ### Provider hierarchy (`src/main.tsx`)
 
-MSAL initializes first (async), then: `MsalProvider → ThemeProvider → AuthProvider → BrowserRouter → SettingsProvider → App`
+```
+React.StrictMode
+  └─ ThemeProvider
+      └─ AuthProvider
+          └─ BrowserRouter
+              └─ SettingsProvider
+                  └─ App + BugReportButton + Toaster
+```
 
 ### Routing (`src/App.tsx`)
 
-Flat routes via react-router-dom v7.
+Flat routes via react-router-dom v7. App is wrapped in `<UpdaterProvider>` + `<ErrorBoundary>`.
 - `/login` — public
-- All others wrapped in `<ProtectedRoute>` + `<GlobalSyncManager>`
-- `/system` — admin only (`hierarchy_level >= 80`); integrations (Zoom, Microsoft) require `level={100}` (super_admin)
+- All others wrapped in `<ProtectedRoute>` + `<GlobalSyncManager>` + shared `<Layout>`
+- `/` — `ScheduleDashboard`
+- `/statistics` — `StatisticsPage` (Recharts charts, daily stats)
+- `/system` — `<AdminRoute>` (`hierarchy_level >= 80`); integrations (Zoom, Microsoft) require `level={100}` (super_admin)
 - `/reports` — requires `reports.view` permission; management actions require `reports.manage`
 
 ### Feature-based organization (`src/features/`)
@@ -57,8 +69,8 @@ Flat routes via react-router-dom v7.
 | `matching/` | Zoom meeting matching engine — scorer, 10 penalties, Web Worker |
 | `auth/` | Login, signup, OTP, password reset |
 | `system/` | Admin panel, roles, reports, `GlobalSyncManager`, integrations UI |
+| `statistics/` | Statistics page with Recharts charts (daily stats, incidence breakdowns) |
 | `settings/` | User preferences |
-| `profile/` | User profile |
 | `docs/` | In-app docs, bug report form |
 
 ### State management
@@ -75,7 +87,7 @@ Flat routes via react-router-dom v7.
 
 ### Matching engine (`src/features/matching/`)
 
-Three-tier search: exact normalized → Fuse.js fuzzy → token set fallback. Runs off main thread in a **Web Worker** (`match.worker.ts`). Config source of truth: `matching/config/matching.config.json` (penalties, thresholds, 10 categories of irrelevant words). **Full docs: `docs/matching_logic.md`**
+Three-tier search: exact normalized → Fuse.js fuzzy → token set fallback. Runs off main thread in a **Web Worker** (`match.worker.ts`). Config source of truth: `matching/config/matching.config.json` (penalties, thresholds, 10 categories of irrelevant words). **Full docs: `docs/MATCHING_LOGIC.md`**
 
 ### Supabase Edge Functions (`supabase/functions/`, Deno)
 
@@ -100,7 +112,7 @@ Most deploy with `--no-verify-jwt` (custom auth inside). Shared utils in `_share
 
 ### Database
 
-6 consolidated migration files (001–006). Key tables: `profiles`, `roles`, `permissions`, `schedule_entries`, `published_schedules`, `zoom_users`, `zoom_meetings`, `zoom_account`, `microsoft_account`, `webhook_events`, `bug_reports`. **Full schema: `docs/SUPABASE_BACKEND.md`**
+8 migration files (001–008). 001–006 are consolidated; 007 (`delete_account`) and 008 (`schedules_optimization`) are standalone. Key tables: `profiles`, `roles`, `permissions`, `schedule_entries`, `published_schedules`, `zoom_users`, `zoom_meetings`, `zoom_account`, `microsoft_account`, `webhook_events`, `bug_reports`. **Full schema: `docs/SUPABASE_BACKEND.md`**
 
 ## Permissions & Authorization
 
@@ -132,11 +144,11 @@ Integration pattern (Zoom, Microsoft):
 ## Testing
 
 - Tests live in `tests/` at project root (not co-located), organized in subdirectories:
-  - `tests/matching/` — matcher, penalties, normalizer, scorer (6 files)
-  - `tests/schedules/` — time-utils, overlap-utils, merge-utils, schema (4 files)
+  - `tests/matching/` — matcher_meetings, matcher_schedules, matcher_users, penalties, normalizer, scorer (6 files)
+  - `tests/schedules/` — time-utils, overlap-utils, merge-utils, schedule-schema, db-validation-utils, diff-utils, excel-helpers, excel-parser, export-utils, string-utils (10 files)
   - `tests/lib/` — date-utils, rate-limiter (2 files)
 - Vitest with globals enabled — `describe`, `it`, `expect` available without imports
-- 212 tests across 12 files covering matching, schedules, and lib
+- 348 tests across 18 files covering matching, schedules, and lib
 - After changing behavior: add or update tests, even if not explicitly asked
 - After moving files or changing imports: run `pnpm tsc --noEmit`
 

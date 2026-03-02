@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Loader2, Trash2, CircleAlert, Plus, Pencil, Check, X } from "lucide-react";
+import { Search, Loader2, Trash2, CircleAlert, Plus, Pencil, UserRoundPen } from "lucide-react";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { supabase } from "@/lib/supabase";
 import { getErrorMessage } from "@/lib/utils";
@@ -56,6 +56,7 @@ interface User {
     role: string;
     hierarchy_level: number;
     created_at: string;
+    last_login_at: string | null;
 }
 
 interface Role {
@@ -74,6 +75,15 @@ const createUserSchema = z.object({
 
 type CreateUserFormData = z.infer<typeof createUserSchema>;
 
+const editDisplayNameSchema = z.object({
+    displayName: z
+        .string()
+        .min(2, "Display name must be at least 2 characters")
+        .max(30, "Display name must not be longer than 30 characters"),
+});
+
+type EditDisplayNameFormData = z.infer<typeof editDisplayNameSchema>;
+
 export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) {
     const { profile, hasPermission } = useAuth();
     const [searchQuery, setSearchQuery] = useState("");
@@ -87,8 +97,8 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
     const [isDeleting, setIsDeleting] = useState(false);
 
     // Edit display name state
-    const [editingUserId, setEditingUserId] = useState<string | null>(null);
-    const [editingDisplayName, setEditingDisplayName] = useState("");
+    const [editNameOpen, setEditNameOpen] = useState(false);
+    const [editNameUser, setEditNameUser] = useState<User | null>(null);
     const [isSavingDisplayName, setIsSavingDisplayName] = useState(false);
 
     // Create user state
@@ -103,12 +113,24 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
         defaultValues: { email: '', password: '', displayName: '', role: 'viewer' },
     });
 
+    const editNameForm = useForm<EditDisplayNameFormData>({
+        resolver: zodResolver(editDisplayNameSchema),
+        defaultValues: { displayName: '' },
+    });
+
     // Reset form when dialog closes
     useEffect(() => {
         if (!isCreateOpen) {
             createForm.reset();
         }
     }, [isCreateOpen, createForm]);
+
+    useEffect(() => {
+        if (!editNameOpen) {
+            setEditNameUser(null);
+            editNameForm.reset({ displayName: '' });
+        }
+    }, [editNameOpen, editNameForm]);
 
     // Fetch users and roles when modal opens
     useEffect(() => {
@@ -164,34 +186,32 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
     };
 
     const handleStartEditDisplayName = (user: User) => {
-        setEditingUserId(user.id);
-        setEditingDisplayName(user.display_name || '');
+        setEditNameUser(user);
+        editNameForm.reset({ displayName: user.display_name || '' });
+        setEditNameOpen(true);
     };
 
-    const handleCancelEditDisplayName = () => {
-        setEditingUserId(null);
-        setEditingDisplayName('');
-    };
+    const handleSaveDisplayName = async (data: EditDisplayNameFormData) => {
+        if (!editNameUser) return;
 
-    const handleSaveDisplayName = async (userId: string) => {
         setIsSavingDisplayName(true);
         try {
             const { error } = await supabase.rpc('update_user_display_name', {
-                target_user_id: userId,
-                new_display_name: editingDisplayName.trim() || null
+                target_user_id: editNameUser.id,
+                new_display_name: data.displayName.trim() || null
             });
 
             if (error) throw error;
 
             // Update local state
             setUsers(prev => prev.map(u =>
-                u.id === userId
-                    ? { ...u, display_name: editingDisplayName.trim() || null }
+                u.id === editNameUser.id
+                    ? { ...u, display_name: data.displayName.trim() || null }
                     : u
             ));
 
-            setEditingUserId(null);
-            setEditingDisplayName('');
+            setEditNameOpen(false);
+            setEditNameUser(null);
             toast.success('Display name updated successfully');
         } catch (err: unknown) {
             console.error('Error updating display name:', err);
@@ -265,6 +285,15 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
         (user.display_name?.toLowerCase() || '').includes(searchQuery.toLowerCase())
     );
 
+    const formatLastLogin = (lastLoginAt: string | null) => {
+        if (!lastLoginAt) return 'Never';
+
+        const date = new Date(lastLoginAt);
+        if (Number.isNaN(date.getTime())) return 'Unknown';
+
+        return date.toLocaleString();
+    };
+
     const getRoleBadgeVariant = (role: string) => {
         switch (role) {
             case "super_admin": return "default";
@@ -336,59 +365,19 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
                                     <div key={user.id} className="group flex items-center justify-between p-3 px-4 hover:bg-muted/50">
                                         <div className="space-y-0.5 min-w-0 flex-1">
                                             <div className="flex items-center gap-2">
-                                                {editingUserId === user.id ? (
-                                                    <div className="flex items-center gap-1">
-                                                        <Input
-                                                            value={editingDisplayName}
-                                                            onChange={(e) => setEditingDisplayName(e.target.value)}
-                                                            className="h-7 w-[160px] text-sm"
-                                                            placeholder="Display name"
-                                                            autoFocus
-                                                            disabled={isSavingDisplayName}
-                                                            onKeyDown={(e) => {
-                                                                if (e.key === 'Enter') handleSaveDisplayName(user.id);
-                                                                if (e.key === 'Escape') handleCancelEditDisplayName();
-                                                            }}
-                                                        />
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon-sm"
-                                                            onClick={() => handleSaveDisplayName(user.id)}
-                                                            disabled={isSavingDisplayName}
-                                                        >
-                                                            {isSavingDisplayName ? <Loader2 className="animate-spin" /> : <Check className="text-green-600" />}
-                                                        </Button>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon-sm"
-                                                            onClick={handleCancelEditDisplayName}
-                                                            disabled={isSavingDisplayName}
-                                                        >
-                                                            <X className="text-muted-foreground" />
-                                                        </Button>
-                                                    </div>
-                                                ) : (
-                                                    <>
-                                                        <p className="font-medium text-sm truncate">
-                                                            {user.display_name || user.email.split('@')[0]}
-                                                        </p>
-                                                        {canModifyUser(user.hierarchy_level) && user.id !== profile?.id && (
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon-sm"
-                                                                className="h-5 w-5 opacity-0 group-hover:opacity-100 hover:opacity-100"
-                                                                onClick={() => handleStartEditDisplayName(user)}
-                                                            >
-                                                                <Pencil className="h-3 w-3" />
-                                                            </Button>
-                                                        )}
-                                                    </>
-                                                )}
+                                                <>
+                                                    <p className="font-medium text-sm truncate">
+                                                        {user.display_name || user.email.split('@')[0]}
+                                                    </p>
+                                                </>
                                                 {user.id === profile?.id && (
                                                     <Badge variant="secondary" className="text-xs">You</Badge>
                                                 )}
                                             </div>
                                             <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                                            <p className="text-xs text-muted-foreground truncate">
+                                                Last login: {formatLastLogin(user.last_login_at)}
+                                            </p>
                                         </div>
                                         <div className="flex items-center gap-2 shrink-0">
                                             {/* Role Select */}
@@ -412,6 +401,16 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
                                                 <Badge variant={getRoleBadgeVariant(user.role)}>
                                                     {user.role}
                                                 </Badge>
+                                            )}
+
+                                            {canModifyUser(user.hierarchy_level) && user.id !== profile?.id && (
+                                                <Button
+                                                    variant="secondary"
+                                                    size="icon-sm"
+                                                    onClick={() => handleStartEditDisplayName(user)}
+                                                >
+                                                    <UserRoundPen />
+                                                </Button>
                                             )}
 
                                             {/* Delete Button (users.manage permission + lower rank) */}
@@ -451,6 +450,42 @@ export function ManageUsersModal({ open, onOpenChange }: ManageUsersModalProps) 
                             )}
                         </div>
                     </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Display Name Dialog */}
+            <Dialog open={editNameOpen} onOpenChange={setEditNameOpen}>
+                <DialogContent className="sm:max-w-sm gap-6">
+                    <DialogHeader>
+                        <DialogTitle>Change name</DialogTitle>
+                        <DialogDescription>
+                            Update display name for {editNameUser?.email || 'selected user'}.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form id="edit-user-name-form" onSubmit={editNameForm.handleSubmit(handleSaveDisplayName)}>
+                        <Controller
+                            control={editNameForm.control}
+                            name="displayName"
+                            render={({ field, fieldState }) => (
+                                <Field data-invalid={fieldState.invalid}>
+                                    <FieldLabel>New name</FieldLabel>
+                                    <Input
+                                        {...field}
+                                        placeholder="Your Name"
+                                        aria-invalid={fieldState.invalid}
+                                        disabled={isSavingDisplayName}
+                                    />
+                                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                </Field>
+                            )}
+                        />
+                    </form>
+                    <DialogFooter>
+                        <Button type="submit" form="edit-user-name-form" disabled={isSavingDisplayName}>
+                            {isSavingDisplayName && <Loader2 className="animate-spin" />}
+                            Save
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 

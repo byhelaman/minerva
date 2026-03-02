@@ -43,9 +43,9 @@ export const getAssignmentColumns = (
 
         {
             id: "select",
-            size: 40,
+            size: 36,
             header: ({ table }) => (
-                <div className="flex justify-center items-center mb-1 w-7">
+                <div className="flex justify-center items-center mb-1 w-9">
                     <Checkbox
                         checked={
                             table.getIsAllPageRowsSelected() ||
@@ -130,7 +130,7 @@ export const getAssignmentColumns = (
                 <DataTableColumnHeader column={column} title="Program" />
             ),
             cell: ({ row }) => (
-                <div className="truncate max-w-[320px]">
+                <div className="truncate max-w-[320px]" title={row.getValue("program")}>
                     {row.getValue("program")}
                 </div>
             ),

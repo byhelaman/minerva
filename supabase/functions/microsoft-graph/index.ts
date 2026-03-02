@@ -43,10 +43,10 @@ Deno.serve(async (req: Request) => {
         if (needsFileId.includes(action) && (!fileId || typeof fileId !== 'string')) {
             return new Response(JSON.stringify({ error: 'fileId is required and must be a string' }), { status: 400, headers: corsHeaders })
         }
-        const needsFolderId = ['list-children']
-        if (needsFolderId.includes(action) && (!folderId || typeof folderId !== 'string')) {
-            return new Response(JSON.stringify({ error: 'folderId is required and must be a string' }), { status: 400, headers: corsHeaders })
-        }
+
+        const normalizedFolderId = typeof folderId === 'string' && folderId.trim().length > 0
+            ? folderId
+            : 'root'
 
         // Determinar el permiso requerido según la acción
         const readActions = ['list-children', 'list-worksheets', 'list-content', 'list-tables', 'read-table-rows'];
@@ -67,7 +67,7 @@ Deno.serve(async (req: Request) => {
         switch (action) {
             // === READ ACTIONS ===
             case 'list-children':
-                result = await readControllers.handleListChildren(token, folderId)
+                result = await readControllers.handleListChildren(token, normalizedFolderId)
                 break
             case 'list-worksheets':
             case 'list-content':

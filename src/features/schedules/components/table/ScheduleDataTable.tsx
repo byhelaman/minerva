@@ -311,6 +311,7 @@ export function ScheduleDataTable<TData, TValue>({
     // because Schedule rows may not have an 'id' field (rowId falls back to index string).
     const tableRef = React.useRef(table);
     tableRef.current = table;
+    const selectionAnchorRowIdRef = React.useRef<string | null>(null);
     React.useEffect(() => {
         if (onSelectionChangeRef.current) {
             const selectedRows = tableRef.current.getSelectedRowModel().rows.map(r => r.original);
@@ -352,6 +353,56 @@ export function ScheduleDataTable<TData, TValue>({
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [tableData]);
+
+    const handleRowModifierSelection = React.useCallback((event: React.MouseEvent<HTMLTableRowElement>, rowId: string) => {
+        if (!(event.shiftKey || event.ctrlKey || event.metaKey)) return;
+
+        const target = event.target as HTMLElement;
+        if (target.closest('button, a, input, [role="checkbox"], [data-radix-collection-item]')) return;
+
+        const visibleRows = table.getRowModel().rows;
+        const isToggle = event.ctrlKey || event.metaKey;
+
+        if (event.shiftKey && selectionAnchorRowIdRef.current) {
+            const fromIndex = visibleRows.findIndex((r) => r.id === selectionAnchorRowIdRef.current);
+            const toIndex = visibleRows.findIndex((r) => r.id === rowId);
+
+            if (fromIndex !== -1 && toIndex !== -1) {
+                const [start, end] = fromIndex < toIndex ? [fromIndex, toIndex] : [toIndex, fromIndex];
+                const nextSelection: Record<string, boolean> = isToggle ? { ...rowSelection } : {};
+
+                for (let index = start; index <= end; index++) {
+                    nextSelection[visibleRows[index].id] = true;
+                }
+
+                setRowSelection(nextSelection);
+                return;
+            }
+        }
+
+        if (isToggle) {
+            const isSelected = !!rowSelection[rowId as keyof typeof rowSelection];
+            const nextSelection = { ...rowSelection } as Record<string, boolean>;
+
+            if (isSelected) {
+                delete nextSelection[rowId];
+            } else {
+                nextSelection[rowId] = true;
+            }
+
+            setRowSelection(nextSelection);
+            selectionAnchorRowIdRef.current = rowId;
+        }
+    }, [rowSelection, setRowSelection, table]);
+
+    const handleRowModifierMouseDown = React.useCallback((event: React.MouseEvent<HTMLTableRowElement>) => {
+        if (!(event.shiftKey || event.ctrlKey || event.metaKey)) return;
+
+        const target = event.target as HTMLElement;
+        if (target.closest('button, a, input, [role="checkbox"], [data-radix-collection-item]')) return;
+
+        event.preventDefault();
+    }, []);
 
     const handleBulkCopy = () => {
         const selectedRows = table.getFilteredSelectedRowModel().rows;
@@ -418,7 +469,7 @@ export function ScheduleDataTable<TData, TValue>({
         const rows = selectedRows.map(row => {
             return mapScheduleToExcelRow(row.original as Schedule);
         }).join("\n");
-        
+
         navigator.clipboard.writeText(rows).then(() => {
             toast.success(`${selectedRows.length} rows copied for Excel`);
         }).catch(() => {
@@ -435,19 +486,19 @@ export function ScheduleDataTable<TData, TValue>({
 
         const baseVisibleData = data.filter(item => {
             const row = item as Record<string, unknown>;
-            
+
             // 1. Column filters (simplified evaluation for our specific filters: branch, status, time, type)
             for (const filter of activeFilters) {
                 const cellValue = String(row[filter.id] || '');
                 const filterValues = filter.value as string | string[];
 
                 if (Array.isArray(filterValues)) {
-                   if (!filterValues.includes(cellValue)) return false;
+                    if (!filterValues.includes(cellValue)) return false;
                 } else if (typeof filterValues === 'string') {
-                   if (!cellValue.toLowerCase().startsWith(filterValues.toLowerCase()) && 
-                       !cellValue.toLowerCase().includes(filterValues.toLowerCase())) {
-                       return false;
-                   }
+                    if (!cellValue.toLowerCase().startsWith(filterValues.toLowerCase()) &&
+                        !cellValue.toLowerCase().includes(filterValues.toLowerCase())) {
+                        return false;
+                    }
                 }
             }
 
@@ -467,7 +518,7 @@ export function ScheduleDataTable<TData, TValue>({
         // Recalculate issue counts dynamically using the base visible data
         return issueCategories.map(cat => {
             const keysForThisCategory = allIssueRowKeys[cat.key] || new Set();
-            
+
             const activeCount = baseVisibleData.filter(item => {
                 const rowKey = props.getRowKey ? props.getRowKey(item) : getScheduleKey(item as unknown as Schedule);
                 return keysForThisCategory.has(rowKey);
@@ -513,9 +564,9 @@ export function ScheduleDataTable<TData, TValue>({
             />
 
             {/* Table */}
-            <div className="flex-1 min-h-0 overflow-auto">
-                <div className="rounded-md border">
-                    <Table>
+            <div className="flex flex-1 min-h-0 flex-col overflow-auto">
+                <div className="w-max min-w-full rounded-md border">
+                    <Table containerClassName="overflow-visible">
                         <TableHeader>
                             {table.getHeaderGroups().map((headerGroup) => (
                                 <TableRow key={headerGroup.id}>
@@ -558,6 +609,8 @@ export function ScheduleDataTable<TData, TValue>({
                                         <TableRow
                                             key={row.id}
                                             data-state={row.getIsSelected() && "selected"}
+                                            onMouseDown={handleRowModifierMouseDown}
+                                            onClick={(event) => handleRowModifierSelection(event, row.id)}
                                             className={cn(
                                                 isConflict && "bg-red-50 dark:bg-red-950/20 border-l-2 border-l-red-500",
                                                 isActive && "bg-green-50 dark:bg-green-950/20 border-l-2 border-l-green-500",

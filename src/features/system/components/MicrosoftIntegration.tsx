@@ -87,11 +87,12 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
 
         setLoadingFolders(prev => new Set(prev).add(folderKey));
         try {
+            const body = folderId
+                ? { action: 'list-children', folderId }
+                : { action: 'list-children' };
+
             const { data, error } = await supabase.functions.invoke('microsoft-graph', {
-                body: {
-                    action: 'list-children',
-                    folderId
-                },
+                body,
                 method: 'POST'
             });
 

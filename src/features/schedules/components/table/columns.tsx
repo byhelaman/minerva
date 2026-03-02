@@ -19,7 +19,7 @@ export const getScheduleColumns = (
             id: "select",
             size: 36,
             header: ({ table }) => (
-                <div className="flex justify-center items-center mb-1 w-8">
+                <div className="flex justify-center items-center mb-1 w-9">
                     <Checkbox
                         checked={
                             table.getIsAllPageRowsSelected() ||
@@ -46,31 +46,29 @@ export const getScheduleColumns = (
         },
         {
             accessorKey: "date",
+            size: 120,
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Date" className="justify-center" />
             ),
-            cell: ({ row }) => <div className="w-[80px] mx-auto">{formatDateForDisplay(row.getValue("date"))}</div>,
+            cell: ({ row }) => <div className="text-center">{formatDateForDisplay(row.getValue("date"))}</div>,
         },
         {
             accessorKey: "shift",
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Shift" />
             ),
-            cell: ({ row }) => <div className="w-[100px]">{row.getValue("shift")}</div>,
+            cell: ({ row }) => <div className="w-25">{row.getValue("shift")}</div>,
             filterFn: (row, id, value) => {
                 return value.includes(row.getValue(id));
             },
         },
         {
             accessorKey: "branch",
-            size: 140,
+            size: 120,
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Branch" />
             ),
             cell: ({ row }) => <div>{row.getValue("branch")}</div>,
-            // Filtro con coincidencia parcial:
-            // - "CORPORATE" coincide con "CORPORATE" y "CORPORATE/KIDS"
-            // - "KIDS" coincide con cualquier branch que contenga "KIDS"
             filterFn: (row, id, filterValues: string[]) => {
                 const cellValue = row.getValue(id) as string;
                 return filterValues.some((filter) => cellValue.includes(filter));
@@ -101,12 +99,11 @@ export const getScheduleColumns = (
                 <DataTableColumnHeader column={column} title="Instructor" />
             ),
             cell: ({ row }) => (
-                <div className="truncate max-w-40">{row.getValue("instructor")}</div>
+                <div className="truncate max-w-45">{row.getValue("instructor")}</div>
             ),
         },
         {
             accessorKey: "program",
-            size: 400,
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Program" />
             ),
@@ -134,7 +131,7 @@ export const getScheduleColumns = (
                             <Popover>
                                 <PopoverTrigger asChild>
                                     <Badge variant="outline" className="cursor-pointer">
-                                        <Info/>
+                                        <Info />
                                         Issue
                                     </Badge>
                                 </PopoverTrigger>
@@ -143,7 +140,7 @@ export const getScheduleColumns = (
                                 </PopoverContent>
                             </Popover>
                         )}
-                        <span className="truncate max-w-100">{row.getValue("program")}</span>
+                        <span className="truncate max-w-100" title={row.getValue("program")}>{row.getValue("program")}</span>
                     </div>
                 );
             },
@@ -153,20 +150,20 @@ export const getScheduleColumns = (
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Mins" className="justify-center" />
             ),
-            cell: ({ row }) => <div className="w-12.5 mx-auto text-center">{row.getValue("minutes")}</div>,
+            cell: ({ row }) => <div className="w-12 mx-auto text-center">{row.getValue("minutes")}</div>,
         },
         {
             accessorKey: "units",
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Units" className="justify-center" />
             ),
-            cell: ({ row }) => <div className="w-12.5 mx-auto text-center">{row.getValue("units")}</div>,
+            cell: ({ row }) => <div className="w-12 mx-auto text-center">{row.getValue("units")}</div>,
         },
         {
             id: "status",
-            size: 70,
+            size: 80,
             header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Status" />
+                <DataTableColumnHeader column={column} title="Status" className="text-center" />
             ),
             cell: ({ row }) => {
                 const schedule = row.original;

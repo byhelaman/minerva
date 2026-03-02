@@ -430,7 +430,7 @@ export function ReportsPage() {
                                 code: false,
                                 minutes: false,
                                 units: false,
-                                subtype: false,
+                                type: true,
                                 department: false,
                                 feedback: false,
                             }}

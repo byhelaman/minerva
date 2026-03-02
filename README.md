@@ -3,7 +3,7 @@
 Aplicación de escritorio (Tauri 2) para gestión de horarios educativos con emparejamiento automático de reuniones Zoom e integración con OneDrive.
 
 **Stack:** React 19 · TypeScript 5.9 · Vite 7 · Tauri 2 (Rust) · Supabase (PostgreSQL + Edge Functions) · Zustand 5  
-**Versión actual:** 0.2.0  
+**Versión actual:** 0.2.8  
 **Idiomas:** English, Español, Français (i18next)
 
 ## Requisitos
@@ -42,7 +42,7 @@ pnpm tsc --noEmit       # Type-check (no hay script de lint)
 
 ### 2. Ejecutar Migraciones (en orden)
 
-Ejecutar cada archivo en el **SQL Editor** de Supabase en estricto orden (9 archivos):
+Ejecutar cada archivo en el **SQL Editor** de Supabase en estricto orden (8 archivos):
 
 | Orden | Archivo | Descripción |
 |-------|---------|-------------|
@@ -53,8 +53,7 @@ Ejecutar cada archivo en el **SQL Editor** de Supabase en estricto orden (9 arch
 | 5 | `005_microsoft_integration.sql` | Integración Microsoft (OneDrive, Vault, vista de credenciales) |
 | 6 | `006_schedules_realtime.sql` | Horarios publicados, schedule entries, Realtime, REPLICA IDENTITY |
 | 7 | `007_delete_account.sql` | RPC `delete_my_account` para la eliminación segura de cuenta |
-| 8 | `008_statistics_rpc.sql` | RPC `get_system_statistics` para el Dashboard de Admin |
-| 9 | `009_reports_rpc.sql` | RPC `get_schedules_report` para exportación y borrado en lote |
+| 8 | `008_schedules_optimization.sql` | Optimización de índices para consultas mensuales rápidas |
 
 ### 3. Habilitar Auth Hook
 
@@ -98,14 +97,14 @@ En **Dashboard → Authentication → Email Templates**:
 Conexión de cuenta Zoom para creación, sincronización y emparejamiento automático de reuniones.
 - OAuth 2.0 Server-to-Server con tokens en Supabase Vault
 - Sync de usuarios y meetings → emparejamiento automático con horarios
-- Documentación detallada: [`docs/matching_logic.md`](docs/matching_logic.md)
+- Documentación detallada: [`docs/MATCHING_LOGIC.md`](docs/MATCHING_LOGIC.md)
 
 ### Microsoft OneDrive 📎
 Conexión de cuenta Microsoft para lectura/escritura directa de archivos Excel en OneDrive.
 - OAuth 2.0 Authorization Code Flow (server-side)
 - Tokens cifrados en Supabase Vault
 - Navegador visual de carpetas/archivos
-- Documentación detallada: [`docs/microsoft_setup.md`](docs/microsoft_setup.md)
+- Documentación detallada: [`docs/MICROSOFT_SETUP.md`](docs/MICROSOFT_SETUP.md)
 
 ## Variables de Entorno
 
@@ -150,8 +149,8 @@ Genera instaladores en `src-tauri/target/release/bundle/` (MSI + NSIS). Releases
 | [`docs/AUTH_SYSTEM.md`](docs/AUTH_SYSTEM.md) | Sistema de autenticación y sesiones |
 | [`docs/EXCEL_SYSTEM.md`](docs/EXCEL_SYSTEM.md) | Parser Excel, schemas, validación |
 | [`docs/SUPABASE_BACKEND.md`](docs/SUPABASE_BACKEND.md) | Edge Functions, migraciones, esquema DB |
-| [`docs/matching_logic.md`](docs/matching_logic.md) | Motor de emparejamiento Zoom |
-| [`docs/microsoft_setup.md`](docs/microsoft_setup.md) | Integración Microsoft/OneDrive |
+| [`docs/MATCHING_LOGIC.md`](docs/MATCHING_LOGIC.md) | Motor de emparejamiento Zoom |
+| [`docs/MICROSOFT_SETUP.md`](docs/MICROSOFT_SETUP.md) | Integración Microsoft/OneDrive |
 | [`docs/release_guide.md`](docs/release_guide.md) | Guía de release y CI/CD |
 
 ## Troubleshooting
@@ -166,4 +165,4 @@ supabase functions deploy zoom-sync --no-verify-jwt
 El refresh token se invalida al conectar las mismas credenciales en otro entorno. Solución: desconectar y reconectar Zoom desde la UI.
 
 ### Más problemas
-Ver sección de troubleshooting en [`docs/microsoft_setup.md`](docs/microsoft_setup.md) y [`docs/SUPABASE_BACKEND.md`](docs/SUPABASE_BACKEND.md).
+Ver sección de troubleshooting en [`docs/MICROSOFT_SETUP.md`](docs/MICROSOFT_SETUP.md) y [`docs/SUPABASE_BACKEND.md`](docs/SUPABASE_BACKEND.md).
