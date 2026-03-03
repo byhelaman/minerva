@@ -13,6 +13,7 @@ import {
     type SortingState,
     type VisibilityState,
 } from "@tanstack/react-table";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
 import {
     Table,
@@ -112,6 +113,7 @@ export function ScheduleDataTable<TData, TValue>({
     canPublish,
     ...props
 }: ScheduleDataTableProps<TData, TValue>) {
+    const tableContainerRef = React.useRef<HTMLDivElement>(null);
 
     // Use controlled selection if provided, otherwise use internal state
     const [internalSelection, setInternalSelection] = React.useState({});
@@ -132,6 +134,13 @@ export function ScheduleDataTable<TData, TValue>({
     const [sorting, setSorting] = React.useState<SortingState>([]);
     const [globalFilter, setGlobalFilter] = React.useState("");
     const [selectedIssueKeys, setSelectedIssueKeys] = React.useState<Set<string>>(new Set());
+    const globalFilterTerms = React.useMemo(
+        () => String(globalFilter)
+            .split(',')
+            .map((term) => term.trim().toLowerCase())
+            .filter((term) => term.length > 0),
+        [globalFilter]
+    );
 
     const [pagination, setPagination] = React.useState({
         pageIndex: 0,
@@ -292,13 +301,12 @@ export function ScheduleDataTable<TData, TValue>({
         getFacetedRowModel: getFacetedRowModel(),
         getFacetedUniqueValues: getFacetedUniqueValues(),
         autoResetPageIndex: true, // Resetear a página 1 cuando cambian filtros
-        globalFilterFn: (row, columnId, filterValue) => {
+        globalFilterFn: (row, columnId, _filterValue) => {
             const value = row.getValue(columnId);
             if (value == null) return false;
             const cellValue = String(value).toLowerCase();
-            const terms = String(filterValue).split(',').map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
-            if (terms.length === 0) return true;
-            return terms.some(term => cellValue.includes(term));
+            if (globalFilterTerms.length === 0) return true;
+            return globalFilterTerms.some(term => cellValue.includes(term));
         },
     });
 
@@ -482,7 +490,6 @@ export function ScheduleDataTable<TData, TValue>({
     // TanStack column and global filters, but BEFORE the IssueFilter exclusion applies.
     const dynamicCategories = React.useMemo(() => {
         const activeFilters = table.getState().columnFilters;
-        const activeGlobalFilter = table.getState().globalFilter as string | undefined;
 
         const baseVisibleData = data.filter(item => {
             const row = item as Record<string, unknown>;
@@ -503,13 +510,10 @@ export function ScheduleDataTable<TData, TValue>({
             }
 
             // 2. Global filter
-            if (activeGlobalFilter) {
-                const terms = activeGlobalFilter.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
-                if (terms.length > 0) {
-                    const searchableText = Object.values(row).map(v => String(v || '')).join(' ').toLowerCase();
-                    const matchesGlobally = terms.some(term => searchableText.includes(term));
-                    if (!matchesGlobally) return false;
-                }
+            if (globalFilterTerms.length > 0) {
+                const searchableText = Object.values(row).map(v => String(v || '')).join(' ').toLowerCase();
+                const matchesGlobally = globalFilterTerms.some(term => searchableText.includes(term));
+                if (!matchesGlobally) return false;
             }
 
             return true;
@@ -526,7 +530,33 @@ export function ScheduleDataTable<TData, TValue>({
 
             return { ...cat, count: activeCount };
         });
-    }, [data, issueCategories, allIssueRowKeys, props.getRowKey, table.getState().columnFilters, table.getState().globalFilter]);
+    }, [
+        data,
+        issueCategories,
+        allIssueRowKeys,
+        globalFilterTerms,
+        props.getRowKey,
+        table.getState().columnFilters,
+        table.getState().globalFilter,
+    ]);
+
+    const rows = table.getRowModel().rows;
+    const shouldVirtualize = table.getState().pagination.pageSize >= 200;
+    const rowVirtualizer = useVirtualizer({
+        count: shouldVirtualize ? rows.length : 0,
+        getScrollElement: () => tableContainerRef.current,
+        estimateSize: () => 38,
+        overscan: 10,
+    });
+    const virtualRows = rowVirtualizer.getVirtualItems();
+    const totalSize = rowVirtualizer.getTotalSize();
+    const topPadding = shouldVirtualize && virtualRows.length > 0 ? virtualRows[0].start : 0;
+    const bottomPadding = shouldVirtualize && virtualRows.length > 0 ? totalSize - virtualRows[virtualRows.length - 1].end : 0;
+    const visibleRows = shouldVirtualize
+        ? virtualRows
+            .map((virtualRow) => rows[virtualRow.index])
+            .filter((row): row is (typeof rows)[number] => row !== undefined)
+        : rows;
 
     return (
         <div className="flex flex-col flex-1 min-h-0 gap-4 p-1">
@@ -564,7 +594,7 @@ export function ScheduleDataTable<TData, TValue>({
             />
 
             {/* Table */}
-            <div className="flex flex-1 min-h-0 flex-col overflow-auto">
+            <div ref={tableContainerRef} className="flex flex-1 min-h-0 flex-col overflow-auto">
                 <div className="w-max min-w-full rounded-md border">
                     <Table containerClassName="overflow-visible">
                         <TableHeader>
@@ -592,42 +622,54 @@ export function ScheduleDataTable<TData, TValue>({
                             ))}
                         </TableHeader>
                         <TableBody>
-                            {table.getRowModel().rows?.length ? (
-                                table.getRowModel().rows.map((row) => {
-                                    const rowKey = getScheduleKey(row.original as Schedule);
-                                    const isConflict = overlapResult.allOverlaps.has(rowKey);
-
-                                    // Detectar si la reunión está activa
-                                    // Soporta: meeting_id/meetingId para modals, program para Management
-                                    const original = row.original as { meeting_id?: string; meetingId?: string; program?: string };
-                                    const rowMeetingId = original.meeting_id || original.meetingId;
-                                    const isActiveByMeetingId = rowMeetingId && props.activeMeetingIds?.includes(rowMeetingId);
-                                    const isActiveByProgram = original.program && props.activePrograms?.has(original.program);
-                                    const isActive = isActiveByMeetingId || isActiveByProgram;
-
-                                    return (
-                                        <TableRow
-                                            key={row.id}
-                                            data-state={row.getIsSelected() && "selected"}
-                                            onMouseDown={handleRowModifierMouseDown}
-                                            onClick={(event) => handleRowModifierSelection(event, row.id)}
-                                            className={cn(
-                                                isConflict && "bg-red-50 dark:bg-red-950/20 border-l-2 border-l-red-500",
-                                                isActive && "bg-green-50 dark:bg-green-950/20 border-l-2 border-l-green-500",
-                                                props.getRowClassName?.(row.original)
-                                            )}
-                                        >
-                                            {row.getVisibleCells().map((cell) => (
-                                                <TableCell key={cell.id}>
-                                                    {flexRender(
-                                                        cell.column.columnDef.cell,
-                                                        cell.getContext()
-                                                    )}
-                                                </TableCell>
-                                            ))}
+                            {rows.length ? (
+                                <>
+                                    {shouldVirtualize && topPadding > 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={table.getVisibleLeafColumns().length} style={{ height: `${topPadding}px`, padding: 0 }} />
                                         </TableRow>
-                                    );
-                                })
+                                    )}
+
+                                    {visibleRows.map((row) => {
+                                        const rowKey = getScheduleKey(row.original as Schedule);
+                                        const isConflict = overlapResult.allOverlaps.has(rowKey);
+
+                                        const original = row.original as { meeting_id?: string; meetingId?: string; program?: string };
+                                        const rowMeetingId = original.meeting_id || original.meetingId;
+                                        const isActiveByMeetingId = rowMeetingId && props.activeMeetingIds?.includes(rowMeetingId);
+                                        const isActiveByProgram = original.program && props.activePrograms?.has(original.program);
+                                        const isActive = isActiveByMeetingId || isActiveByProgram;
+
+                                        return (
+                                            <TableRow
+                                                key={row.id}
+                                                data-state={row.getIsSelected() && "selected"}
+                                                onMouseDown={handleRowModifierMouseDown}
+                                                onClick={(event) => handleRowModifierSelection(event, row.id)}
+                                                className={cn(
+                                                    isConflict && "bg-red-50 dark:bg-red-950/20 border-l-2 border-l-red-500",
+                                                    isActive && "bg-green-50 dark:bg-green-950/20 border-l-2 border-l-green-500",
+                                                    props.getRowClassName?.(row.original)
+                                                )}
+                                            >
+                                                {row.getVisibleCells().map((cell) => (
+                                                    <TableCell key={cell.id}>
+                                                        {flexRender(
+                                                            cell.column.columnDef.cell,
+                                                            cell.getContext()
+                                                        )}
+                                                    </TableCell>
+                                                ))}
+                                            </TableRow>
+                                        );
+                                    })}
+
+                                    {shouldVirtualize && bottomPadding > 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={table.getVisibleLeafColumns().length} style={{ height: `${bottomPadding}px`, padding: 0 }} />
+                                        </TableRow>
+                                    )}
+                                </>
                             ) : (
                                 <TableRow>
                                     <TableCell

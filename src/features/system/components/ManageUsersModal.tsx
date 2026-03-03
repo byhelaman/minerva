@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Loader2, Trash2, CircleAlert, Plus, Pencil, UserRoundPen } from "lucide-react";
+import { Search, Loader2, Trash2, CircleAlert, Plus, UserRoundPen } from "lucide-react";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { supabase } from "@/lib/supabase";
 import { getErrorMessage } from "@/lib/utils";

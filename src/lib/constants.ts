@@ -16,6 +16,7 @@ export const STORAGE_KEYS = {
     // Caché de UI (Reports)
     UI_SHEETS_CACHE_PREFIX: "minerva_ui_sheets_cache_", // + FileID
     UI_LAST_VIEWED_SHEET_PREFIX: "minerva_ui_last_viewed_sheet_", // + FileID
+    REPORTS_PAGE_CACHE: "minerva_reports_page_cache",
 
     // Autenticación y Usuario
     AUTH_LAST_EMAIL: "minerva_auth_last_email",

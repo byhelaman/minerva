@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { format } from "date-fns";
 import { ScheduleDataTable } from "@/features/schedules/components/table/ScheduleDataTable";
 import { getDataSourceColumns } from "./data-source-columns";
@@ -40,28 +40,21 @@ import { useSettings } from "@/components/settings-provider";
 
 import { type DateRange } from "react-day-picker";
 import { ScheduleInfo } from "@/features/schedules/components/modals/ScheduleInfo";
-
-// Cache a nivel de módulo: persiste entre mount/unmount (navegación de página)
-let reportCache: {
-    key: string; // "from|to"
-    schedules: Schedule[];
-    incidences: DailyIncidence[];
-    dateRange: DateRange;
-} | null = null;
-
-function getDateRangeKey(range: DateRange | undefined): string {
-    if (!range?.from) return "";
-    const from = format(range.from, "yyyy-MM-dd");
-    const to = range.to ? format(range.to, "yyyy-MM-dd") : from;
-    return `${from}|${to}`;
-}
+import {
+    clearReportsCacheByRange,
+    getInitialReportsDateRange,
+    getReportsCache,
+    getReportsDateRangeKey,
+    setReportsCache,
+} from "@/features/system/utils/reports-cache";
 
 export function ReportsPage() {
     // Estado — restaurar último rango de fechas o default a hoy
     const defaultDateRange: DateRange = { from: new Date(), to: new Date() };
-    const initialDateRange = reportCache?.dateRange ?? defaultDateRange;
-    const initialKey = getDateRangeKey(initialDateRange);
-    const hasCachedData = reportCache?.key === initialKey;
+    const initialDateRange = getInitialReportsDateRange() ?? defaultDateRange;
+    const initialCache = getReportsCache(initialDateRange);
+    const initialKey = getReportsDateRangeKey(initialDateRange);
+    const hasCachedData = initialCache?.key === initialKey;
 
     const [dateRange, setDateRange] = useState<DateRange | undefined>(initialDateRange);
     const [pendingRange, setPendingRange] = useState<DateRange | undefined>(initialDateRange);
@@ -77,13 +70,14 @@ export function ReportsPage() {
     // Estado local para datos de reportes (aislado del store de drafts de Management)
     // Inicializar desde cache si disponible para el rango de fechas actual
     const [reportSchedules, setReportSchedules] = useState<Schedule[]>(
-        hasCachedData ? reportCache?.schedules ?? [] : []
+        hasCachedData ? initialCache?.schedules ?? [] : []
     );
     const [reportIncidences, setReportIncidences] = useState<DailyIncidence[]>(
-        hasCachedData ? reportCache?.incidences ?? [] : []
+        hasCachedData ? initialCache?.incidences ?? [] : []
     );
 
     const [isLoading, setIsLoading] = useState(false);
+    const [isRangeHydrated, setIsRangeHydrated] = useState(false);
 
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
@@ -91,9 +85,9 @@ export function ReportsPage() {
     const { syncToExcel, refreshMsConfig } = useScheduleSyncStore();
     const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
 
-    // Suscribirse a cambios de incidencias del store compartido
-    // Esto asegura que Reports se refresque cuando se guardan incidencias via modal
-    const incidencesVersion = useScheduleDataStore(s => s.incidencesVersion);
+    // Suscribirse a incidencias del store compartido.
+    // Esto permite reflejar guardado/limpieza de incidencia sin refetch completo.
+    const sharedIncidences = useScheduleDataStore(s => s.incidences);
 
     // Cargar config de MS al montar
     useEffect(() => {
@@ -102,6 +96,13 @@ export function ReportsPage() {
 
     // Eliminación optimista — claves de filas en proceso de eliminación
     const [pendingDeleteKeys, setPendingDeleteKeys] = useState<Set<string>>(new Set());
+
+    const activeRangeBoundaries = useMemo(() => {
+        if (!dateRange?.from) return null;
+        const from = format(dateRange.from, "yyyy-MM-dd");
+        const to = dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : from;
+        return { from, to };
+    }, [dateRange]);
 
     // Calcular datos de tabla desde estado local (excluir eliminaciones pendientes)
     const tableData = useMemo(() => {
@@ -130,15 +131,26 @@ export function ReportsPage() {
     }, [realIncidenceCount, tableData]);
 
     // Obtener datos cuando cambia el rango de fechas (al estado local, no al store compartido)
-    const fetchData = useCallback(async () => {
+    const fetchData = useCallback(async (options?: { force?: boolean }) => {
         if (!dateRange?.from) return;
+        const force = options?.force ?? false;
+        setIsRangeHydrated(false);
 
         const fromStr = format(dateRange.from, "yyyy-MM-dd");
         const toStr = dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : fromStr;
         const key = `${fromStr}|${toStr}`;
+        const cached = getReportsCache(dateRange);
+
+        if (!force && cached?.key === key) {
+            setReportSchedules(cached.schedules);
+            setReportIncidences(cached.incidences);
+            useScheduleDataStore.setState({ incidences: cached.incidences });
+            setIsRangeHydrated(true);
+            return;
+        }
 
         // Solo mostrar loading si no hay datos cacheados para este rango
-        const hasCached = reportCache?.key === key;
+        const hasCached = cached?.key === key;
         if (!hasCached) {
             setIsLoading(true);
         }
@@ -154,8 +166,9 @@ export function ReportsPage() {
             // lo cual causaría un bucle infinito de refetch.
             useScheduleDataStore.setState({ incidences });
 
-            // Actualizar cache a nivel de módulo
-            reportCache = { key, schedules, incidences, dateRange };
+            // Actualizar cache persistente
+            setReportsCache(dateRange, schedules, incidences);
+            setIsRangeHydrated(true);
         } catch (error) {
             console.error("Failed to fetch report data:", error);
             toast.error("Failed to load report data");
@@ -169,16 +182,23 @@ export function ReportsPage() {
         fetchData();
     }, [fetchData]);
 
-    // Mantener ref estable al fetchData más reciente para evitar closure stale en el efecto de incidencias
-    const fetchDataRef = useRef(fetchData);
-    useEffect(() => { fetchDataRef.current = fetchData; });
-
-    // Re-fetch cuando cambian las incidencias en el store compartido
+    // Sincronizar incidencias desde el store compartido sin recargar toda la tabla.
+    // También actualiza caché del rango activo para mantener consistencia.
     useEffect(() => {
-        if (incidencesVersion > 0) {
-            fetchDataRef.current();
-        }
-    }, [incidencesVersion]);
+        if (!isRangeHydrated || !activeRangeBoundaries) return;
+
+        const scheduleKeys = new Set(reportSchedules.map((schedule) => getSchedulePrimaryKey(schedule)));
+        const scopedIncidences = sharedIncidences.filter((incidence) => {
+            const inRange = incidence.date >= activeRangeBoundaries.from && incidence.date <= activeRangeBoundaries.to;
+            if (!inRange) return false;
+
+            const incidenceKey = getSchedulePrimaryKey(incidence);
+            return scheduleKeys.has(incidenceKey);
+        });
+
+        setReportIncidences(scopedIncidences);
+        setReportsCache(dateRange, reportSchedules, scopedIncidences);
+    }, [isRangeHydrated, activeRangeBoundaries, sharedIncidences, dateRange, reportSchedules]);
 
     const handleDateSelect = (range: DateRange | undefined) => {
         setPendingRange(range);
@@ -211,7 +231,8 @@ export function ReportsPage() {
             await scheduleEntriesService.addScheduleEntry(newSchedule, user?.id || "");
             toast.success("Schedule added");
             // Refrescar datos
-            fetchData();
+            clearReportsCacheByRange(dateRange);
+            fetchData({ force: true });
         } catch (error) {
             console.error("Failed to add schedule:", error);
             toast.error("Failed to add schedule");
@@ -383,8 +404,8 @@ export function ReportsPage() {
                             columns={columns}
                             data={tableData}
                             onRefresh={() => {
-                                reportCache = null;
-                                fetchData();
+                                clearReportsCacheByRange(dateRange);
+                                fetchData({ force: true });
                             }}
                             disableRefresh={isLoading}
                             hideFilters={true}
@@ -462,7 +483,10 @@ export function ReportsPage() {
                 open={importModalOpen}
                 onOpenChange={setImportModalOpen}
                 data={importedData}
-                onConfirm={fetchData}
+                onConfirm={() => {
+                    clearReportsCacheByRange(dateRange);
+                    fetchData({ force: true });
+                }}
             />
 
             {/* Delete Schedule Confirmation (single + bulk) */}
@@ -499,7 +523,8 @@ export function ReportsPage() {
                                         await scheduleEntriesService.batchDeleteScheduleEntries(entriesToDelete);
                                     }
                                     toast.success(`${entriesToDelete.length} ${entriesToDelete.length === 1 ? "entry" : "entries"} deleted`);
-                                    await fetchData();
+                                    clearReportsCacheByRange(dateRange);
+                                    await fetchData({ force: true });
                                 } catch (error) {
                                     console.error("Failed to delete:", error);
                                     toast.error("Failed to delete entries");
@@ -525,7 +550,10 @@ export function ReportsPage() {
             <SyncFromExcelModal
                 open={syncFromExcelModalOpen}
                 onOpenChange={setSyncFromExcelModalOpen}
-                onImportComplete={fetchData}
+                onImportComplete={() => {
+                    clearReportsCacheByRange(dateRange);
+                    fetchData({ force: true });
+                }}
             />
         </div>
     );
