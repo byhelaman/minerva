@@ -217,11 +217,28 @@ export function ScheduleDataTable<TData, TValue>({
 
         // External categories from parent
         if (props.externalIssueCategories) {
-            cats.push(...props.externalIssueCategories);
+            cats.push(...props.externalIssueCategories.filter((category) => category.count > 0));
         }
 
         return cats;
     }, [overlapResult, props.externalIssueCategories]);
+
+    React.useEffect(() => {
+        if (selectedIssueKeys.size === 0) return;
+        const availableKeys = new Set(issueCategories.map((category) => category.key));
+        setSelectedIssueKeys((prev) => {
+            let changed = false;
+            const next = new Set<string>();
+            prev.forEach((key) => {
+                if (availableKeys.has(key)) {
+                    next.add(key);
+                } else {
+                    changed = true;
+                }
+            });
+            return changed ? next : prev;
+        });
+    }, [issueCategories, selectedIssueKeys.size]);
 
     // Combined row keys for all issue types: built-in overlaps + external
     const allIssueRowKeys = React.useMemo(() => {

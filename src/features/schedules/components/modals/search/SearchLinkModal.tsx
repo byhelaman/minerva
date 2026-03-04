@@ -40,7 +40,6 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
     const [meetingsToDelete, setMeetingsToDelete] = useState<MeetingRow[]>([]);
     const [isDeleting, setIsDeleting] = useState(false);
     const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
-    const [editingHostIds, setEditingHostIds] = useState<Set<string>>(new Set());
     const [pendingHostChanges, setPendingHostChanges] = useState<Map<string, { newHost: string; newEmail: string }>>(new Map());
     const [isApplyingHostChanges, setIsApplyingHostChanges] = useState(false);
     const [showHostConfirm, setShowHostConfirm] = useState(false);
@@ -65,7 +64,6 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
                 toast.success(`${result.succeeded} host${result.succeeded > 1 ? 's' : ''} updated`);
             }
             setPendingHostChanges(new Map());
-            setEditingHostIds(new Set());
             await fetchZoomData({ force: true });
         } catch {
             toast.error("Failed to update hosts");
@@ -170,7 +168,7 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
             header: ({ column }) => <DataTableColumnHeader column={column} title="Host" />,
             cell: ({ row }) => {
                 const meeting = row.original;
-                const isEditing = editingHostIds.has(meeting.meeting_id);
+                const hasPendingHostChange = pendingHostChanges.has(meeting.meeting_id);
                 if (!canManageHost) {
                     return <div className="truncate max-w-30">{meeting.host_name}</div>;
                 }
@@ -185,8 +183,14 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
                                 return next;
                             });
                         }}
+                        onReset={hasPendingHostChange ? () => {
+                            setPendingHostChanges(prev => {
+                                const next = new Map(prev);
+                                next.delete(meeting.meeting_id);
+                                return next;
+                            });
+                        } : undefined}
                         instructors={uniqueInstructors}
-                        disabled={!isEditing}
                         className="w-45"
                         popoverClassName="max-w-50"
                     />
@@ -195,7 +199,7 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
         },
         {
             accessorKey: "created_at",
-            size: 160,
+            size: 150,
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Created At" className="justify-center" />
             ),
@@ -240,43 +244,6 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
                                 <DropdownMenuItem onClick={handleCopyJoinUrl} disabled={!hasJoinUrl}>
                                     Copy join URL
                                 </DropdownMenuItem>
-                                {canManageHost && (
-                                    <>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem
-                                            onClick={() => setEditingHostIds(prev => {
-                                                const next = new Set(prev);
-                                                if (next.has(meeting.meeting_id)) {
-                                                    next.delete(meeting.meeting_id);
-                                                } else {
-                                                    next.add(meeting.meeting_id);
-                                                }
-                                                return next;
-                                            })}
-                                        >
-                                            {editingHostIds.has(meeting.meeting_id) ? "Disable manual" : "Enable manual"}
-                                        </DropdownMenuItem>
-                                        {(editingHostIds.has(meeting.meeting_id) && pendingHostChanges.has(meeting.meeting_id)) && (
-                                            <DropdownMenuItem
-                                                disabled={!pendingHostChanges.has(meeting.meeting_id)}
-                                                onClick={() => {
-                                                    setPendingHostChanges(prev => {
-                                                        const next = new Map(prev);
-                                                        next.delete(meeting.meeting_id);
-                                                        return next;
-                                                    });
-                                                    setEditingHostIds(prev => {
-                                                        const next = new Set(prev);
-                                                        next.delete(meeting.meeting_id);
-                                                        return next;
-                                                    });
-                                                }}
-                                            >
-                                                Reset host
-                                            </DropdownMenuItem>
-                                        )}
-                                    </>
-                                )}
                                 {canDelete && (
                                     <>
                                         <DropdownMenuSeparator />
@@ -294,7 +261,7 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
                 );
             },
         },
-    ], [canDelete, canManageHost, uniqueInstructors, editingHostIds, pendingHostChanges]);
+    ], [canDelete, canManageHost, uniqueInstructors, pendingHostChanges]);
 
     // Crear mapa de usuarios para lookup rápido
     const userMap = useMemo(() => {
@@ -410,7 +377,9 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
 
                     <DialogFooter className="mt-auto flex-col sm:flex-row gap-4">
                         <div className="flex items-center gap-3 mr-auto text-sm text-muted-foreground">
-                            <span>Pending: <strong className="text-foreground font-medium">{pendingHostChanges.size}</strong></span>
+                            {pendingHostChanges.size > 0 && (
+                                <span>Pending: <strong className="text-foreground font-medium">{pendingHostChanges.size}</strong></span>
+                            )}
                         </div>
                         <div className="flex items-center gap-2">
                             <Button
