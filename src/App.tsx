@@ -4,6 +4,7 @@ import { MainNav } from "@/components/main-nav";
 import { UserNav } from "@/components/user-nav";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ScheduleDashboard } from "@/features/schedules/components/ScheduleDashboard";
+import { PoolsPage } from "@/features/schedules/components/PoolsPage";
 import { SystemPage } from "@/features/system/components/SystemPage";
 import { ReportsPage } from "@/features/system/components/ReportsPage";
 import { StatisticsPage } from "@/features/statistics/components/StatisticsPage";
@@ -50,6 +51,11 @@ function App() {
             }
           >
             <Route path="/" element={<ErrorBoundary><ScheduleDashboard /></ErrorBoundary>} />
+            <Route path="/pools" element={
+              <ProtectedRoute requiredPermission="pools.manage">
+                <ErrorBoundary><PoolsPage /></ErrorBoundary>
+              </ProtectedRoute>
+            } />
             <Route path="/statistics" element={<ErrorBoundary><StatisticsPage /></ErrorBoundary>} />
 
             <Route path="/system" element={

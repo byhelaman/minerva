@@ -541,22 +541,19 @@ export function ScheduleDataTable<TData, TValue>({
     ]);
 
     const rows = table.getRowModel().rows;
-    const shouldVirtualize = table.getState().pagination.pageSize >= 200;
     const rowVirtualizer = useVirtualizer({
-        count: shouldVirtualize ? rows.length : 0,
+        count: rows.length,
         getScrollElement: () => tableContainerRef.current,
         estimateSize: () => 38,
         overscan: 10,
     });
     const virtualRows = rowVirtualizer.getVirtualItems();
     const totalSize = rowVirtualizer.getTotalSize();
-    const topPadding = shouldVirtualize && virtualRows.length > 0 ? virtualRows[0].start : 0;
-    const bottomPadding = shouldVirtualize && virtualRows.length > 0 ? totalSize - virtualRows[virtualRows.length - 1].end : 0;
-    const visibleRows = shouldVirtualize
-        ? virtualRows
-            .map((virtualRow) => rows[virtualRow.index])
-            .filter((row): row is (typeof rows)[number] => row !== undefined)
-        : rows;
+    const topPadding = virtualRows.length > 0 ? virtualRows[0].start : 0;
+    const bottomPadding = virtualRows.length > 0 ? totalSize - virtualRows[virtualRows.length - 1].end : 0;
+    const visibleRows = virtualRows
+        .map((virtualRow) => rows[virtualRow.index])
+        .filter((row): row is (typeof rows)[number] => row !== undefined);
 
     return (
         <div className="flex flex-col flex-1 min-h-0 gap-4 p-1">
@@ -624,7 +621,7 @@ export function ScheduleDataTable<TData, TValue>({
                         <TableBody>
                             {rows.length ? (
                                 <>
-                                    {shouldVirtualize && topPadding > 0 && (
+                                    {topPadding > 0 && (
                                         <TableRow>
                                             <TableCell colSpan={table.getVisibleLeafColumns().length} style={{ height: `${topPadding}px`, padding: 0 }} />
                                         </TableRow>
@@ -664,7 +661,7 @@ export function ScheduleDataTable<TData, TValue>({
                                         );
                                     })}
 
-                                    {shouldVirtualize && bottomPadding > 0 && (
+                                    {bottomPadding > 0 && (
                                         <TableRow>
                                             <TableCell colSpan={table.getVisibleLeafColumns().length} style={{ height: `${bottomPadding}px`, padding: 0 }} />
                                         </TableRow>

@@ -18,6 +18,7 @@ export const ROW_STYLE_NEW = "bg-green-50 dark:bg-green-950/20 border-l-2 border
 export const ROW_STYLE_MODIFIED = "bg-amber-50 dark:bg-amber-950/20 border-l-2 border-l-amber-500";
 export const ROW_STYLE_INCIDENCE = "bg-amber-50/50 dark:bg-amber-950/10 border-l-2 border-l-amber-500";
 export const ROW_STYLE_DUPLICATE = "bg-red-50 dark:bg-red-950/20 border-l-2 border-l-red-500";
+export const ROW_STYLE_POOL = "bg-red-50/50 dark:bg-red-950/10 border-l-2 border-l-red-500";
 
 /**
  * Minimal type for issue category construction — compatible with IssueCategory.

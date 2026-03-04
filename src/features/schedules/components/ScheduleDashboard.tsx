@@ -1,10 +1,11 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import { UploadModal } from "@schedules/components/modals/UploadModal";
 import { ScheduleDataTable } from "@schedules/components/table/ScheduleDataTable";
+import type { IssueCategory } from "@schedules/components/table/IssueFilter";
 import { getScheduleColumns } from "@schedules/components/table/columns";
 import { Schedule } from "@schedules/types";
 import { getUniqueScheduleKey, getScheduleKey } from "@schedules/utils/overlap-utils";
-import { ISSUE_STYLE_AMBER, ROW_STYLE_INCIDENCE } from "@/features/schedules/utils/issue-styles";
+import { ISSUE_STYLE_AMBER, ROW_STYLE_INCIDENCE, ROW_STYLE_POOL } from "@/features/schedules/utils/issue-styles";
 import { BaseDirectory, exists, readTextFile, remove, writeTextFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,13 +13,16 @@ import { useSettings } from "@/components/settings-provider";
 import { RequirePermission } from "@/components/RequirePermission";
 import { STORAGE_FILES } from "@/lib/constants";
 import { formatDateToISO, formatDateForDisplay } from "@/lib/date-utils";
-import { Bot, CalendarPlus, CalendarSearch, CircleAlert } from "lucide-react";
+import { Bot, CalendarPlus, CalendarSearch, CircleAlert, ShieldAlert } from "lucide-react";
 import { SearchLinkModal } from "./modals/search/SearchLinkModal";
 import { CreateLinkModal } from "./modals/creation/CreateLinkModal";
 import { AssignLinkModal } from "./modals/assignment/AssignLinkModal";
 import { useZoomStore } from "@/features/matching/stores/useZoomStore";
 import { MatchingService } from "@/features/matching/services/matcher";
 import { useAuth } from "@/components/auth-provider";
+import { poolsService } from "@/features/schedules/services/pools-service";
+import { evaluatePoolIssues } from "@/features/schedules/utils/pool-validation";
+import type { PoolRule } from "@/features/schedules/types";
 // Atomic Stores
 import { useScheduleDataStore } from "@/features/schedules/stores/useScheduleDataStore";
 import { useScheduleUIStore } from "@/features/schedules/stores/useScheduleUIStore";
@@ -40,8 +44,9 @@ export function ScheduleDashboard() {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
     // Autenticación
-    const { profile } = useAuth();
+    const { profile, hasPermission } = useAuth();
     const canManage = (profile?.hierarchy_level ?? 0) >= 80;
+    const canManagePools = hasPermission("pools.manage");
 
     // Acceso al Store
     const { baseSchedules, setBaseSchedules, incidences, getComputedSchedules } = useScheduleDataStore();
@@ -57,7 +62,7 @@ export function ScheduleDashboard() {
         return schedules.filter(s => !!s.type).length;
     }, [schedules]);
 
-    const externalIssueCategories = useMemo(() => {
+    const externalIssueCategories = useMemo<IssueCategory[]>(() => {
         if (realIncidenceCount === 0) return [];
         return [{ key: 'incidences', label: 'Incidencias', count: realIncidenceCount, icon: CircleAlert, activeClassName: ISSUE_STYLE_AMBER }];
     }, [realIncidenceCount]);
@@ -70,6 +75,60 @@ export function ScheduleDashboard() {
         }
         return { incidences: keys };
     }, [realIncidenceCount, schedules]);
+
+    const [poolRules, setPoolRules] = useState<PoolRule[]>([]);
+
+    useEffect(() => {
+        if (!canManagePools) {
+            setPoolRules([]);
+            return;
+        }
+
+        const loadPoolRules = async () => {
+            try {
+                const rules = await poolsService.listMyRules();
+                setPoolRules(rules);
+            } catch (error) {
+                console.error("Failed to load pool rules for validation", error);
+            }
+        };
+
+        loadPoolRules();
+    }, [canManagePools]);
+
+    const poolValidation = useMemo(() => {
+        if (!canManagePools) {
+            return {
+                violatingRowKeys: new Set<string>(),
+                reasonsByRowKey: new Map<string, string>(),
+                violationCount: 0,
+            };
+        }
+
+        return evaluatePoolIssues(schedules as Schedule[], poolRules);
+    }, [canManagePools, schedules, poolRules]);
+
+    const mergedIssueCategories = useMemo(() => {
+        const categories = [...externalIssueCategories];
+
+        if (poolValidation.violationCount > 0) {
+            categories.push({
+                key: "pool",
+                label: "Pool",
+                count: poolValidation.violationCount,
+                icon: ShieldAlert,
+            });
+        }
+
+        return categories;
+    }, [externalIssueCategories, poolValidation.violationCount]);
+
+    const mergedIssueRowKeys = useMemo(() => {
+        return {
+            ...issueRowKeys,
+            ...(poolValidation.violationCount > 0 ? { pool: poolValidation.violatingRowKeys } : {}),
+        };
+    }, [issueRowKeys, poolValidation]);
 
     const hasLoadedAutosave = useRef(false);
     const autoSaveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -460,11 +519,24 @@ export function ScheduleDashboard() {
                 onPublish={() => setIsPublishModalOpen(true)}
                 isPublishing={isPublishing}
                 canPublish={schedules.length > 0 && activeDate !== null}
-                externalIssueCategories={externalIssueCategories}
-                issueRowKeys={issueRowKeys}
+                externalIssueCategories={mergedIssueCategories}
+                issueRowKeys={mergedIssueRowKeys}
                 getRowClassName={(row) => {
                     const s = row as Schedule & { type?: string };
+                    const rowKey = getScheduleKey(s);
+
+                    if (poolValidation.violatingRowKeys.has(rowKey)) {
+                        return ROW_STYLE_POOL;
+                    }
+
                     return s.type ? ROW_STYLE_INCIDENCE : undefined;
+                }}
+                getRowIssueTooltip={(row) => {
+                    const s = row as Schedule;
+                    const rowKey = getScheduleKey(s);
+                    const reason = poolValidation.reasonsByRowKey.get(rowKey);
+                    if (!reason) return undefined;
+                    return reason;
                 }}
             />
 

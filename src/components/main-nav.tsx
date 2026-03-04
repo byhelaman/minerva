@@ -5,6 +5,7 @@ import { useAuth } from "@/components/auth-provider"
 
 const navItems = [
     { title: "Manage", href: "/" },
+    { title: "Pools", href: "/pools", permission: "pools.manage" },
     { title: "System", href: "/system", minLevel: 80 },
     { title: "Reports", href: "/reports", permission: "reports.view" },
     { title: "Statistics", href: "/statistics" },

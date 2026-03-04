@@ -48,3 +48,25 @@ export interface Instructor {
     display_name: string;
     email: string;
 }
+
+export interface PoolRule {
+    id: string;
+    owner_id: string;
+    program_query: string;
+    allowed_instructors: string[];
+    blocked_instructors: string[];
+    hard_lock: boolean;
+    is_active: boolean;
+    notes: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface PoolRuleInput {
+    program_query: string;
+    allowed_instructors: string[];
+    blocked_instructors: string[];
+    hard_lock: boolean;
+    is_active: boolean;
+    notes?: string | null;
+}
