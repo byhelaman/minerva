@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Info } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, options?: { hideIncidenceActions?: boolean }): ColumnDef<Schedule>[] => [
+export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDef<Schedule>[] => [
     {
         id: "select",
         size: 36,
@@ -224,6 +224,6 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void, options?:
     {
         id: "actions",
         size: 50,
-        cell: ({ row }) => <DataTableRowActions row={row} onDelete={onDelete} hideIncidenceActions={options?.hideIncidenceActions} />,
+        cell: ({ row }) => <DataTableRowActions row={row} onDelete={onDelete} />,
     },
 ];

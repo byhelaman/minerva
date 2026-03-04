@@ -46,9 +46,10 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
         setWorkingData(prev => prev.filter(s => getSchedulePrimaryKey(s) !== pk));
     };
 
-    const columns = useMemo(() => getDataSourceColumns(handleDeleteRow, { hideIncidenceActions: true }), []);
+    const columns = useMemo(() => getDataSourceColumns(handleDeleteRow), []);
     const [isSaving, setIsSaving] = useState(false);
     const [isValidating, setIsValidating] = useState(false);
+    const [validationError, setValidationError] = useState<string | null>(null);
 
     // Working copy of data that the user can modify (remove rows)
     const [workingData, setWorkingData] = useState<Schedule[]>([]);
@@ -58,25 +59,56 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
         newCount: 0, existingKeys: new Set(), modifiedKeys: new Set(), identicalKeys: new Set(), modifiedReasons: new Map(),
     });
 
-    // Reset working data and run DB validation when modal opens with new data
-    useEffect(() => {
-        if (open && data?.length > 0) {
-            setWorkingData([...data]);
+    const runDbValidation = async (rows: Schedule[]) => {
+        if (rows.length === 0) {
+            setValidationError(null);
+            setDbValidation({
+                newCount: 0,
+                existingKeys: new Set(),
+                modifiedKeys: new Set(),
+                identicalKeys: new Set(),
+                modifiedReasons: new Map(),
+            });
+            return;
+        }
 
-            // Run DB validation via shared utility
-            (async () => {
-                setIsValidating(true);
-                try {
-                    const result = await validateAgainstDb(data);
-                    setDbValidation(result);
-                } catch (error) {
-                    console.error('DB validation failed:', error);
-                } finally {
-                    setIsValidating(false);
-                }
-            })();
+        setIsValidating(true);
+        setValidationError(null);
+        try {
+            const result = await validateAgainstDb(rows);
+            setDbValidation(result);
+        } catch (error) {
+            console.error('DB validation failed:', error);
+            setValidationError('No se pudo validar contra la base de datos. Reintenta antes de guardar.');
+        } finally {
+            setIsValidating(false);
+        }
+    };
+
+    // Reset working data when modal opens with new data
+    useEffect(() => {
+        if (!open) return;
+
+        if (data?.length > 0) {
+            setWorkingData([...data]);
+        } else {
+            setWorkingData([]);
+            setValidationError(null);
+            setDbValidation({
+                newCount: 0,
+                existingKeys: new Set(),
+                modifiedKeys: new Set(),
+                identicalKeys: new Set(),
+                modifiedReasons: new Map(),
+            });
         }
     }, [open, data]);
+
+    // Re-validate whenever the editable data changes while modal is open
+    useEffect(() => {
+        if (!open) return;
+        void runDbValidation(workingData);
+    }, [open, workingData]);
 
     const initialVisibility = {
         shift: false,
@@ -148,6 +180,11 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
             return;
         }
 
+        if (validationError) {
+            toast.error("DB validation failed. Fix validation before saving.");
+            return;
+        }
+
         setIsSaving(true);
         const toastId = toast.loading("Saving data...");
         try {
@@ -182,6 +219,12 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
                         Reviewing {workingData.length} records to import.
                     </DialogDescription>
                 </DialogHeader>
+
+                {validationError && (
+                    <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                        {validationError}
+                    </div>
+                )}
 
                 <div className="flex-1 flex flex-col min-h-0 overflow-hidden pr-2">
                     <ScheduleDataTable
@@ -255,7 +298,7 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
                             </Button>
                             <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                    <Button disabled={isSaving || isValidating || workingData.length === 0 || duplicateCount > 0}>
+                                    <Button disabled={isSaving || isValidating || !!validationError || workingData.length === 0 || duplicateCount > 0}>
 
                                         {isSaving ? (
                                             <>
@@ -273,6 +316,7 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
                                         <AlertDialogDescription>
                                             You are about to import {workingData.length} records to the database.
                                             {dbValidation.modifiedKeys.size > 0 ? ` This will overwrite existing records with modifications.` : ""}
+                                            {` Summary: ${dbValidation.newCount} new, ${dbValidation.modifiedKeys.size} modified, ${dbValidation.identicalKeys.size} identical, ${duplicateCount} duplicates in file.`}
                                         </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>

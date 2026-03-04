@@ -188,7 +188,7 @@ export function ToolbarFilters<TData>({
             {(showTime ?? !hideFilters) && table.getColumn("start_time") && (
                 <DataTableFacetedFilter
                     column={table.getColumn("start_time")}
-                    title="Time"
+                    title="Interval"
                     options={timeOptions}
                     matchMode="startsWith"
                     disabled={isTableEmpty}

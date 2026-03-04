@@ -1,19 +1,15 @@
 import { type ColumnDef } from "@tanstack/react-table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Switch } from "@/components/ui/switch";
 import type { Schedule } from "@schedules/types";
 import { DataTableColumnHeader } from "./data-table-column-header";
 import { DataTableRowActions } from "./data-table-row-actions";
 import { formatDateForDisplay } from "@/lib/date-utils";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Info } from "lucide-react";
-import { toast } from "sonner";
-import { useScheduleDataStore } from "@/features/schedules/stores/useScheduleDataStore";
-import { Popover, PopoverContent, PopoverDescription, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
+import { Info } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export const getScheduleColumns = (
     onDelete?: (s: Schedule) => void,
-    canManage: boolean = false,
 ): ColumnDef<Schedule>[] => [
         {
             id: "select",
@@ -64,7 +60,7 @@ export const getScheduleColumns = (
         },
         {
             accessorKey: "branch",
-            size: 120,
+            size: 100,
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Branch" />
             ),
@@ -78,10 +74,10 @@ export const getScheduleColumns = (
             accessorKey: "start_time",
             size: 130,
             header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Time" className="justify-center" />
+                <DataTableColumnHeader column={column} title="Interval" className="justify-center" />
             ),
             cell: ({ row }) => (
-                <div className="mx-auto text-center">
+                <div className="text-center">
                     {row.getValue("start_time")} - {row.original.end_time}
                 </div>
             ),
@@ -91,6 +87,16 @@ export const getScheduleColumns = (
                 const hour = cellValue?.substring(0, 2); // Extrae "HH" de "HH:MM"
                 return filterValues.includes(hour);
             },
+        },
+        {
+            accessorKey: "code",
+            size: 120,
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title="Code" />
+            ),
+            cell: ({ row }) => (
+                <div>{row.getValue("code")}</div>
+            ),
         },
         {
             accessorKey: "instructor",
@@ -111,23 +117,7 @@ export const getScheduleColumns = (
                 const issueTooltip = (table.options.meta as { getRowIssueTooltip?: (row: Schedule) => string | undefined })?.getRowIssueTooltip?.(row.original);
                 return (
                     <div className="flex items-center gap-2">
-                        {row.original.type && (
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Badge variant="outline" className="cursor-pointer border-orange-500/50 text-orange-600 bg-orange-500/10 dark:text-orange-400 hover:bg-orange-500/20">
-                                        <AlertCircle />
-                                        {row.original.type}
-                                    </Badge>
-                                </PopoverTrigger>
-                                <PopoverContent side="bottom" align="start" className="text-xs w-60 space-y-1">
-                                    <PopoverTitle>{row.original.type}</PopoverTitle>
-                                    <PopoverDescription>
-                                        {[row.original.subtype, row.original.description].filter(Boolean).join(' — ') || 'Sin descripción'}
-                                    </PopoverDescription>
-                                </PopoverContent>
-                            </Popover>
-                        )}
-                        {issueTooltip && !row.original.type && (
+                        {issueTooltip && (
                             <Popover>
                                 <PopoverTrigger asChild>
                                     <Badge variant="outline" className="cursor-pointer">
@@ -140,7 +130,7 @@ export const getScheduleColumns = (
                                 </PopoverContent>
                             </Popover>
                         )}
-                        <span className="truncate max-w-100" title={row.getValue("program")}>{row.getValue("program")}</span>
+                        <span title={row.getValue("program")}>{row.getValue("program")}</span>
                     </div>
                 );
             },
@@ -158,46 +148,6 @@ export const getScheduleColumns = (
                 <DataTableColumnHeader column={column} title="Units" className="justify-center" />
             ),
             cell: ({ row }) => <div className="w-12 mx-auto text-center">{row.getValue("units")}</div>,
-        },
-        {
-            id: "status",
-            size: 80,
-            header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Status" className="text-center" />
-            ),
-            cell: ({ row }) => {
-                const schedule = row.original;
-                const isYes = schedule.status === "Yes";
-
-                const handleToggle = async (checked: boolean) => {
-                    const { updateIncidence } = useScheduleDataStore.getState();
-                    try {
-                        await updateIncidence({
-                            ...schedule,
-                            status: checked ? "Yes" : "No",
-                        });
-                    } catch (error: unknown) {
-                        const msg = error instanceof Error ? error.message : "";
-                        if (msg === "SCHEDULE_NOT_PUBLISHED") {
-                            toast.error("Schedule not in database", { description: "Publish the schedule first to mark class status" });
-                        } else {
-                            toast.error("Failed to update status");
-                        }
-                    }
-                };
-
-                return (
-                    <div className="flex h-8 py-2 justify-center">
-                        <Switch
-                            checked={isYes}
-                            onCheckedChange={handleToggle}
-                            disabled={!canManage}
-                        />
-                    </div>
-                );
-            },
-            enableSorting: false,
-            enableHiding: true,
         },
         {
             id: "actions",

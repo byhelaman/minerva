@@ -8,7 +8,6 @@ import { RequirePermission } from "@/components/RequirePermission";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/auth-provider";
 import { ZoomIntegration } from "@/features/system/components/ZoomIntegration";
-import { MicrosoftIntegration } from "@/features/system/components/MicrosoftIntegration";
 import { Label } from "@/components/ui/label";
 import { ActivityLog } from "./ActivityLog";
 import {
@@ -239,10 +238,6 @@ export function SystemPage() {
 
                     <RequirePermission level={100}>
                         <ZoomIntegration />
-                    </RequirePermission>
-
-                    <RequirePermission level={100}>
-                        <MicrosoftIntegration />
                     </RequirePermission>
 
                     <ActivityLog />

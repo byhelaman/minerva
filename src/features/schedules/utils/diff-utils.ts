@@ -8,9 +8,7 @@ import { ensureTimeFormat } from "./time-utils";
 export function getFieldDiffs(
     imported: {
         shift?: string; branch?: string; end_time?: string; code?: string;
-        minutes?: string; units?: string; status?: string | null;
-        substitute?: string | null; type?: string | null; subtype?: string | null;
-        description?: string | null; department?: string | null; feedback?: string | null;
+        minutes?: string; units?: string;
     },
     dbFields: Record<string, string>
 ): string[] {
@@ -24,13 +22,6 @@ export function getFieldDiffs(
         ['code', n(imported.code), dbFields.code ?? ''],
         ['minutes', n(imported.minutes), dbFields.minutes ?? ''],
         ['units', n(imported.units), dbFields.units ?? ''],
-        ['status', n(imported.status), dbFields.status ?? ''],
-        ['substitute', n(imported.substitute), dbFields.substitute ?? ''],
-        ['type', n(imported.type), dbFields.type ?? ''],
-        ['subtype', n(imported.subtype), dbFields.subtype ?? ''],
-        ['description', n(imported.description), dbFields.description ?? ''],
-        ['department', n(imported.department), dbFields.department ?? ''],
-        ['feedback', n(imported.feedback), dbFields.feedback ?? ''],
     ];
 
     return checks

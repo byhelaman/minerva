@@ -81,36 +81,19 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
     dismissedVersions: JSON.parse(localStorage.getItem('dismissed_schedule_versions') || '[]'),
 
     refreshMsConfig: async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
-
-        try {
-            const claims = jwtDecode<JwtClaims>(session.access_token);
-            const permissions = claims.permissions || [];
-            if (!permissions.includes('reports.manage')) return;
-        } catch (e) {
-            return;
-        }
-
-        const { data, error } = await supabase.functions.invoke('microsoft-auth', {
-            body: { action: 'status' }
+        set({
+            msConfig: {
+                isConnected: false,
+                schedulesFolderId: null,
+                incidencesFileId: null,
+                schedulesFolderName: null,
+                incidencesFileName: null,
+                incidencesWorksheetId: null,
+                incidencesWorksheetName: null,
+                incidencesTableId: null,
+                incidencesTableName: null,
+            }
         });
-
-        if (!error && data?.connected) {
-            set({
-                msConfig: {
-                    isConnected: true,
-                    schedulesFolderId: data.account.schedules_folder?.id,
-                    incidencesFileId: data.account.incidences_file?.id,
-                    schedulesFolderName: data.account.schedules_folder?.name,
-                    incidencesFileName: data.account.incidences_file?.name,
-                    incidencesWorksheetId: data.account.incidences_worksheet?.id,
-                    incidencesWorksheetName: data.account.incidences_worksheet?.name,
-                    incidencesTableId: data.account.incidences_table?.id,
-                    incidencesTableName: data.account.incidences_table?.name
-                }
-            });
-        }
     },
 
     publishToSupabase: async () => {
@@ -125,43 +108,39 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
         set({ isPublishing: true });
 
         try {
-            // 1. Check existence
-            const { data: existing } = await supabase
-                .from('published_schedules')
-                .select('id')
-                .eq('schedule_date', activeDate)
-                .single();
-
-            if (existing) return { success: false, error: 'A schedule is already published for this date', exists: true };
-
             const userId = (await supabase.auth.getUser()).data.user?.id || '';
 
-            // 2. Create published_schedules header first to block accidental replacements by date
+            // 1. Upsert header by date (replace mode)
             const { data: published, error } = await supabase
                 .from('published_schedules')
-                .insert({
+                .upsert({
                     schedule_date: activeDate,
                     entries_count: baseSchedules.length,
                     published_by: userId,
                     updated_at: new Date().toISOString()
+                }, {
+                    onConflict: 'schedule_date',
                 })
                 .select()
                 .single();
 
             if (error) {
-                const dbError = error as { code?: string };
-                if (dbError.code === '23505') {
-                    return { success: false, error: 'A schedule is already published for this date', exists: true };
-                }
                 throw error;
             }
 
             try {
-                // 3. Publish Entries (Upsert)
-                await scheduleEntriesService.publishSchedules(baseSchedules, userId);
+                // 2. Replace entries for this date
+                const { error: deleteExistingError } = await supabase
+                    .from('schedule_entries')
+                    .delete()
+                    .eq('date', activeDate);
+
+                if (deleteExistingError) throw deleteExistingError;
+
+                // 3. Publish current draft entries
+                const dateRows = baseSchedules.filter((s) => s.date === activeDate);
+                await scheduleEntriesService.publishSchedules(dateRows, userId);
             } catch (publishError) {
-                // Revert header if entries publishing fails
-                await supabase.from('published_schedules').delete().eq('id', published.id);
                 throw publishError;
             }
 
@@ -190,53 +169,9 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
     },
 
     syncToExcel: async (date?: string, endDateArg?: string) => {
-        const targetDate = date || useScheduleUIStore.getState().activeDate;
-        const { msConfig } = get();
-
-        if (!targetDate) {
-            toast.error("No date selected");
-            return;
-        }
-        if (!msConfig.isConnected || !msConfig.schedulesFolderId) {
-            toast.error("Microsoft Excel not connected");
-            return;
-        }
-
-        set({ isSyncing: true });
-        const toastId = toast.loading("Syncing to Excel...");
-
-        try {
-            // 1. Fetch schedule entries for this date from Supabase
-            // const { schedules, incidences } = await scheduleEntriesService.getSchedulesByDate(targetDate);
-
-            // Merge incidences on top of base schedules
-            // const computedSchedules = mergeSchedulesWithIncidences(schedules, incidences);
-
-            // 2. Publish consolidated incidences file
-            const { publishIncidencesToExcel } = await import('../services/microsoft-publisher');
-            if (msConfig.incidencesFileId) {
-                const startDate = targetDate;
-                const endDate: string | undefined = endDateArg;
-
-                await publishIncidencesToExcel(
-                    msConfig,
-                    startDate,
-                    endDate,
-                    (msg: string) => toast.loading(msg, { id: toastId })
-                );
-            }
-
-            toast.success("Synced successfully", { id: toastId });
-
-            // 4. Mark date as synced in DB
-            await scheduleEntriesService.markDateAsSynced(targetDate);
-
-        } catch (e: unknown) {
-            const message = e instanceof Error ? e.message : "Unknown error";
-            toast.error(`Sync failed: ${message}`, { id: toastId });
-        } finally {
-            set({ isSyncing: false });
-        }
+        date;
+        endDateArg;
+        toast.info("Microsoft sync is deprecated");
     },
 
     loadPublishedSchedule: async (schedule: PublishedSchedule) => {

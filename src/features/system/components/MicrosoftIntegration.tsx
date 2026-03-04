@@ -54,8 +54,7 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
     const [account, setAccount] = useState<MicrosoftAccount | null>(null);
     const [isDisconnecting, setIsDisconnecting] = useState(false);
 
-    // Configuration Mode: 'schedules_folder' or 'incidences_file'
-    const [configMode, setConfigMode] = useState<'schedules_folder' | 'incidences_file' | null>(null);
+    const [configMode, setConfigMode] = useState<'schedules_folder' | null>(null);
     const [isFileDialogOpen, setIsFileDialogOpen] = useState(false);
 
     // Cache for loaded data (no need to track expansion state with Collapsible)
@@ -331,7 +330,7 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
     };
 
     // Helper to open dialog for specific mode
-    const openSelectionDialog = (mode: 'schedules_folder' | 'incidences_file') => {
+    const openSelectionDialog = (mode: 'schedules_folder') => {
         setConfigMode(mode);
         setFolderChildren(new Map());
         setFileWorksheets(new Map());
@@ -368,7 +367,7 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
         title: string,
         description: string,
         value: { id: string; name: string } | undefined,
-        mode: 'schedules_folder' | 'incidences_file',
+        mode: 'schedules_folder',
     ) => (
         <div className="flex items-center justify-between space-x-2">
             <div className={value?.id ? "space-y-1" : "space-y-2"}>
@@ -426,7 +425,7 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
             <CardHeader>
                 <CardTitle>Microsoft Integration</CardTitle>
                 <CardDescription>
-                    Manage connection to OneDrive for Schedules and Incidences.
+                    Manage connection to OneDrive for schedules.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -494,34 +493,6 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
                             account.schedules_folder,
                             'schedules_folder',
                         )}
-                        <div className="space-y-3">
-                            {renderConfigRow(
-                                "Incidences Log File",
-                                "Excel file for tracking incidences history.",
-                                account.incidences_file,
-                                'incidences_file',
-                            )}
-                            {account.incidences_file && (
-                                <div className="text-xs flex gap-2 items-center ">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-muted-foreground">Worksheet:</span>
-                                        {account.incidences_worksheet?.name ? (
-                                            <Badge variant="outline">{account.incidences_worksheet.name}</Badge>
-                                        ) : (
-                                            <span className="text-muted-foreground italic">Not configured</span>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-muted-foreground">Table:</span>
-                                        {account.incidences_table?.name ? (
-                                            <Badge variant="outline">{account.incidences_table.name}</Badge>
-                                        ) : (
-                                            <span className="text-muted-foreground italic">Not configured</span>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
                     </div>
                 )}
 
@@ -537,14 +508,8 @@ export function MicrosoftIntegration({ onConfigChange }: MicrosoftIntegrationPro
                 }}>
                     <DialogContent className="max-h-[85vh] flex flex-col gap-6">
                         <DialogHeader>
-                            <DialogTitle>
-                                {configMode === 'schedules_folder' ? 'Select Folder' : 'Configure Incidences File'}
-                            </DialogTitle>
-                            <DialogDescription>
-                                {configMode === 'schedules_folder'
-                                    ? "Select the root folder for schedules."
-                                    : "Navigate to the Excel file, expand it, then select a table."}
-                            </DialogDescription>
+                            <DialogTitle>Select Folder</DialogTitle>
+                            <DialogDescription>Select the root folder for schedules.</DialogDescription>
                         </DialogHeader>
 
                         {/* File Tree */}

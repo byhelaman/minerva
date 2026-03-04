@@ -21,7 +21,7 @@ interface PublishToDbModalProps {
 }
 
 export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) {
-    const { publishToSupabase, isPublishing, checkIfScheduleExists } = useScheduleSyncStore();
+    const { publishToSupabase, isPublishing } = useScheduleSyncStore();
     const { activeDate } = useScheduleUIStore();
     const { baseSchedules } = useScheduleDataStore();
 
@@ -81,14 +81,6 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
                 return;
             }
 
-            // 5. Check Existence
-            const exists = await checkIfScheduleExists(activeDate);
-            if (exists) {
-                setValidationError(
-                    "A schedule is already published for this date. Delete that date from System Administration before publishing a new one."
-                );
-            }
-
         } catch (error) {
             console.error("Check failed", error);
         } finally {
@@ -100,10 +92,6 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
         const result = await publishToSupabase();
         if (result.success) {
             onOpenChange(false);
-        } else if (result.exists) {
-            setValidationError(
-                "A schedule is already published for this date. Delete that date from System Administration before publishing a new one."
-            );
         } else if (result.error) {
             setValidationError(result.error);
         }
@@ -134,7 +122,8 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
                                     <br /><br />
                                     This action will:
                                     <ul className="list-disc pl-5 mt-2 space-y-1">
-                                        <li>Save {baseSchedules.length} entries to the database</li>
+                                        <li>Replace existing database entries for this date</li>
+                                        <li>Save {baseSchedules.length} entries from the current draft</li>
                                         <li>Notify all users of the update</li>
                                     </ul>
                                 </>

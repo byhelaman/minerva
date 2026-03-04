@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Controller, useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
@@ -14,8 +14,6 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -41,24 +39,26 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Check, ChevronsUpDown, CircleCheck, CircleSlash, CloudUpload, MoreHorizontal, Plus, X } from "lucide-react";
+import { CircleCheck, CircleSlash, CloudUpload, MoreHorizontal, Plus } from "lucide-react";
 import { poolsService } from "@/features/schedules/services/pools-service";
 import type { PoolRule, PoolRuleInput } from "@/features/schedules/types";
 import { ScheduleDataTable } from "@schedules/components/table/ScheduleDataTable";
 import { DataTableColumnHeader } from "@schedules/components/table/data-table-column-header";
 import { useInstructors } from "@schedules/hooks/useInstructors";
 import { formatTimestampForDisplay } from "@/lib/date-utils";
-import { read, utils, write } from "xlsx";
+import { utils, write } from "xlsx";
 import { secureSaveFile } from "@/lib/secure-export";
-
-interface PoolImportRow {
-    program_query?: unknown;
-    program?: unknown;
-    allowed_instructors?: unknown;
-    positive_pool?: unknown;
-    blocked_instructors?: unknown;
-    negative_pool?: unknown;
-}
+import { UploadModal } from "@/features/schedules/components/modals/UploadModal";
+import { useSettings } from "@/components/settings-provider";
+import { InstructorMultiSelect } from "@/features/schedules/components/pools/InstructorMultiSelect";
+import { PoolsImportPreviewModal } from "@/features/schedules/components/pools/PoolsImportPreviewModal";
+import {
+    buildPoolImportPreview,
+    countWords,
+    parsePoolImportFiles,
+    sanitizeInstructorList,
+    type PoolImportDraft,
+} from "@/features/schedules/components/pools/pools-import-utils";
 
 interface RuleFormState {
     program_query: string;
@@ -83,25 +83,6 @@ const POOL_STATUS_OPTIONS = [
     { label: "Active", value: "active", icon: CircleCheck },
     { label: "Inactive", value: "inactive", icon: CircleSlash },
 ];
-
-function sanitizeInstructorList(values: string[]): string[] {
-    const unique = new Map<string, string>();
-    values
-        .map((value) => value.trim())
-        .filter(Boolean)
-        .forEach((value) => {
-            const key = value.toLowerCase();
-            if (!unique.has(key)) {
-                unique.set(key, value);
-            }
-        });
-
-    return Array.from(unique.values());
-}
-
-function countWords(value: string): number {
-    return value.trim().split(/\s+/).filter(Boolean).length;
-}
 
 const maxWords = (max: number) => (value: string): boolean => {
     return countWords(value) <= max;
@@ -129,227 +110,6 @@ function toForm(rule: PoolRule): RuleFormState {
     };
 }
 
-function parseInstructorCell(value: unknown): string[] {
-    if (Array.isArray(value)) {
-        return sanitizeInstructorList(value.map((entry) => String(entry ?? "")));
-    }
-
-    const raw = String(value ?? "").trim();
-    if (!raw) return [];
-
-    return sanitizeInstructorList(raw.split(/[\n,;|]+/).map((entry) => entry.trim()));
-}
-
-interface InstructorMultiSelectProps {
-    value: string[];
-    onChange: (next: string[]) => void;
-    options: string[];
-    placeholder: string;
-    searchPlaceholder: string;
-    emptyText: string;
-    className?: string;
-}
-
-function InstructorMultiSelect({
-    value,
-    onChange,
-    options,
-    placeholder,
-    searchPlaceholder,
-    emptyText,
-    className,
-}: InstructorMultiSelectProps) {
-    const [open, setOpen] = useState(false);
-    const [search, setSearch] = useState("");
-    const [expanded, setExpanded] = useState(false);
-
-    useEffect(() => {
-        if (value.length <= 5) {
-            setExpanded(false);
-        }
-    }, [value.length]);
-
-    const mergedOptions = useMemo(() => {
-        const map = new Map<string, string>();
-        [...options, ...value].forEach((name) => {
-            const trimmed = name.trim();
-            if (!trimmed) return;
-            const key = trimmed.toLowerCase();
-            if (!map.has(key)) {
-                map.set(key, trimmed);
-            }
-        });
-        return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
-    }, [options, value]);
-
-    const hasExactMatch = mergedOptions.some(
-        (name) => name.toLowerCase() === search.trim().toLowerCase()
-    );
-    const canAddCustom = search.trim().length > 0 && !hasExactMatch;
-
-    const toggleValue = (name: string) => {
-        const key = name.toLowerCase();
-        const exists = value.some((selected) => selected.toLowerCase() === key);
-        if (exists) {
-            onChange(value.filter((selected) => selected.toLowerCase() !== key));
-            return;
-        }
-        onChange([...value, name]);
-    };
-
-    const removeValue = (name: string) => {
-        const key = name.toLowerCase();
-        onChange(value.filter((selected) => selected.toLowerCase() !== key));
-    };
-
-    const visibleValues = expanded ? value : value.slice(0, 5);
-    const hiddenCount = value.length - visibleValues.length;
-
-    return (
-        <div className={`space-y-2 ${className ?? ""}`}>
-            <Popover open={open} onOpenChange={(nextOpen) => {
-                setOpen(nextOpen);
-                if (!nextOpen) {
-                    setSearch("");
-                }
-            }} modal={true}>
-                <PopoverTrigger asChild>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={open}
-                        className="w-full h-auto justify-between font-normal px-3 py-2 hover:bg-transparent data-[state=open]:bg-transparent"
-                    >
-                        <div className="flex flex-wrap items-center gap-1.5 min-h-5">
-                            {value.length === 0 ? (
-                                <span className="text-muted-foreground truncate">{placeholder}</span>
-                            ) : (
-                                <>
-                                    {visibleValues.map((name) => (
-                                        <Badge key={name} variant="secondary" className="gap-1 pr-1">
-                                            <span className="max-w-40 truncate">{name}</span>
-                                            <span
-                                                role="button"
-                                                tabIndex={0}
-                                                className="rounded-sm opacity-70 hover:opacity-100"
-                                                onClick={(event) => {
-                                                    event.preventDefault();
-                                                    event.stopPropagation();
-                                                    removeValue(name);
-                                                }}
-                                                onKeyDown={(event) => {
-                                                    if (event.key === "Enter" || event.key === " ") {
-                                                        event.preventDefault();
-                                                        event.stopPropagation();
-                                                        removeValue(name);
-                                                    }
-                                                }}
-                                                aria-label={`Remove ${name}`}
-                                            >
-                                                <X />
-                                            </span>
-                                        </Badge>
-                                    ))}
-                                    {hiddenCount > 0 && (
-                                        <Badge
-                                            variant="outline"
-                                            role="button"
-                                            tabIndex={0}
-                                            className="cursor-pointer select-none hover:bg-accent"
-                                            onClick={(event) => {
-                                                event.preventDefault();
-                                                event.stopPropagation();
-                                                setExpanded(true);
-                                            }}
-                                            onKeyDown={(event) => {
-                                                if (event.key === "Enter" || event.key === " ") {
-                                                    event.preventDefault();
-                                                    event.stopPropagation();
-                                                    setExpanded(true);
-                                                }
-                                            }}
-                                        >
-                                            +{hiddenCount} more
-                                        </Badge>
-                                    )}
-                                    {expanded && value.length > 5 && (
-                                        <Badge
-                                            variant="outline"
-                                            role="button"
-                                            tabIndex={0}
-                                            className="cursor-pointer select-none hover:bg-accent"
-                                            onClick={(event) => {
-                                                event.preventDefault();
-                                                event.stopPropagation();
-                                                setExpanded(false);
-                                            }}
-                                            onKeyDown={(event) => {
-                                                if (event.key === "Enter" || event.key === " ") {
-                                                    event.preventDefault();
-                                                    event.stopPropagation();
-                                                    setExpanded(false);
-                                                }
-                                            }}
-                                        >
-                                            show less
-                                        </Badge>
-                                    )}
-                                </>
-                            )}
-                        </div>
-                        <ChevronsUpDown className="size-4 opacity-50 shrink-0" />
-                    </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                    <Command>
-                        <CommandInput
-                            placeholder={searchPlaceholder}
-                            value={search}
-                            onValueChange={setSearch}
-                        />
-                        <CommandList className="max-h-70">
-                            <CommandEmpty>{emptyText}</CommandEmpty>
-
-                            {canAddCustom && (
-                                <CommandGroup heading="Custom">
-                                    <CommandItem
-                                        value={`__custom__${search}`}
-                                        onSelect={() => {
-                                            toggleValue(search.trim());
-                                            setSearch("");
-                                        }}
-                                    >
-                                        <Check className="opacity-0" />
-                                        <span>Use “{search.trim()}”</span>
-                                    </CommandItem>
-                                </CommandGroup>
-                            )}
-
-                            <CommandGroup>
-                                {mergedOptions.map((name) => {
-                                    const isSelected = value.some((selected) => selected.toLowerCase() === name.toLowerCase());
-
-                                    return (
-                                        <CommandItem
-                                            key={name}
-                                            value={name}
-                                            onSelect={() => toggleValue(name)}
-                                        >
-                                            <Check className={isSelected ? "opacity-100" : "opacity-0"} />
-                                            <span className="truncate">{name}</span>
-                                        </CommandItem>
-                                    );
-                                })}
-                            </CommandGroup>
-                        </CommandList>
-                    </Command>
-                </PopoverContent>
-            </Popover>
-        </div>
-    );
-}
-
 export function PoolsPage() {
     const [rules, setRules] = useState<PoolRule[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -360,9 +120,12 @@ export function PoolsPage() {
 
     const [ruleToDelete, setRuleToDelete] = useState<PoolRule | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
-    const [isImporting, setIsImporting] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isApplyingImport, setIsApplyingImport] = useState(false);
+    const [importDrafts, setImportDrafts] = useState<PoolImportDraft[]>([]);
     const instructors = useInstructors();
+    const { settings } = useSettings();
 
     const form = useForm<RuleFormState>({
         defaultValues: emptyForm,
@@ -545,16 +308,18 @@ export function PoolsPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => openEditDialog(row.original)}>
-                            Edit Rule
+                            Edit
                         </DropdownMenuItem>
                         <DropdownMenuItem variant="destructive" onClick={() => setRuleToDelete(row.original)}>
-                            Delete Rule
+                            Delete
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
             ),
         },
     ], []);
+
+    const importPreview = useMemo(() => buildPoolImportPreview(importDrafts, rules), [importDrafts, rules]);
 
     const loadRules = async () => {
         setIsLoading(true);
@@ -702,6 +467,7 @@ export function PoolsPage() {
                 title: "Save As",
                 defaultName,
                 content: new Uint8Array(excelBuffer),
+                openAfterExport: settings.openAfterExport,
             });
 
             if (saved) {
@@ -713,67 +479,115 @@ export function PoolsPage() {
         }
     };
 
-    const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        event.target.value = "";
-        if (!file) return;
+    const handleImportFiles = async (files: File[]) => {
+        if (files.length === 0) return;
 
-        setIsImporting(true);
         try {
-            const buffer = await file.arrayBuffer();
-            const workbook = read(buffer, { type: "array" });
-            const firstSheetName = workbook.SheetNames[0];
+            const { payloads, fileErrors } = await parsePoolImportFiles(files);
 
-            if (!firstSheetName) {
-                toast.error("The selected file has no sheets");
-                return;
+            for (const message of fileErrors) {
+                toast.error(message);
             }
-
-            const worksheet = workbook.Sheets[firstSheetName];
-            const importedRows = utils.sheet_to_json<PoolImportRow>(worksheet, { defval: "" });
-
-            if (importedRows.length === 0) {
-                toast.error("No rows found to import");
-                return;
-            }
-
-            const payloads = importedRows
-                .map((row) => {
-                    const programValue = String(row.program_query ?? row.program ?? "").trim();
-                    if (!programValue) return null;
-
-                    return {
-                        program_query: programValue,
-                        allowed_instructors: parseInstructorCell(row.allowed_instructors ?? row.positive_pool),
-                        blocked_instructors: parseInstructorCell(row.blocked_instructors ?? row.negative_pool),
-                        hard_lock: false,
-                        is_active: true,
-                        notes: null,
-                    } as PoolRuleInput;
-                })
-                .filter((item): item is PoolRuleInput => item !== null);
 
             if (payloads.length === 0) {
                 toast.error("No valid pool rules found in file");
                 return;
             }
 
-            const results = await Promise.allSettled(payloads.map((payload) => poolsService.createRule(payload)));
-            const successCount = results.filter((result) => result.status === "fulfilled").length;
-            const failCount = results.length - successCount;
+            setImportDrafts(payloads.map((payload, index) => ({
+                id: `${Date.now()}-${index}`,
+                payload,
+            })));
+            setIsImportModalOpen(true);
+        } catch (error) {
+            console.error("Failed to import pool rules", error);
+            toast.error("Failed to import pool rules");
+        }
+    };
 
-            if (successCount > 0) {
-                toast.success(`${successCount} pool rule${successCount > 1 ? "s" : ""} imported`);
-                await loadRules();
+    const handleConfirmImport = async () => {
+        if (importPreview.rows.length === 0) {
+            toast.warning("No data to import");
+            return;
+        }
+
+        if (importPreview.summary.unresolvedCount > 0) {
+            toast.error("Resolve duplicate/invalid/ambiguous rows before importing");
+            return;
+        }
+
+        const operations = importPreview.rows
+            .filter((row) => row.status === "new" || row.status === "modified")
+            .map((row) => {
+                const payload: PoolRuleInput = {
+                    program_query: row.program_query,
+                    allowed_instructors: row.allowed_instructors,
+                    blocked_instructors: row.blocked_instructors,
+                    hard_lock: row.hard_lock,
+                    is_active: row.is_active,
+                    notes: row.notes,
+                };
+
+                if (row.status === "new") {
+                    return {
+                        kind: "create" as const,
+                        run: () => poolsService.createRule(payload),
+                    };
+                }
+
+                return {
+                    kind: "update" as const,
+                    run: () => {
+                        if (!row.existingRuleId) throw new Error("Missing existing rule id");
+                        return poolsService.updateRule(row.existingRuleId, payload);
+                    },
+                };
+            });
+
+        setIsApplyingImport(true);
+        try {
+            const results = await Promise.allSettled(operations.map((op) => op.run()));
+
+            let createdCount = 0;
+            let updatedCount = 0;
+            let failCount = 0;
+
+            results.forEach((result, index) => {
+                if (result.status === "fulfilled") {
+                    if (operations[index]?.kind === "create") createdCount += 1;
+                    if (operations[index]?.kind === "update") updatedCount += 1;
+                } else {
+                    failCount += 1;
+                }
+            });
+
+            const identicalCount = importPreview.summary.identicalCount;
+
+            const messageParts: string[] = [];
+            if (createdCount > 0) messageParts.push(`${createdCount} created`);
+            if (updatedCount > 0) messageParts.push(`${updatedCount} updated`);
+            if (identicalCount > 0) messageParts.push(`${identicalCount} identical skipped`);
+
+            if (messageParts.length > 0) {
+                toast.success(messageParts.join(", "));
+            } else {
+                toast.warning("No rows were applied");
             }
+
             if (failCount > 0) {
-                toast.error(`${failCount} pool rule${failCount > 1 ? "s" : ""} failed to import`);
+                toast.error(`${failCount} row${failCount > 1 ? "s" : ""} failed to import`);
+            }
+
+            await loadRules();
+            if (failCount === 0) {
+                setImportDrafts([]);
+                setIsImportModalOpen(false);
             }
         } catch (error) {
             console.error("Failed to import pool rules", error);
             toast.error("Failed to import pool rules");
         } finally {
-            setIsImporting(false);
+            setIsApplyingImport(false);
         }
     };
 
@@ -794,13 +608,6 @@ export function PoolsPage() {
                 </div>
             </div>
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden pr-2">
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".xlsx,.xls,.csv"
-                    className="hidden"
-                    onChange={handleImportFile}
-                />
                 <ScheduleDataTable
                     columns={columns}
                     data={rules}
@@ -818,16 +625,22 @@ export function PoolsPage() {
                     customActionItems={
                         <>
                             <DropdownMenuItem
-                                onClick={() => fileInputRef.current?.click()}
-                                disabled={isImporting}
+                                onClick={() => setIsUploadModalOpen(true)}
                             >
                                 <CloudUpload />
-                                {isImporting ? "Importing..." : "Import Data"}
+                                Import Data
                             </DropdownMenuItem>
                         </>
                     }
                 />
             </div>
+
+            <UploadModal
+                open={isUploadModalOpen}
+                onOpenChange={setIsUploadModalOpen}
+                onUploadComplete={() => { }}
+                processFiles={handleImportFiles}
+            />
 
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                 <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col gap-6">
@@ -979,6 +792,21 @@ export function PoolsPage() {
                     </form>
                 </DialogContent>
             </Dialog>
+
+            <PoolsImportPreviewModal
+                open={isImportModalOpen}
+                onOpenChange={setIsImportModalOpen}
+                rows={importPreview.rows}
+                summary={importPreview.summary}
+                isApplying={isApplyingImport}
+                onConfirm={handleConfirmImport}
+                onRemoveRows={(ids) => {
+                    if (ids.length === 0) return;
+                    const idSet = new Set(ids);
+                    setImportDrafts((prev) => prev.filter((item) => !idSet.has(item.id)));
+                    toast.success(`${ids.length} row(s) removed`);
+                }}
+            />
 
             <AlertDialog open={!!ruleToDelete} onOpenChange={(open) => !open && setRuleToDelete(null)}>
                 <AlertDialogContent className="sm:max-w-100!">

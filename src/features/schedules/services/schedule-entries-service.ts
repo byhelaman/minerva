@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { Schedule, DailyIncidence } from "../types";
 import { ensureTimeFormat } from "../utils/time-utils";
-import { normalizeString, emptyToNull, getSchedulePrimaryKey } from "../utils/string-utils";
+import { normalizeString, getSchedulePrimaryKey } from "../utils/string-utils";
 
 /**
  * Servicio para operaciones CRUD de entradas de horario en Supabase.
@@ -19,15 +19,7 @@ interface ScheduleEntryRow {
     code: string;
     minutes: string;
     units: string;
-    status?: string | null;
-    substitute?: string | null;
-    type?: string | null;
-    subtype?: string | null;
-    description?: string | null;
-    department?: string | null;
-    feedback?: string | null;
     published_by?: string | null;
-    synced_at?: string | null;
     updated_at?: string | null;
 }
 
@@ -45,35 +37,6 @@ const mapEntryToSchedule = (row: ScheduleEntryRow): Schedule => ({
     units: row.units,
 });
 
-// Helper para mapear fila de BD a DailyIncidence (si tiene type o status)
-const mapEntryToIncidence = (row: ScheduleEntryRow): DailyIncidence | null => {
-    // Considerar como incidencia si tiene 'type' (incidencia completa)
-    // O si tiene 'status' (marcado via switch/Live mode)
-    if (!row.type && !row.status) return null;
-    return {
-        // Campos base del Schedule (requeridos ya que DailyIncidence extiende Schedule)
-        date: row.date,
-        program: row.program,
-        start_time: ensureTimeFormat(row.start_time),
-        instructor: row.instructor,
-        shift: row.shift,
-        branch: row.branch,
-        end_time: ensureTimeFormat(row.end_time),
-        code: row.code,
-        minutes: row.minutes,
-        units: row.units,
-
-        // Campos específicos de incidencia
-        status: row.status,
-        substitute: row.substitute || undefined,
-        type: row.type || undefined,
-        subtype: row.subtype || undefined,
-        description: row.description || undefined,
-        department: row.department || undefined,
-        feedback: row.feedback || undefined
-    };
-};
-
 export const scheduleEntriesService = {
 
     /**
@@ -89,17 +52,12 @@ export const scheduleEntriesService = {
         if (error) throw error;
 
         const schedules: Schedule[] = [];
-        const incidences: DailyIncidence[] = [];
 
         (data as ScheduleEntryRow[] | null)?.forEach(row => {
             schedules.push(mapEntryToSchedule(row));
-            const incidence = mapEntryToIncidence(row);
-            if (incidence) {
-                incidences.push(incidence);
-            }
         });
 
-        return { schedules, incidences };
+        return { schedules, incidences: [] as DailyIncidence[] };
     },
 
     /**
@@ -108,27 +66,24 @@ export const scheduleEntriesService = {
      */
     async getSchedulesByDateRange(startDate: string, endDate: string) {
         const { data, error } = await supabase
-            .rpc('get_schedules_report', {
-                p_start_date: startDate,
-                p_end_date: endDate
-            });
+            .from('schedule_entries')
+            .select('*')
+            .gte('date', startDate)
+            .lte('date', endDate)
+            .order('date', { ascending: true })
+            .order('start_time', { ascending: true });
 
         if (error) throw error;
 
         const schedules: Schedule[] = [];
-        const incidences: DailyIncidence[] = [];
 
         const rows: ScheduleEntryRow[] = Array.isArray(data) ? data : [];
 
         rows.forEach((row) => {
             schedules.push(mapEntryToSchedule(row));
-            const incidence = mapEntryToIncidence(row);
-            if (incidence) {
-                incidences.push(incidence);
-            }
         });
 
-        return { schedules, incidences };
+        return { schedules, incidences: [] as DailyIncidence[] };
     },
 
     /**
@@ -166,7 +121,6 @@ export const scheduleEntriesService = {
                     // así que los datos de incidencia existentes se preservan al re-publicar.
 
                     published_by: publishedBy,
-                    synced_at: null
                 });
             }
         }
@@ -184,20 +138,12 @@ export const scheduleEntriesService = {
     /**
      * Upsert masivo de schedules desde flujos de Importar/Pull.
      * Normaliza todos los campos clave (trim + formato de hora) para prevenir duplicados.
-     *
-     * IMPORTANTE: El upsert masivo de PostgREST usa la UNIÓN de todas las columnas
-     * de todas las filas. Si UNA fila tiene un campo de incidencia, TODAS las filas
-     * reciben esa columna con NULL — borrando datos de incidencia existentes en conflicto.
-     * Para evitarlo, las filas se dividen en dos upserts separados:
-     *   1. Filas base (sin columnas de incidencia) → preserva incidencias existentes
-     *   2. Filas de incidencia (TODAS las columnas, forma uniforme) → actualiza incidencias
      */
     async importSchedules(schedules: Schedule[], publishedBy: string): Promise<{ upsertedCount: number; duplicatesSkipped: number }> {
         if (schedules.length === 0) return { upsertedCount: 0, duplicatesSkipped: 0 };
 
         const uniqueKeys = new Set<string>();
-        const baseOnlyRows: Omit<ScheduleEntryRow, 'updated_at'>[] = [];
-        const incidenceRows: Omit<ScheduleEntryRow, 'updated_at'>[] = [];
+        const rows: Omit<ScheduleEntryRow, 'updated_at'>[] = [];
         let duplicatesSkipped = 0;
 
         for (const s of schedules) {
@@ -226,27 +172,9 @@ export const scheduleEntriesService = {
                 units: s.units,
 
                 published_by: publishedBy,
-                synced_at: null
             };
 
-            const hasIncidence = s.substitute || s.type || s.subtype
-                || s.description || s.department || s.feedback;
-
-            if (hasIncidence) {
-                // Incluir TODOS los campos de incidencia para asegurar forma de columnas uniforme
-                incidenceRows.push({
-                    ...baseRow,
-                    status: emptyToNull(s.status),
-                    substitute: emptyToNull(s.substitute),
-                    type: emptyToNull(s.type),
-                    subtype: emptyToNull(s.subtype),
-                    description: emptyToNull(s.description),
-                    department: emptyToNull(s.department),
-                    feedback: emptyToNull(s.feedback),
-                });
-            } else {
-                baseOnlyRows.push(baseRow);
-            }
+            rows.push(baseRow);
         }
 
         const upsertOpts = {
@@ -254,120 +182,52 @@ export const scheduleEntriesService = {
             ignoreDuplicates: false
         };
 
-        // Dos upserts separados para evitar contaminación de columnas mixtas
-        if (baseOnlyRows.length > 0) {
+        if (rows.length > 0) {
             const { error } = await supabase
                 .from('schedule_entries')
-                .upsert(baseOnlyRows, upsertOpts);
+                .upsert(rows, upsertOpts);
             if (error) throw error;
         }
 
-        if (incidenceRows.length > 0) {
-            const { error } = await supabase
-                .from('schedule_entries')
-                .upsert(incidenceRows, upsertOpts);
-            if (error) throw error;
-        }
-
-        return { upsertedCount: baseOnlyRows.length + incidenceRows.length, duplicatesSkipped };
+        return { upsertedCount: rows.length, duplicatesSkipped };
     },
 
     /**
      * Actualizar datos de incidencia de una entrada específica (IncidenceModal).
      * Retorna true si la actualización fue exitosa (la fila existía), false si no.
      */
-    async updateIncidence(key: { date: string, program: string, start_time: string, instructor: string }, changes: Partial<DailyIncidence>): Promise<boolean> {
-        const normalizedKey = {
-            date: key.date,
-            program: normalizeString(key.program),
-            start_time: ensureTimeFormat(key.start_time),
-            instructor: normalizeString(key.instructor) || 'none'
-        };
-
-        const { data, error } = await supabase
-            .from('schedule_entries')
-            .update({
-                status: emptyToNull(changes.status),
-                substitute: emptyToNull(changes.substitute),
-                type: emptyToNull(changes.type),
-                subtype: emptyToNull(changes.subtype),
-                description: emptyToNull(changes.description),
-                department: emptyToNull(changes.department),
-                feedback: emptyToNull(changes.feedback),
-            })
-            .match(normalizedKey)
-            .select();
-
-        if (error) throw error;
-
-        return (data?.length ?? 0) > 0;
+    async updateIncidence(_key: { date: string, program: string, start_time: string, instructor: string }, _changes: Partial<DailyIncidence>): Promise<boolean> {
+        return false;
     },
 
     /**
      * Para Sync: Obtener entradas que necesitan sincronizarse a Excel
      */
     async getEntriesPendingSync(date: string) {
-        const { data, error } = await supabase
-            .from('schedule_entries')
-            .select('*')
-            .eq('date', date)
-            .or('synced_at.is.null,updated_at.gt.synced_at');
-
-        if (error) throw error;
-        return data;
+        date;
+        return [];
     },
 
     /**
      * Buscar fechas que parecen necesitar sincronización.
      */
     async getPendingSyncDates(): Promise<string[]> {
-        const { data, error } = await supabase
-            .from('schedule_entries')
-            .select('date')
-            .is('synced_at', null)
-            .limit(100);
-
-        if (error) return [];
-        return Array.from(new Set(data.map(d => d.date)));
+        return [];
     },
 
     /**
      * Obtener todas las entradas que tienen datos de incidencia.
      * Usado para la exportación consolidada de incidencias a Excel.
      */
-    async getAllIncidences(startDate?: string, endDate?: string): Promise<DailyIncidence[]> {
-        let query = supabase
-            .from('schedule_entries')
-            .select('*')
-            .not('type', 'is', null)
-            .neq('type', '')
-            .order('date', { ascending: true })
-            .order('start_time', { ascending: true });
-
-        if (startDate && endDate) {
-            query = query.gte('date', startDate).lte('date', endDate);
-        } else if (startDate) {
-            query = query.eq('date', startDate);
-        }
-
-        const { data, error } = await query;
-
-        if (error) throw error;
-
-        return ((data || []) as ScheduleEntryRow[]).map(row => mapEntryToIncidence(row)).filter((inc): inc is DailyIncidence => inc !== null);
+    async getAllIncidences(_startDate?: string, _endDate?: string): Promise<DailyIncidence[]> {
+        return [];
     },
 
     /**
      * Marcar una fecha como sincronizada
      */
     async markDateAsSynced(date: string) {
-        const now = new Date().toISOString();
-        const { error } = await supabase
-            .from('schedule_entries')
-            .update({ synced_at: now })
-            .eq('date', date);
-
-        if (error) throw error;
+        date;
     },
 
     /**
@@ -420,7 +280,7 @@ export const scheduleEntriesService = {
         if (dates.length === 0) return new Set();
 
         const keys = new Set<string>();
-        
+
         const { data, error } = await supabase.rpc('get_existing_keys_by_dates', {
             p_dates: dates
         });
@@ -461,13 +321,6 @@ export const scheduleEntriesService = {
                 code: normalizeString(row.code),
                 minutes: normalizeString(row.minutes) || '0',
                 units: normalizeString(row.units) || '0',
-                status: normalizeString(row.status),
-                substitute: normalizeString(row.substitute),
-                type: normalizeString(row.type),
-                subtype: normalizeString(row.subtype),
-                description: normalizeString(row.description),
-                department: normalizeString(row.department),
-                feedback: normalizeString(row.feedback),
             });
         });
 
@@ -489,15 +342,6 @@ export const scheduleEntriesService = {
                 minutes: schedule.minutes,
                 units: schedule.units,
                 published_by: publishedBy,
-
-                // Campos de incidencia
-                status: emptyToNull(schedule.status),
-                type: emptyToNull(schedule.type),
-                subtype: emptyToNull(schedule.subtype),
-                substitute: emptyToNull(schedule.substitute),
-                description: emptyToNull(schedule.description),
-                department: emptyToNull(schedule.department),
-                feedback: emptyToNull(schedule.feedback),
             });
 
         if (error) throw error;

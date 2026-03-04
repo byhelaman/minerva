@@ -25,6 +25,10 @@ interface UploadModalProps {
     onOpenChange: (open: boolean) => void;
     onUploadComplete: (schedules: Schedule[]) => void;
     strictValidation?: boolean;
+    processFiles?: (files: File[]) => Promise<void>;
+    accept?: string;
+    title?: string;
+    description?: string;
 }
 
 const MAX_FILES = 10;
@@ -42,11 +46,27 @@ export function UploadModal({
     open,
     onOpenChange,
     onUploadComplete,
-    strictValidation
+    strictValidation,
+    processFiles,
+    accept = ".xlsx",
+    title = "Upload Excel Files",
+    description,
 }: UploadModalProps) {
     const [selectedFiles, setSelectedFiles] = useState<FileInfo[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
+
+    const allowedExtensions = accept
+        .split(",")
+        .map((part) => part.trim().toLowerCase())
+        .filter(Boolean);
+
+    const defaultDescription = `Select Excel files (${accept} only, max ${MAX_FILES} files).`;
+
+    const isAllowedFile = useCallback((fileName: string) => {
+        const lower = fileName.toLowerCase();
+        return allowedExtensions.some((ext) => lower.endsWith(ext));
+    }, [allowedExtensions]);
 
     // Validate and add files to selection
     const addFiles = useCallback(
@@ -62,7 +82,7 @@ export function UploadModal({
                     duplicateCount++;
                     continue;
                 }
-                if (!file.name.toLowerCase().endsWith(".xlsx")) {
+                if (!isAllowedFile(file.name)) {
                     invalidCount++;
                     continue;
                 }
@@ -74,7 +94,7 @@ export function UploadModal({
             }
             if (invalidCount > 0) {
                 toast.error(
-                    `${invalidCount} invalid file(s) rejected. Only .xlsx files allowed`
+                    `${invalidCount} invalid file(s) rejected. Allowed: ${accept}`
                 );
             }
 
@@ -91,7 +111,7 @@ export function UploadModal({
                 setSelectedFiles((prev) => [...prev, ...filesToAdd]);
             }
         },
-        [selectedFiles]
+        [accept, isAllowedFile, selectedFiles]
     );
 
     // Handle drag events
@@ -143,7 +163,7 @@ export function UploadModal({
 
         const input = document.createElement("input");
         input.type = "file";
-        input.accept = ".xlsx";
+        input.accept = accept;
         input.multiple = true;
         input.onchange = (e) => {
             const target = e.target as HTMLInputElement;
@@ -152,7 +172,7 @@ export function UploadModal({
             }
         };
         input.click();
-    }, [selectedFiles.length, addFiles]);
+    }, [accept, selectedFiles.length, addFiles]);
 
     // Process files when Done is clicked
     const handleProcess = useCallback(async () => {
@@ -163,6 +183,13 @@ export function UploadModal({
 
         setIsProcessing(true);
         try {
+            if (processFiles) {
+                await processFiles(selectedFiles.map((f) => f.file));
+                setSelectedFiles([]);
+                onOpenChange(false);
+                return;
+            }
+
             // Procesar archivos en paralelo
             const promises = selectedFiles.map((f) => parseExcelFile(f.file, { strictValidation }));
             const results = await Promise.all(promises);
@@ -184,7 +211,7 @@ export function UploadModal({
         } finally {
             setIsProcessing(false);
         }
-    }, [selectedFiles, onUploadComplete, onOpenChange]);
+    }, [processFiles, selectedFiles, strictValidation, onUploadComplete, onOpenChange]);
 
     const handleRemoveFile = useCallback((name: string) => {
         setSelectedFiles((prev) => prev.filter((f) => f.name !== name));
@@ -203,9 +230,9 @@ export function UploadModal({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="flex max-h-[85vh] flex-col gap-6">
                 <DialogHeader>
-                    <DialogTitle>Upload Excel Files</DialogTitle>
+                    <DialogTitle>{title}</DialogTitle>
                     <DialogDescription>
-                        Select Excel files (.xlsx only, max {MAX_FILES} files).
+                        {description ?? defaultDescription}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -237,7 +264,7 @@ export function UploadModal({
                                 {isDragging ? "Drop files here" : "Drag & drop files here"}
                             </p>
                             <p className="text-muted-foreground text-xs">
-                                Or click to browse (.xlsx only, max {MAX_FILES} files)
+                                {`Or click to browse (${accept} only, max ${MAX_FILES} files)`}
                             </p>
                         </div>
                         <Button

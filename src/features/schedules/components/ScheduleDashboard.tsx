@@ -5,7 +5,7 @@ import type { IssueCategory } from "@schedules/components/table/IssueFilter";
 import { getScheduleColumns } from "@schedules/components/table/columns";
 import { Schedule } from "@schedules/types";
 import { getUniqueScheduleKey, getScheduleKey } from "@schedules/utils/overlap-utils";
-import { ISSUE_STYLE_AMBER, ROW_STYLE_INCIDENCE, ROW_STYLE_POOL } from "@/features/schedules/utils/issue-styles";
+import { ROW_STYLE_POOL } from "@/features/schedules/utils/issue-styles";
 import { BaseDirectory, exists, readTextFile, remove, writeTextFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { useSettings } from "@/components/settings-provider";
 import { RequirePermission } from "@/components/RequirePermission";
 import { STORAGE_FILES } from "@/lib/constants";
 import { formatDateToISO, formatDateForDisplay } from "@/lib/date-utils";
-import { Bot, CalendarPlus, CalendarSearch, CircleAlert, ShieldAlert } from "lucide-react";
+import { Bot, CalendarPlus, CalendarSearch, ShieldAlert } from "lucide-react";
 import { SearchLinkModal } from "./modals/search/SearchLinkModal";
 import { CreateLinkModal } from "./modals/creation/CreateLinkModal";
 import { AssignLinkModal } from "./modals/assignment/AssignLinkModal";
@@ -44,37 +44,15 @@ export function ScheduleDashboard() {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
     // Autenticación
-    const { profile, hasPermission } = useAuth();
-    const canManage = (profile?.hierarchy_level ?? 0) >= 80;
+    const { hasPermission } = useAuth();
     const canManagePools = hasPermission("pools.manage");
 
     // Acceso al Store
-    const { baseSchedules, setBaseSchedules, incidences, getComputedSchedules } = useScheduleDataStore();
+    const { baseSchedules, setBaseSchedules } = useScheduleDataStore();
     const { activeDate, setActiveDate } = useScheduleUIStore();
-    const { refreshMsConfig, isPublishing } = useScheduleSyncStore();
+    const { isPublishing } = useScheduleSyncStore();
 
-    // Schedules Computados (Mergeados con Incidencias)
-    // Memoizar para prevenir loops infinitos en componentes downstream (AssignLinkModal) que dependen de este array
-    const schedules = useMemo(() => getComputedSchedules(), [baseSchedules, incidences, getComputedSchedules]);
-
-    // Build incidence issue categories for the unified IssueFilter
-    const realIncidenceCount = useMemo(() => {
-        return schedules.filter(s => !!s.type).length;
-    }, [schedules]);
-
-    const externalIssueCategories = useMemo<IssueCategory[]>(() => {
-        if (realIncidenceCount === 0) return [];
-        return [{ key: 'incidences', label: 'Incidencias', count: realIncidenceCount, icon: CircleAlert, activeClassName: ISSUE_STYLE_AMBER }];
-    }, [realIncidenceCount]);
-
-    const issueRowKeys = useMemo((): Record<string, Set<string>> => {
-        if (realIncidenceCount === 0) return {};
-        const keys = new Set<string>();
-        for (const row of schedules) {
-            if (row.type) keys.add(getScheduleKey(row as unknown as Schedule));
-        }
-        return { incidences: keys };
-    }, [realIncidenceCount, schedules]);
+    const schedules = useMemo(() => baseSchedules, [baseSchedules]);
 
     const [poolRules, setPoolRules] = useState<PoolRule[]>([]);
 
@@ -109,7 +87,7 @@ export function ScheduleDashboard() {
     }, [canManagePools, schedules, poolRules]);
 
     const mergedIssueCategories = useMemo(() => {
-        const categories = [...externalIssueCategories];
+        const categories: IssueCategory[] = [];
 
         if (poolValidation.violationCount > 0) {
             categories.push({
@@ -121,14 +99,13 @@ export function ScheduleDashboard() {
         }
 
         return categories;
-    }, [externalIssueCategories, poolValidation.violationCount]);
+    }, [poolValidation.violationCount]);
 
     const mergedIssueRowKeys = useMemo(() => {
         return {
-            ...issueRowKeys,
             ...(poolValidation.violationCount > 0 ? { pool: poolValidation.violatingRowKeys } : {}),
         };
-    }, [issueRowKeys, poolValidation]);
+    }, [poolValidation]);
 
     const hasLoadedAutosave = useRef(false);
     const autoSaveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -141,12 +118,6 @@ export function ScheduleDashboard() {
     const [activePrograms, setActivePrograms] = useState<Set<string>>(new Set());
     const [liveTimeFilter, setLiveTimeFilter] = useState<string | undefined>(undefined);
     const [liveDateFilter, setLiveDateFilter] = useState<string | undefined>(undefined);
-
-    // Inicializar Store Global
-    useEffect(() => {
-        refreshMsConfig();
-    }, [refreshMsConfig]);
-
 
     // Auto-cargar drafts al montar (solo una vez por sesión de app)
     useEffect(() => {
@@ -180,12 +151,6 @@ export function ScheduleDashboard() {
 
         loadAutosave();
     }, [setBaseSchedules, setActiveDate]);
-
-    // Obtener incidencias de BD cuando cambia la fecha activa
-    useEffect(() => {
-        if (!activeDate) return;
-        useScheduleDataStore.getState().fetchIncidencesForDate(activeDate);
-    }, [activeDate]);
 
     // Auto-guardado con debounce para SCHEDULES (Solo Drafts)
     useEffect(() => {
@@ -278,13 +243,6 @@ export function ScheduleDashboard() {
 
             setActivePrograms(matchedPrograms);
 
-            // Auto-marcar clases coincidentes como "Yes" solo si el status es null
-            const { updateIncidence } = useScheduleDataStore.getState();
-            for (const s of filteredSchedules) {
-                if (matchedPrograms.has(s.program) && !s.status) {
-                    updateIncidence({ ...s, status: "Yes" }).catch(e => console.warn('Live: no se pudo actualizar status', e));
-                }
-            }
         } catch (error) {
             console.error("Error in live mode:", error);
             toast.error("Failed to fetch live meetings");
@@ -326,13 +284,6 @@ export function ScheduleDashboard() {
             }
             setActivePrograms(matched);
 
-            // Auto-marcar clases coincidentes como "Yes" solo si el status es null
-            const { updateIncidence } = useScheduleDataStore.getState();
-            for (const s of filtered) {
-                if (matched.has(s.program) && !s.status) {
-                    updateIncidence({ ...s, status: "Yes" }).catch(e => console.warn('Live tick: no se pudo actualizar status', e));
-                }
-            }
         };
 
         const interval = setInterval(tick, 60_000);
@@ -450,15 +401,15 @@ export function ScheduleDashboard() {
     };
 
     const columns = useMemo(
-        () => getScheduleColumns(handleDeleteSchedule, canManage),
-        [handleDeleteSchedule, canManage],
+        () => getScheduleColumns(handleDeleteSchedule),
+        [handleDeleteSchedule],
     );
 
     return (
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
             <div className="flex py-8 my-4 gap-6 justify-between items-center">
                 <div className="flex flex-col gap-1">
-                    <h1 className="text-xl font-bold tracking-tight">Management</h1>
+                    <h1 className="text-xl font-bold tracking-tight">Schedule</h1>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <span>Active Date: {activeDate ? formatDateForDisplay(activeDate) : "No Date Selected"}</span>
                     </div>
@@ -522,14 +473,13 @@ export function ScheduleDashboard() {
                 externalIssueCategories={mergedIssueCategories}
                 issueRowKeys={mergedIssueRowKeys}
                 getRowClassName={(row) => {
-                    const s = row as Schedule & { type?: string };
-                    const rowKey = getScheduleKey(s);
+                    const rowKey = getScheduleKey(row as Schedule);
 
                     if (poolValidation.violatingRowKeys.has(rowKey)) {
                         return ROW_STYLE_POOL;
                     }
 
-                    return s.type ? ROW_STYLE_INCIDENCE : undefined;
+                    return undefined;
                 }}
                 getRowIssueTooltip={(row) => {
                     const s = row as Schedule;

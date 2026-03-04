@@ -6,8 +6,6 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ScheduleDashboard } from "@/features/schedules/components/ScheduleDashboard";
 import { PoolsPage } from "@/features/schedules/components/PoolsPage";
 import { SystemPage } from "@/features/system/components/SystemPage";
-import { ReportsPage } from "@/features/system/components/ReportsPage";
-import { StatisticsPage } from "@/features/statistics/components/StatisticsPage";
 import { LoginPage } from "@/features/auth/components/LoginPage";
 
 import { ProtectedRoute, AdminRoute } from "@/components/ProtectedRoute";
@@ -56,18 +54,11 @@ function App() {
                 <ErrorBoundary><PoolsPage /></ErrorBoundary>
               </ProtectedRoute>
             } />
-            <Route path="/statistics" element={<ErrorBoundary><StatisticsPage /></ErrorBoundary>} />
 
             <Route path="/system" element={
               <AdminRoute>
                 <ErrorBoundary><SystemPage /></ErrorBoundary>
               </AdminRoute>
-            } />
-
-            <Route path="/reports" element={
-              <ProtectedRoute requiredPermission="reports.view">
-                <ErrorBoundary><ReportsPage /></ErrorBoundary>
-              </ProtectedRoute>
             } />
           </Route>
         </Routes>

@@ -75,7 +75,7 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
     const { msConfig } = useScheduleSyncStore();
 
     // Columns with delete handler
-    const columns = useMemo(() => getDataSourceColumns(handleDeleteRow, { hideIncidenceActions: true }), []);
+    const columns = useMemo(() => getDataSourceColumns(handleDeleteRow), []);
 
     // Convert errorMap keys to Set for ScheduleDataTable
     const errorRowKeys = useMemo(() => new Set(errorMap.keys()), [errorMap]);
@@ -146,7 +146,7 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
             for (const s of previewData) {
                 const pk = getSchedulePrimaryKey(s);
                 const sk = getScheduleKey(s);
-                
+
                 if (!existingKeys.has(pk)) newKeys.add(sk);
                 else if (modifiedKeys.has(pk)) modKeys.add(sk);
                 else if (identicalKeys.has(pk)) idenKeys.add(sk);
@@ -231,7 +231,7 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
             // Compare against existing DB entries (full field comparison)
             const uniqueDates = [...new Set(filteredSchedules.map(s => s.date))];
             const dbMap = await scheduleEntriesService.getFullSchedulesByDates(uniqueDates);
-            
+
             // Classify rows in a single pass
             const seenInFile = new Set<string>();
             const identical = new Set<string>();
@@ -242,7 +242,7 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
 
             for (const s of filteredSchedules) {
                 const pk = getSchedulePrimaryKey(s);
-                
+
                 // Skip intra-file duplicates for DB comparison stats to avoid double-counting
                 if (seenInFile.has(pk)) continue;
                 seenInFile.add(pk);

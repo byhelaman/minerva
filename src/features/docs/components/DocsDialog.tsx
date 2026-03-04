@@ -169,7 +169,7 @@ export function DocsDialog({ children, open, onOpenChange }: { children?: React.
                                                 {
                                                     n: 2,
                                                     title: "Access the Dashboard",
-                                                    desc: "Once logged in, you'll land on the Management dashboard — your central hub for viewing and managing schedules."
+                                                    desc: "Once logged in, you'll land on the Schedule dashboard — your central hub for viewing and managing schedules."
                                                 },
                                                 {
                                                     n: 3,
@@ -256,7 +256,7 @@ export function DocsDialog({ children, open, onOpenChange }: { children?: React.
                                     <section id="schedules" className="space-y-4 py-5">
                                         <h2 className="text-xl font-semibold tracking-tight">Managing Schedules</h2>
                                         <p className="text-sm text-muted-foreground leading-relaxed">
-                                            The Management dashboard is where you view, filter, and work with your schedule data.
+                                            The Schedule dashboard is where you view, filter, and work with your schedule data.
                                         </p>
                                         <div className="space-y-6">
                                             <div className="space-y-3">
@@ -290,7 +290,7 @@ export function DocsDialog({ children, open, onOpenChange }: { children?: React.
                                                                 <TableCell><code className="text-muted-foreground">Corporate</code></TableCell>
                                                             </TableRow>
                                                             <TableRow>
-                                                                <TableCell className="px-4"><code className="text-primary">Time</code></TableCell>
+                                                                <TableCell className="px-4"><code className="text-primary">Interval</code></TableCell>
                                                                 <TableCell className="text-muted-foreground">Start and end time for the activity</TableCell>
                                                                 <TableCell><code className="text-muted-foreground">09:00 - 10:00</code></TableCell>
                                                             </TableRow>

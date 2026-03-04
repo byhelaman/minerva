@@ -15,6 +15,18 @@ interface DataTableViewOptionsProps<TData> {
     table: Table<TData>;
 }
 
+const COLUMN_LABELS: Record<string, string> = {
+    start_time: "Interval",
+    date: "Date",
+    shift: "Shift",
+    branch: "Branch",
+    code: "Code",
+    instructor: "Instructor",
+    program: "Program",
+    minutes: "Mins",
+    units: "Units",
+};
+
 export function DataTableViewOptions<TData>({
     table,
 }: DataTableViewOptionsProps<TData>) {
@@ -48,7 +60,7 @@ export function DataTableViewOptions<TData>({
                                     checked={column.getIsVisible()}
                                     onCheckedChange={(value) => column.toggleVisibility(!!value)}
                                 >
-                                    {column.id.replace(/_/g, " ")}
+                                    {COLUMN_LABELS[column.id] ?? column.id.replace(/_/g, " ")}
                                 </DropdownMenuCheckboxItem>
                             );
                         })}
