@@ -9,10 +9,12 @@
 
 
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getValidAccessToken } from '../_shared/zoom-token-utils.ts'
 
 const ZOOM_WEBHOOK_SECRET = Deno.env.get('ZOOM_WEBHOOK_SECRET') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const ZOOM_API_BASE = 'https://api.zoom.us/v2'
 
 // Declaración para uso del objeto global EdgeRuntime disponible en Supabase
 declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void } | undefined;
@@ -281,17 +283,61 @@ interface ZoomMeetingPayload {
     join_url?: string
 }
 
+async function fetchMeetingFromZoom(supabase: SupabaseClient, meetingId: string): Promise<ZoomMeetingPayload | null> {
+    try {
+        const accessToken = await getValidAccessToken(supabase)
+        const response = await fetch(`${ZOOM_API_BASE}/meetings/${meetingId}`, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+            },
+        })
+
+        if (!response.ok) {
+            console.warn(`Webhook: zoom meeting hydrate skipped for ${meetingId} (status ${response.status})`)
+            return null
+        }
+
+        const zoomMeeting = await response.json() as ZoomMeetingPayload
+        return zoomMeeting
+    } catch (error: unknown) {
+        console.error(`Webhook: zoom meeting hydrate exception for ${meetingId}`, error)
+        return null
+    }
+}
+
 async function upsertMeeting(supabase: SupabaseClient, meeting: ZoomMeetingPayload, eventTimestamp?: number): Promise<void> {
     // FIX: Siempre convertir a string (meeting.id puede ser number en webhooks)
     const meetingId = String(meeting.id)
+
+    let workingMeeting: ZoomMeetingPayload = { ...meeting }
+
+    if (!workingMeeting.host_id || !workingMeeting.topic) {
+        const hydratedMeeting = await fetchMeetingFromZoom(supabase, meetingId)
+        if (hydratedMeeting) {
+            workingMeeting = {
+                ...hydratedMeeting,
+                ...workingMeeting,
+                host_id: workingMeeting.host_id ?? hydratedMeeting.host_id,
+                topic: workingMeeting.topic ?? hydratedMeeting.topic,
+                start_time: workingMeeting.start_time ?? hydratedMeeting.start_time,
+                duration: workingMeeting.duration ?? hydratedMeeting.duration,
+                timezone: workingMeeting.timezone ?? hydratedMeeting.timezone,
+                join_url: workingMeeting.join_url ?? hydratedMeeting.join_url,
+            }
+        }
+    }
+
+    let existingHostId: string | null = null
 
     // Validar si el evento es obsoleto (protección contra webhooks desordenados)
     if (eventTimestamp) {
         const { data: existing } = await supabase
             .from('zoom_meetings')
-            .select('last_event_timestamp')
+            .select('last_event_timestamp, host_id')
             .eq('meeting_id', meetingId)
-            .single()
+            .maybeSingle()
+
+        existingHostId = (existing?.host_id as string | null) ?? null
 
         if (existing?.last_event_timestamp) {
             if (eventTimestamp <= existing.last_event_timestamp) {
@@ -299,37 +345,40 @@ async function upsertMeeting(supabase: SupabaseClient, meeting: ZoomMeetingPaylo
                 return
             }
         }
+    } else {
+        const { data: existing } = await supabase
+            .from('zoom_meetings')
+            .select('host_id')
+            .eq('meeting_id', meetingId)
+            .maybeSingle()
+
+        existingHostId = (existing?.host_id as string | null) ?? null
+    }
+
+    const resolvedHostId = workingMeeting.host_id || existingHostId || 'unknown'
+
+    if (!workingMeeting.host_id && !existingHostId) {
+        console.warn(`Webhook: missing host_id for ${meetingId}; fallback host_id='unknown' applied`)
     }
 
     const meetingRecord: Record<string, unknown> = {
         meeting_id: meetingId,
+        host_id: resolvedHostId,
         synced_at: new Date().toISOString()
     }
 
     if (eventTimestamp) meetingRecord.last_event_timestamp = eventTimestamp
-    if (meeting.uuid) meetingRecord.uuid = meeting.uuid
-    if (meeting.host_id) meetingRecord.host_id = meeting.host_id
-    if (meeting.topic) meetingRecord.topic = meeting.topic
-    if (meeting.type !== undefined) meetingRecord.type = meeting.type
-    if (meeting.start_time) meetingRecord.start_time = meeting.start_time
-    if (meeting.duration) meetingRecord.duration = meeting.duration
-    if (meeting.timezone) meetingRecord.timezone = meeting.timezone
-    if (meeting.join_url) meetingRecord.join_url = meeting.join_url
+    if (workingMeeting.uuid) meetingRecord.uuid = workingMeeting.uuid
+    if (workingMeeting.topic) meetingRecord.topic = workingMeeting.topic
+    if (workingMeeting.type !== undefined) meetingRecord.type = workingMeeting.type
+    if (workingMeeting.start_time) meetingRecord.start_time = workingMeeting.start_time
+    if (workingMeeting.duration !== undefined) meetingRecord.duration = workingMeeting.duration
+    if (workingMeeting.timezone) meetingRecord.timezone = workingMeeting.timezone
+    if (workingMeeting.join_url) meetingRecord.join_url = workingMeeting.join_url
 
-    let error
-
-    if (meeting.host_id) {
-        const result = await supabase
-            .from('zoom_meetings')
-            .upsert(meetingRecord, { onConflict: 'meeting_id' })
-        error = result.error
-    } else {
-        const result = await supabase
-            .from('zoom_meetings')
-            .update(meetingRecord)
-            .eq('meeting_id', meetingId)
-        error = result.error
-    }
+    const { error } = await supabase
+        .from('zoom_meetings')
+        .upsert(meetingRecord, { onConflict: 'meeting_id' })
 
     if (error) {
         console.error('Meeting operation failed:', error.message)
