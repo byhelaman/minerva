@@ -4,6 +4,7 @@ import { normalizeString } from "@/features/matching/utils/normalizer";
 import { evaluateMatch } from "@/features/matching/scoring/scorer";
 import type { ZoomMeetingCandidate } from "@/features/matching/types";
 import { MatchingService } from "@/features/matching/services/matcher";
+import { getIsoWeekdayFromDateString, normalizeDayInstructorPools } from "./weekdays";
 
 export interface PoolValidationResult {
     violatingRowKeys: Set<string>;
@@ -93,6 +94,20 @@ function isInstructorInPool(
     return isMatch;
 }
 
+function mergeInstructorPools(primary: string[], fallback: string[]): string[] {
+    const unique = new Map<string, string>();
+    for (const name of [...primary, ...fallback]) {
+        const trimmed = name.trim();
+        if (!trimmed) continue;
+        const key = normalizeString(trimmed);
+        if (!key) continue;
+        if (!unique.has(key)) {
+            unique.set(key, trimmed);
+        }
+    }
+    return Array.from(unique.values());
+}
+
 export function evaluatePoolIssues(schedules: Schedule[], rules: PoolRule[]): PoolValidationResult {
     const violatingRowKeys = new Set<string>();
     const reasonsByRowKey = new Map<string, string>();
@@ -104,6 +119,7 @@ export function evaluatePoolIssues(schedules: Schedule[], rules: PoolRule[]): Po
     }
 
     for (const schedule of schedules) {
+        const scheduleWeekday = getIsoWeekdayFromDateString(schedule.date);
         const matchingRules = activeRules.filter((rule) => programMatchesPoolRule(schedule.program, rule.program_query));
         if (matchingRules.length === 0) continue;
 
@@ -117,16 +133,24 @@ export function evaluatePoolIssues(schedules: Schedule[], rules: PoolRule[]): Po
                 continue;
             }
 
-            const hasAllowedPool = rule.allowed_instructors.length > 0;
+            const byDayPools = normalizeDayInstructorPools(rule.allowed_instructors_by_day);
+            const daySpecificPool = scheduleWeekday ? (byDayPools[scheduleWeekday] ?? []) : [];
+            const effectiveAllowedPool = daySpecificPool.length > 0
+                ? (rule.hard_lock
+                    ? daySpecificPool
+                    : mergeInstructorPools(daySpecificPool, rule.allowed_instructors))
+                : rule.allowed_instructors;
+
+            const hasAllowedPool = effectiveAllowedPool.length > 0;
             const isAllowed = hasAllowedPool
-                ? isInstructorInPool(schedule.instructor, rule.allowed_instructors, instructorPoolMatchCache)
+                ? isInstructorInPool(schedule.instructor, effectiveAllowedPool, instructorPoolMatchCache)
                 : true;
 
-            if (hasAllowedPool && !isAllowed) {
-                if (rule.hard_lock) {
-                    reasons.push("Regla estricta: no asignar a nadie más (instructor fuera del pool positivo)");
+            if (rule.hard_lock && hasAllowedPool && !isAllowed) {
+                if (daySpecificPool.length > 0) {
+                    reasons.push("Regla estricta (día específico): instructor fuera del pool positivo del día");
                 } else {
-                    reasons.push("Pool positivo: instructor fuera de la lista permitida");
+                    reasons.push("Regla estricta: no asignar a nadie más (instructor fuera del pool positivo)");
                 }
             }
         }

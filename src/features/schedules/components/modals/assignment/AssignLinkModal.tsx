@@ -1,5 +1,6 @@
 import { useMemo, useEffect, useState, useCallback, useRef } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -26,6 +27,7 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
     const [isMatching, setIsMatching] = useState(false);
     const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
     const [includeAssigned, setIncludeAssigned] = useState(false);
+    const [showExecuteConfirm, setShowExecuteConfirm] = useState(false);
     const prevIncludeAssigned = useRef(false);
 
     // Limpiar selección y resetear switch cuando el modal se cierra
@@ -33,6 +35,7 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
         if (!open) {
             setRowSelection({});
             setIncludeAssigned(false);
+            setShowExecuteConfirm(false);
             prevIncludeAssigned.current = false;
         }
     }, [open]);
@@ -119,40 +122,6 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
         useZoomStore.setState({ matchResults: updatedResults });
     };
 
-    // Handler para toggle de modo manual
-    const handleManualModeToggle = (rowId: string) => {
-        const currentResults = useZoomStore.getState().matchResults;
-        const updatedResults = currentResults.map(r => {
-            const id = getRowId(r.schedule);
-            if (id === rowId) {
-                const newManualMode = !r.manualMode;
-
-                if (newManualMode) {
-                    // Activar manual mode
-                    // Crear backup del estado si no existe
-                    const { originalState: existingBackup, ...currentState } = r;
-                    const backup: Omit<MatchResult, 'originalState'> = existingBackup || currentState;
-
-                    return {
-                        ...r,
-                        manualMode: true,
-                        // No forzamos cambio de status ni razón al solo activar el modo
-                        originalState: backup
-                    };
-                } else {
-                    // Desactivar manual mode -> "Commit" de cambios
-                    // Simplemente deshabilitamos la edición pero mantenemos los cambios y el status 'manual'
-                    return {
-                        ...r,
-                        manualMode: false
-                    };
-                }
-            }
-            return r;
-        });
-        useZoomStore.setState({ matchResults: updatedResults });
-    };
-
     // Handler para seleccionar un candidato de la lista de ambiguos
     const handleSelectCandidate = (rowId: string, candidate: import("@/features/matching/services/matcher").ZoomMeetingCandidate) => {
         const currentResults = useZoomStore.getState().matchResults;
@@ -230,7 +199,7 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
     // 2. Definir columnas usando el helper
     const getColumns = useCallback(
         (addStatusFilter: (status: string) => void) =>
-            getAssignmentColumns(instructorsList, hostMap, handleInstructorChange, handleManualModeToggle, handleSelectCandidate, handleDeselectCandidate, addStatusFilter, handleResetRow),
+            getAssignmentColumns(instructorsList, hostMap, handleInstructorChange, handleSelectCandidate, handleDeselectCandidate, addStatusFilter, handleResetRow),
         [instructorsList, hostMap]
     );
 
@@ -261,6 +230,28 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
         });
     }, [matchResults]);
 
+    const isRowBlockedByReason = useCallback((row: AssignmentRow) => {
+        const normalizedReason = String(row.reason || '').trim().toLowerCase();
+        return row.status === 'not_found' || normalizedReason === 'meeting not found';
+    }, []);
+
+    const isRowSelectable = useCallback((row: AssignmentRow) => {
+        if (isRowBlockedByReason(row)) return false;
+
+        const baseEligible = (row.status === 'to_update' || row.status === 'manual') &&
+            !!row.meetingId &&
+            row.meetingId !== '-' &&
+            !!row.found_instructor;
+
+        const assignedEligible = includeAssigned &&
+            row.status === 'assigned' &&
+            !!row.meetingId &&
+            row.meetingId !== '-' &&
+            !!row.found_instructor;
+
+        return baseEligible || assignedEligible;
+    }, [includeAssigned, isRowBlockedByReason]);
+
     // Cuando includeAssigned cambia: seleccionar/deseleccionar filas 'assigned'
     useEffect(() => {
         if (!prevIncludeAssigned.current && includeAssigned) {
@@ -269,7 +260,8 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
                 row.status === 'assigned' &&
                 row.meetingId &&
                 row.meetingId !== '-' &&
-                row.found_instructor
+                row.found_instructor &&
+                !isRowBlockedByReason(row)
             );
             setRowSelection(prev => {
                 const newSelection = { ...prev };
@@ -292,7 +284,26 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
             });
         }
         prevIncludeAssigned.current = includeAssigned;
-    }, [includeAssigned, tableData]);
+    }, [includeAssigned, tableData, isRowBlockedByReason]);
+
+    useEffect(() => {
+        setRowSelection((prev) => {
+            const next: Record<string, boolean> = {};
+            let changed = false;
+
+            for (const [rowId, selected] of Object.entries(prev)) {
+                if (!selected) continue;
+                const row = tableData.find((item) => item.id === rowId);
+                if (row && isRowSelectable(row)) {
+                    next[rowId] = true;
+                } else {
+                    changed = true;
+                }
+            }
+
+            return changed ? next : prev;
+        });
+    }, [tableData, isRowSelectable]);
 
     // Derivar selectedRows de rowSelection
     const selectedRows = useMemo(() => {
@@ -317,10 +328,36 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
 
     const eligibleRows = selectedRows.filter(row =>
         eligibleStatuses.includes(row.status) &&
+        !isRowBlockedByReason(row) &&
         row.meetingId &&
         row.meetingId !== '-' &&
         row.found_instructor
     );
+
+    const handleExecuteAssignments = useCallback(async () => {
+        const schedules = eligibleRows.map(row => row.originalSchedule);
+
+        if (schedules.length === 0) {
+            toast.error('No eligible meetings selected.');
+            return;
+        }
+
+        const result = await executeAssignments(schedules);
+        if (result.succeeded > 0) {
+            toast.success(`${result.succeeded} meetings updated successfully`);
+            setIncludeAssigned(false);
+            setRowSelection({});
+            setIsMatching(true);
+            try {
+                await runMatching(schedules);
+            } finally {
+                setIsMatching(false);
+            }
+        }
+        if (result.failed > 0) {
+            toast.error(`${result.failed} meetings failed to update`);
+        }
+    }, [eligibleRows, executeAssignments, runMatching]);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -366,18 +403,7 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
                             onRefresh={handleRefresh}
                             controlledSelection={rowSelection}
                             onControlledSelectionChange={setRowSelection}
-                            enableRowSelection={(row: AssignmentRow) => {
-                                const baseEligible = (row.status === 'to_update' || row.status === 'manual') &&
-                                    !!row.meetingId &&
-                                    row.meetingId !== '-' &&
-                                    !!row.found_instructor;
-                                const assignedEligible = includeAssigned &&
-                                    row.status === 'assigned' &&
-                                    !!row.meetingId &&
-                                    row.meetingId !== '-' &&
-                                    !!row.found_instructor;
-                                return baseEligible || assignedEligible;
-                            }}
+                            enableRowSelection={(row: AssignmentRow) => isRowSelectable(row)}
                             filterConfig={{
                                 showStatus: true,
                             }}
@@ -444,33 +470,7 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
                             Cancel
                         </Button>
                         <Button
-                            onClick={async () => {
-                                const schedules = eligibleRows.map(row => row.originalSchedule);
-
-                                if (schedules.length === 0) {
-                                    toast.error('No eligible meetings selected.');
-                                    return;
-                                }
-
-                                const result = await executeAssignments(schedules);
-                                if (result.succeeded > 0) {
-                                    toast.success(`${result.succeeded} meetings updated successfully`);
-                                    // Resetear switch y selección después de ejecutar
-                                    setIncludeAssigned(false);
-                                    setRowSelection({});
-                                    // El store ya hizo el refresh con delay de webhook
-                                    // Solo necesitamos re-ejecutar el matching con los datos frescos
-                                    setIsMatching(true);
-                                    try {
-                                        await runMatching(schedules);
-                                    } finally {
-                                        setIsMatching(false);
-                                    }
-                                }
-                                if (result.failed > 0) {
-                                    toast.error(`${result.failed} meetings failed to update`);
-                                }
-                            }}
+                            onClick={() => setShowExecuteConfirm(true)}
                             disabled={isExecuting || isLoadingData || isMatching || eligibleRows.length === 0}
                         >
                             {isExecuting ? (
@@ -485,6 +485,29 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
                     </div>
                 </DialogFooter>
             </DialogContent>
+
+            <AlertDialog open={showExecuteConfirm} onOpenChange={setShowExecuteConfirm}>
+                <AlertDialogContent className="sm:max-w-100!">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {`Execute ${eligibleRows.length} assignment${eligibleRows.length > 1 ? 's' : ''}?`}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will update the selected meetings in Zoom using current host assignments.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isExecuting || isLoadingData || isMatching}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleExecuteAssignments}
+                            disabled={isExecuting || isLoadingData || isMatching || eligibleRows.length === 0}
+                        >
+                            {isExecuting ? <Loader2 className="animate-spin" /> : null}
+                            Confirm
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </Dialog>
     );
 }

@@ -21,12 +21,13 @@ interface PublishToDbModalProps {
 }
 
 export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) {
-    const { publishToSupabase, isPublishing } = useScheduleSyncStore();
+    const { publishToSupabase, isPublishing, checkIfScheduleExists } = useScheduleSyncStore();
     const { activeDate } = useScheduleUIStore();
     const { baseSchedules } = useScheduleDataStore();
 
     const [isLoadingCheck, setIsLoadingCheck] = useState(false);
     const [validationError, setValidationError] = useState<string | null>(null);
+    const [isReplaceMode, setIsReplaceMode] = useState(false);
 
     useEffect(() => {
         if (open && activeDate) {
@@ -41,6 +42,7 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
     const checkStatus = async () => {
         setIsLoadingCheck(true);
         setValidationError(null);
+        setIsReplaceMode(false);
 
         try {
             // 1. Validate: no date selected (happens when multiple dates are loaded)
@@ -81,6 +83,10 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
                 return;
             }
 
+            // 5. Check Existence
+            const exists = await checkIfScheduleExists(activeDate);
+            setIsReplaceMode(exists);
+
         } catch (error) {
             console.error("Check failed", error);
         } finally {
@@ -102,7 +108,7 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
             <AlertDialogContent className="sm:max-w-100!">
                 <AlertDialogHeader>
                     <AlertDialogTitle>
-                        {isLoadingCheck ? "Checking..." : (validationError ? "Cannot Publish Schedule" : "Publish Schedule")}
+                        {isLoadingCheck ? "Checking..." : (validationError ? "Cannot Publish Schedule" : (isReplaceMode ? "Replace Published Schedule" : "Publish Schedule"))}
                     </AlertDialogTitle>
                     <AlertDialogDescription asChild>
                         <div>
@@ -112,19 +118,26 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
                                 </div>
                             ) : validationError ? (
                                 <span>
-                                    Issue with schedule for <strong>{formatDateForDisplay(activeDate!)}</strong>:
+                                    {formatDateForDisplay(activeDate!)}:
                                     <br />
                                     {validationError}
                                 </span>
                             ) : (
                                 <>
-                                    Are you sure you want to publish the schedule for <strong>{formatDateForDisplay(activeDate!)}</strong>?
+                                    {isReplaceMode ? (
+                                        <>
+                                            Replace published schedule for <strong>{formatDateForDisplay(activeDate!)}</strong>?
+                                        </>
+                                    ) : (
+                                        <>
+                                            Publish schedule for <strong>{formatDateForDisplay(activeDate!)}</strong>?
+                                        </>
+                                    )}
                                     <br /><br />
-                                    This action will:
+                                    This will:
                                     <ul className="list-disc pl-5 mt-2 space-y-1">
-                                        <li>Replace existing database entries for this date</li>
-                                        <li>Save {baseSchedules.length} entries from the current draft</li>
-                                        <li>Notify all users of the update</li>
+                                        <li>{isReplaceMode ? `Replace published entries for ${formatDateForDisplay(activeDate!)} with ${baseSchedules.length} current draft entries` : `Save ${baseSchedules.length} entries to the database`}</li>
+                                        <li>Notify users of the update</li>
                                     </ul>
                                 </>
                             )}
@@ -143,7 +156,7 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
                             </AlertDialogCancel>
                             <AlertDialogAction onClick={handlePublish} disabled={isPublishing || isLoadingCheck}>
                                 {isPublishing ? <Loader2 className="animate-spin" /> : null}
-                                {isLoadingCheck ? "Checking..." : "Publish"}
+                                {isLoadingCheck ? "Checking..." : (isReplaceMode ? "Replace" : "Publish")}
                             </AlertDialogAction>
                         </>
                     )}

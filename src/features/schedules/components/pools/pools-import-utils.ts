@@ -1,13 +1,20 @@
 import { read, utils } from "xlsx";
 import type { PoolRule, PoolRuleInput } from "@/features/schedules/types";
+import {
+    normalizeDayInstructorPools,
+    parseDayInstructorPoolsCell,
+} from "@/features/schedules/utils/weekdays";
 
 export interface PoolImportRow {
     program_query?: unknown;
     program?: unknown;
     allowed_instructors?: unknown;
+    positive_pool_by_day?: unknown;
+    allowed_instructors_by_day?: unknown;
     positive_pool?: unknown;
     blocked_instructors?: unknown;
     negative_pool?: unknown;
+    notes?: unknown;
 }
 
 export type PoolImportStatus = "new" | "modified" | "identical" | "duplicate" | "invalid" | "ambiguous";
@@ -72,6 +79,35 @@ function normalizeNotes(value: string | null | undefined): string {
     return (value ?? "").trim();
 }
 
+function getRuleIdentityKey(programQuery: string): string {
+    const normalizedProgram = normalizeProgramQuery(programQuery);
+    return normalizedProgram;
+}
+
+function normalizeDayPools(value: unknown): Partial<Record<number, string[]>> {
+    return normalizeDayInstructorPools(value);
+}
+
+function isSameDayPoolMap(left: unknown, right: unknown): boolean {
+    const leftMap = normalizeDayPools(left);
+    const rightMap = normalizeDayPools(right);
+
+    const keys = new Set<number>([
+        ...Object.keys(leftMap).map(Number),
+        ...Object.keys(rightMap).map(Number),
+    ]);
+
+    for (const key of keys) {
+        const leftValues = leftMap[key] ?? [];
+        const rightValues = rightMap[key] ?? [];
+        if (!isSameInstructorSet(leftValues, rightValues)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 function normalizeInstructorSet(values: string[]): string[] {
     return sanitizeInstructorList(values)
         .map((entry) => entry.trim().toLowerCase())
@@ -94,6 +130,7 @@ function isSameInstructorSet(left: string[], right: string[]): boolean {
 function isEquivalentPoolRule(input: PoolRuleInput, existing: PoolRule): boolean {
     return (
         normalizeProgramQuery(input.program_query) === normalizeProgramQuery(existing.program_query)
+        && isSameDayPoolMap(input.allowed_instructors_by_day, existing.allowed_instructors_by_day)
         && isSameInstructorSet(input.allowed_instructors, existing.allowed_instructors)
         && isSameInstructorSet(input.blocked_instructors, existing.blocked_instructors)
         && input.hard_lock === existing.hard_lock
@@ -102,31 +139,40 @@ function isEquivalentPoolRule(input: PoolRuleInput, existing: PoolRule): boolean
     );
 }
 
+function findPoolIntersections(payload: PoolRuleInput): string[] {
+    const dayAllowed = Object.values(normalizeDayPools(payload.allowed_instructors_by_day))
+        .flatMap((list) => list ?? []);
+    const allPositive = sanitizeInstructorList([...payload.allowed_instructors, ...dayAllowed]);
+
+    return allPositive.filter((value) =>
+        payload.blocked_instructors.some((blocked) => blocked.toLowerCase() === value.toLowerCase())
+    );
+}
+
 export function buildPoolImportPreview(drafts: PoolImportDraft[], rules: PoolRule[]): { rows: PoolImportPreviewRow[]; summary: PoolImportSummary } {
-    const existingByProgram = new Map<string, PoolRule[]>();
+    const existingByRuleKey = new Map<string, PoolRule[]>();
     for (const rule of rules) {
-        const key = normalizeProgramQuery(rule.program_query);
+        const key = getRuleIdentityKey(rule.program_query);
         if (!key) continue;
-        const bucket = existingByProgram.get(key) ?? [];
+        const bucket = existingByRuleKey.get(key) ?? [];
         bucket.push(rule);
-        existingByProgram.set(key, bucket);
+        existingByRuleKey.set(key, bucket);
     }
 
-    const programCounts = new Map<string, number>();
+    const ruleKeyCounts = new Map<string, number>();
     for (const draft of drafts) {
-        const key = normalizeProgramQuery(draft.payload.program_query);
+        const key = getRuleIdentityKey(draft.payload.program_query);
         if (!key) continue;
-        programCounts.set(key, (programCounts.get(key) ?? 0) + 1);
+        ruleKeyCounts.set(key, (ruleKeyCounts.get(key) ?? 0) + 1);
     }
 
     const rows: PoolImportPreviewRow[] = drafts.map((draft) => {
         const payload = draft.payload;
         const normalizedProgram = normalizeProgramQuery(payload.program_query);
-        const duplicateCount = normalizedProgram ? (programCounts.get(normalizedProgram) ?? 0) : 0;
+        const identityKey = getRuleIdentityKey(payload.program_query);
+        const duplicateCount = normalizedProgram ? (ruleKeyCounts.get(identityKey) ?? 0) : 0;
 
-        const intersections = payload.allowed_instructors.filter((value) =>
-            payload.blocked_instructors.some((blocked) => blocked.toLowerCase() === value.toLowerCase())
-        );
+        const intersections = findPoolIntersections(payload);
 
         if (!normalizedProgram) {
             return {
@@ -163,12 +209,12 @@ export function buildPoolImportPreview(drafts: PoolImportDraft[], rules: PoolRul
                 ...payload,
                 id: draft.id,
                 status: "invalid",
-                reason: "An instructor cannot be in both positive and negative pool",
+                reason: "An instructor cannot be in both positive and negative pool (general/day)",
                 existingRuleId: null,
             };
         }
 
-        const existing = existingByProgram.get(normalizedProgram) ?? [];
+        const existing = existingByRuleKey.get(identityKey) ?? [];
         if (existing.length > 1) {
             return {
                 ...payload,
@@ -262,10 +308,13 @@ export async function parsePoolImportFiles(files: File[]): Promise<{ payloads: P
                 return {
                     program_query: programValue,
                     allowed_instructors: parseInstructorCell(row.allowed_instructors ?? row.positive_pool),
+                    allowed_instructors_by_day: parseDayInstructorPoolsCell(
+                        row.allowed_instructors_by_day ?? row.positive_pool_by_day,
+                    ),
                     blocked_instructors: parseInstructorCell(row.blocked_instructors ?? row.negative_pool),
                     hard_lock: false,
                     is_active: true,
-                    notes: null,
+                    notes: String(row.notes ?? "").trim() || null,
                 } as PoolRuleInput;
             })
             .filter((item): item is PoolRuleInput => item !== null);

@@ -164,7 +164,7 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
         },
         {
             accessorKey: "host_name",
-            size: 140,
+            size: 200,
             header: ({ column }) => <DataTableColumnHeader column={column} title="Host" />,
             cell: ({ row }) => {
                 const meeting = row.original;

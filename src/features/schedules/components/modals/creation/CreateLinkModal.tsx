@@ -441,7 +441,7 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
                                     controlledSelection={rowSelection}
                                     onControlledSelectionChange={setRowSelection}
                                     onBulkCopy={handleBulkCopy}
-                                    initialPageSize={25}
+                                    initialPageSize={50}
                                     statusOptions={[
                                         { label: "New", value: "to_create", icon: PlusCircle },
                                         { label: "Exists", value: "exists", icon: RefreshCw },

@@ -2,9 +2,6 @@ import { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "@schedules/components/table/data-table-column-header";
 import type { Schedule } from "@schedules/types";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MoreHorizontal, Hand, RotateCcw, XCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { ZoomMeetingCandidate } from "@/features/matching/types";
 import { StatusCell } from "@schedules/components/table/cells/StatusCell";
 import { InstructorCell } from "@schedules/components/table/cells/InstructorCell";
@@ -34,7 +31,6 @@ export const getAssignmentColumns = (
     instructorsList: Instructor[] = [],
     hostMap: Map<string, string> = new Map(),
     onInstructorChange?: (rowId: string, newInstructor: string, email: string, id: string) => void,
-    onManualModeToggle?: (rowId: string) => void,
     onSelectCandidate?: (rowId: string, candidate: ZoomMeetingCandidate) => void,
     onDeselectCandidate?: (rowId: string) => void,
     onAddStatusFilter?: (status: string) => void,
@@ -120,12 +116,12 @@ export const getAssignmentColumns = (
                     row={row}
                     instructorsList={instructorsList}
                     onInstructorChange={onInstructorChange}
+                    onResetRow={onResetRow}
                 />
             ),
         },
         {
             accessorKey: "program",
-            size: 350,
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Program" />
             ),
@@ -169,57 +165,5 @@ export const getAssignmentColumns = (
                     {row.getValue("reason")}
                 </div>
             ),
-        },
-        {
-            id: "actions",
-            size: 50,
-            cell: ({ row }) => {
-                return (
-                    <div className="flex justify-center">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon-sm">
-                                    <span className="sr-only">Open menu</span>
-                                    <MoreHorizontal className="w-4 h-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                    disabled={row.original.status === 'not_found' || row.original.status === 'ambiguous'}
-                                    onClick={() => {
-                                        if (onManualModeToggle) {
-                                            onManualModeToggle(row.original.id);
-                                        }
-                                    }}
-                                >
-                                    {row.original.manualMode ? (
-                                        <>
-                                            <XCircle />
-                                            Disable manual
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Hand />
-                                            Enable manual
-                                        </>
-                                    )}
-                                </DropdownMenuItem>
-                                {row.original.manualMode && (
-                                    <DropdownMenuItem
-                                        onClick={() => {
-                                            if (onResetRow) {
-                                                onResetRow(row.original.id);
-                                            }
-                                        }}
-                                    >
-                                        <RotateCcw />
-                                        Reset match
-                                    </DropdownMenuItem>
-                                )}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
-                );
-            },
         },
     ];

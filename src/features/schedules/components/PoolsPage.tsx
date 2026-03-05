@@ -13,6 +13,13 @@ import {
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
     DropdownMenu,
@@ -39,7 +46,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { CircleCheck, CircleSlash, CloudUpload, MoreHorizontal, Plus } from "lucide-react";
+import { CircleCheck, CircleSlash, CloudUpload, MoreHorizontal, Plus, X } from "lucide-react";
 import { poolsService } from "@/features/schedules/services/pools-service";
 import type { PoolRule, PoolRuleInput } from "@/features/schedules/types";
 import { ScheduleDataTable } from "@schedules/components/table/ScheduleDataTable";
@@ -59,9 +66,16 @@ import {
     sanitizeInstructorList,
     type PoolImportDraft,
 } from "@/features/schedules/components/pools/pools-import-utils";
+import {
+    formatDayInstructorPools,
+    normalizeDayInstructorPools,
+    WEEKDAY_OPTIONS,
+    type DayInstructorPools,
+} from "@/features/schedules/utils/weekdays";
 
 interface RuleFormState {
     program_query: string;
+    allowed_instructors_by_day: DayInstructorPools;
     allowed_instructors: string[];
     blocked_instructors: string[];
     hard_lock: boolean;
@@ -71,6 +85,7 @@ interface RuleFormState {
 
 const emptyForm: RuleFormState = {
     program_query: "",
+    allowed_instructors_by_day: {},
     allowed_instructors: [],
     blocked_instructors: [],
     hard_lock: false,
@@ -83,14 +98,21 @@ const POOL_STATUS_OPTIONS = [
     { label: "Active", value: "active", icon: CircleCheck },
     { label: "Inactive", value: "inactive", icon: CircleSlash },
 ];
+const MAX_VISIBLE_POOL_TAGS = 4;
+const MAX_VISIBLE_DAY_BADGES = 3;
 
 const maxWords = (max: number) => (value: string): boolean => {
     return countWords(value) <= max;
 };
 
+function normalizeProgramKey(value: string): string {
+    return value.trim().toLowerCase();
+}
+
 function toPayload(form: RuleFormState): PoolRuleInput {
     return {
         program_query: form.program_query.trim(),
+        allowed_instructors_by_day: normalizeDayInstructorPools(form.allowed_instructors_by_day),
         allowed_instructors: sanitizeInstructorList(form.allowed_instructors),
         blocked_instructors: sanitizeInstructorList(form.blocked_instructors),
         hard_lock: form.hard_lock,
@@ -99,9 +121,53 @@ function toPayload(form: RuleFormState): PoolRuleInput {
     };
 }
 
+function findPoolIntersections(payload: PoolRuleInput): string[] {
+    const dayAllowed = Object.values(normalizeDayInstructorPools(payload.allowed_instructors_by_day))
+        .flatMap((list) => list ?? []);
+    const allPositive = sanitizeInstructorList([...payload.allowed_instructors, ...dayAllowed]);
+
+    return allPositive.filter((value) =>
+        payload.blocked_instructors.some((blocked) => blocked.toLowerCase() === value.toLowerCase())
+    );
+}
+
+function hasAtLeastOnePositiveInstructor(payload: PoolRuleInput): boolean {
+    if (payload.allowed_instructors.length > 0) {
+        return true;
+    }
+
+    const dayAllowed = Object.values(normalizeDayInstructorPools(payload.allowed_instructors_by_day))
+        .flatMap((list) => list ?? []);
+
+    return sanitizeInstructorList(dayAllowed).length > 0;
+}
+
+function mapPoolRuleSaveErrorMessage(error: unknown): string | null {
+    if (!error || typeof error !== "object") return null;
+
+    const candidate = error as {
+        code?: string;
+        message?: string;
+        details?: string;
+    };
+
+    const message = candidate.message ?? "";
+    const details = candidate.details ?? "";
+    const hitsLegacyConstraint =
+        message.includes("pool_rules_non_empty_instructors")
+        || details.includes("pool_rules_non_empty_instructors");
+
+    if (candidate.code === "23514" && hitsLegacyConstraint) {
+        return "Hard lock requires at least one allowed instructor in general pool or by-day pool.";
+    }
+
+    return null;
+}
+
 function toForm(rule: PoolRule): RuleFormState {
     return {
         program_query: rule.program_query,
+        allowed_instructors_by_day: normalizeDayInstructorPools(rule.allowed_instructors_by_day),
         allowed_instructors: [...rule.allowed_instructors],
         blocked_instructors: [...rule.blocked_instructors],
         hard_lock: rule.hard_lock,
@@ -131,6 +197,24 @@ export function PoolsPage() {
         defaultValues: emptyForm,
     });
 
+    const syncPoolConflictError = (
+        nextValues?: Partial<Pick<RuleFormState, "allowed_instructors" | "allowed_instructors_by_day" | "blocked_instructors">>
+    ) => {
+        const current = form.getValues();
+        const merged: RuleFormState = {
+            ...current,
+            ...nextValues,
+        };
+
+        const intersections = findPoolIntersections(toPayload(merged));
+        if (intersections.length > 0) {
+            form.setError("blocked_instructors", { message: "An instructor cannot be in both positive and negative pool" });
+            return;
+        }
+
+        form.clearErrors("blocked_instructors");
+    };
+
     const instructorOptions = useMemo(() => {
         const map = new Map<string, string>();
 
@@ -157,10 +241,10 @@ export function PoolsPage() {
         return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
     }, [instructors, rules]);
 
-    const formatDateOnly = (value: string) => {
+    const formatDateTime = (value: string) => {
         const formatted = formatTimestampForDisplay(value);
         if (!formatted) return "—";
-        return formatted.split(" ")[0] ?? "—";
+        return formatted;
     };
 
     const columns = useMemo<ColumnDef<PoolRule>[]>(() => [
@@ -196,15 +280,16 @@ export function PoolsPage() {
         {
             id: "date",
             accessorFn: (row) => row.updated_at ?? row.created_at,
-            size: 120,
+            size: 160,
             header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Date" className="justify-center" />
+                <DataTableColumnHeader column={column} title="Last changed" className="text-center" />
             ),
             cell: ({ row }) => (
                 <div className="text-center">
-                    {formatDateOnly(row.original.updated_at ?? row.original.created_at)}
+                    {formatDateTime(row.original.updated_at ?? row.original.created_at)}
                 </div>
             ),
+            enableSorting: false,
         },
         {
             id: "program",
@@ -215,7 +300,7 @@ export function PoolsPage() {
             ),
             cell: ({ row }) => (
                 <div className="space-y-1">
-                    <div className="font-medium truncate max-w-90" title={row.original.program_query}>
+                    <div className="truncate max-w-90" title={row.original.program_query}>
                         {row.original.program_query}
                     </div>
                     {row.original.notes && (
@@ -229,21 +314,75 @@ export function PoolsPage() {
         {
             id: "positive_pool",
             accessorFn: (row) => row.allowed_instructors.join(", "),
-            size: 260,
+            size: 340,
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Positive Pool" />
             ),
-            cell: ({ row }) => (
-                <div className="flex flex-wrap gap-1 max-w-90">
-                    {row.original.allowed_instructors.length === 0 ? (
-                        <span className="text-muted-foreground">Any</span>
-                    ) : (
-                        row.original.allowed_instructors.map((name) => (
-                            <Badge key={`${row.original.id}-allow-${name}`} variant="secondary">{name}</Badge>
-                        ))
-                    )}
-                </div>
-            ),
+            cell: ({ row }) => {
+                const dayPools = normalizeDayInstructorPools(row.original.allowed_instructors_by_day);
+                const dayEntries = WEEKDAY_OPTIONS
+                    .map((day) => {
+                        const list = dayPools[day.value];
+                        if (!list || list.length === 0) return null;
+
+                        return {
+                            label: day.label,
+                            count: list.length,
+                        };
+                    })
+                    .filter((entry): entry is { label: string; count: number } => entry !== null);
+
+                const visibleAllowed = row.original.allowed_instructors.slice(0, MAX_VISIBLE_POOL_TAGS);
+                const hiddenAllowedCount = row.original.allowed_instructors.length - visibleAllowed.length;
+                const visibleDayEntries = dayEntries.slice(0, MAX_VISIBLE_DAY_BADGES);
+                const hiddenDayEntriesCount = dayEntries.length - visibleDayEntries.length;
+
+                return (
+                    <div className="space-y-2 max-w-90">
+                        {/* <div className="text-[11px] text-muted-foreground">General</div> */}
+                        <div
+                            className="flex flex-wrap gap-1"
+                            title={row.original.allowed_instructors.join(", ") || "Any"}
+                        >
+                            {row.original.allowed_instructors.length === 0 ? (
+                                <span className="text-xs text-muted-foreground">Any</span>
+                            ) : (
+                                visibleAllowed.map((name) => (
+                                    <Badge key={`${row.original.id}-allow-${name}`} variant="secondary">{name}</Badge>
+                                ))
+                            )}
+                            {hiddenAllowedCount > 0 && (
+                                <span
+                                    className="font-medium text-xs select-none cursor-default px-1 my-auto"
+                                >
+                                    +{hiddenAllowedCount} more
+                                </span>
+                            )}
+                        </div>
+                        {dayEntries.length > 0 && (
+                            <div className="space-y-1" title={formatDayInstructorPools(row.original.allowed_instructors_by_day)}>
+                                {/* <div className="text-[11px] text-muted-foreground">By day</div> */}
+                                <div className="flex flex-wrap gap-1">
+                                    {visibleDayEntries.map((entry) => (
+                                        <Badge
+                                            key={`${row.original.id}-day-${entry.label}`}
+                                            variant="outline"
+                                            className="text-[11px]"
+                                        >
+                                            {entry.label} · {entry.count}
+                                        </Badge>
+                                    ))}
+                                    {hiddenDayEntriesCount > 0 && (
+                                        <span className="font-medium text-xs select-none cursor-default px-1 my-auto">
+                                            +{hiddenDayEntriesCount} day rule{hiddenDayEntriesCount > 1 ? "s" : ""}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            },
         },
         {
             id: "negative_pool",
@@ -253,13 +392,19 @@ export function PoolsPage() {
                 <DataTableColumnHeader column={column} title="Negative Pool" />
             ),
             cell: ({ row }) => (
-                <div className="flex flex-wrap gap-1 max-w-90">
+                <div
+                    className="flex flex-wrap gap-1 max-w-90"
+                    title={row.original.blocked_instructors.join(", ") || "None"}
+                >
                     {row.original.blocked_instructors.length === 0 ? (
-                        <span className="text-muted-foreground">None</span>
+                        <span className="text-xs    text-muted-foreground">None</span>
                     ) : (
-                        row.original.blocked_instructors.map((name) => (
+                        row.original.blocked_instructors.slice(0, MAX_VISIBLE_POOL_TAGS).map((name) => (
                             <Badge key={`${row.original.id}-block-${name}`} variant="outline">{name}</Badge>
                         ))
+                    )}
+                    {row.original.blocked_instructors.length > MAX_VISIBLE_POOL_TAGS && (
+                        <Badge variant="outline">+{row.original.blocked_instructors.length - MAX_VISIBLE_POOL_TAGS} more</Badge>
                     )}
                 </div>
             ),
@@ -363,17 +508,31 @@ export function PoolsPage() {
 
         const payload = toPayload(values);
 
-        if (payload.hard_lock && payload.allowed_instructors.length === 0) {
+        if (payload.hard_lock && !hasAtLeastOnePositiveInstructor(payload)) {
             form.setError("allowed_instructors", { message: "Hard lock requires at least one allowed instructor" });
             return;
         }
 
-        const intersections = payload.allowed_instructors.filter((value) =>
-            payload.blocked_instructors.some((blocked) => blocked.toLowerCase() === value.toLowerCase())
-        );
+        const intersections = findPoolIntersections(payload);
 
         if (intersections.length > 0) {
             form.setError("blocked_instructors", { message: "An instructor cannot be in both positive and negative pool" });
+            return;
+        }
+
+        const payloadProgramKey = normalizeProgramKey(payload.program_query);
+        const hasConflictingRule = rules.some((rule) => {
+            if (editingRule && rule.id === editingRule.id) {
+                return false;
+            }
+
+            return normalizeProgramKey(rule.program_query) === payloadProgramKey;
+        });
+
+        if (hasConflictingRule) {
+            form.setError("program_query", {
+                message: "There is already a rule for this program.",
+            });
             return;
         }
 
@@ -391,7 +550,7 @@ export function PoolsPage() {
             await loadRules();
         } catch (error) {
             console.error("Failed to save pool rule", error);
-            toast.error("Failed to save pool rule");
+            toast.error(mapPoolRuleSaveErrorMessage(error) ?? "Failed to save pool rule");
         } finally {
             setIsSaving(false);
         }
@@ -444,14 +603,18 @@ export function PoolsPage() {
             const rows = data.map((rule) => ({
                 program_query: rule.program_query,
                 allowed_instructors: rule.allowed_instructors.join(", "),
+                positive_pool_by_day: formatDayInstructorPools(rule.allowed_instructors_by_day),
                 blocked_instructors: rule.blocked_instructors.join(", "),
+                notes: rule.notes ?? "",
             }));
 
             const worksheet = utils.json_to_sheet(rows, {
                 header: [
                     "program_query",
                     "allowed_instructors",
+                    "positive_pool_by_day",
                     "blocked_instructors",
+                    "notes",
                 ],
             });
 
@@ -521,6 +684,7 @@ export function PoolsPage() {
             .map((row) => {
                 const payload: PoolRuleInput = {
                     program_query: row.program_query,
+                    allowed_instructors_by_day: normalizeDayInstructorPools(row.allowed_instructors_by_day),
                     allowed_instructors: row.allowed_instructors,
                     blocked_instructors: row.blocked_instructors,
                     hard_lock: row.hard_lock,
@@ -681,7 +845,11 @@ export function PoolsPage() {
                                         <FieldLabel htmlFor={field.name}>Positive pool</FieldLabel>
                                         <InstructorMultiSelect
                                             value={field.value}
-                                            onChange={field.onChange}
+                                            onChange={(next) => {
+                                                const cleaned = sanitizeInstructorList(next);
+                                                field.onChange(cleaned);
+                                                syncPoolConflictError({ allowed_instructors: cleaned });
+                                            }}
                                             options={instructorOptions}
                                             placeholder="Select instructors"
                                             searchPlaceholder="Search instructor..."
@@ -697,13 +865,153 @@ export function PoolsPage() {
 
                             <Controller
                                 control={form.control}
+                                name="allowed_instructors_by_day"
+                                render={({ field }) => {
+                                    const rawDayPools =
+                                        field.value && typeof field.value === "object"
+                                            ? (field.value as DayInstructorPools)
+                                            : {};
+                                    const dayPools = normalizeDayInstructorPools(field.value);
+                                    const usedDays = Object.keys(rawDayPools)
+                                        .map(Number)
+                                        .filter((value) => Number.isInteger(value) && value >= 1 && value <= 7)
+                                        .sort((a, b) => a - b);
+                                    const nextAvailableDay = WEEKDAY_OPTIONS.find((item) => !usedDays.includes(item.value));
+                                    return (
+                                        <Field>
+                                            <FieldLabel>Pool by day (optional)</FieldLabel>
+                                            <div className="space-y-2">
+                                                {usedDays.map((dayValue) => {
+                                                    const selectedSet = new Set(usedDays.filter((value) => value !== dayValue));
+                                                    return (
+                                                        <div key={dayValue} className="grid grid-cols-[110px_minmax(0,1fr)_32px] items-center gap-2">
+                                                            <Select
+                                                                value={String(dayValue)}
+                                                                onValueChange={(nextValue) => {
+                                                                    const nextDay = Number(nextValue);
+                                                                    if (!Number.isInteger(nextDay) || nextDay < 1 || nextDay > 7 || nextDay === dayValue) {
+                                                                        return;
+                                                                    }
+                                                                    if (selectedSet.has(nextDay)) {
+                                                                        return;
+                                                                    }
+
+                                                                    const current =
+                                                                        field.value && typeof field.value === "object"
+                                                                            ? (field.value as DayInstructorPools)
+                                                                            : {};
+                                                                    const list = current[dayValue] ?? [];
+                                                                    const updated: DayInstructorPools = { ...current };
+                                                                    delete updated[dayValue];
+                                                                    updated[nextDay] = list;
+                                                                    field.onChange(updated);
+                                                                }}
+                                                            >
+                                                                <SelectTrigger size="sm" className="w-full">
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {WEEKDAY_OPTIONS
+                                                                        .filter((item) => item.value === dayValue || !selectedSet.has(item.value))
+                                                                        .map((item) => (
+                                                                            <SelectItem key={item.value} value={String(item.value)}>
+                                                                                {item.label}
+                                                                            </SelectItem>
+                                                                        ))}
+                                                                </SelectContent>
+                                                            </Select>
+
+                                                            <InstructorMultiSelect
+                                                                value={rawDayPools[dayValue] ?? dayPools[dayValue] ?? []}
+                                                                onChange={(next) => {
+                                                                    const current =
+                                                                        field.value && typeof field.value === "object"
+                                                                            ? (field.value as DayInstructorPools)
+                                                                            : {};
+                                                                    const updated: DayInstructorPools = { ...current };
+                                                                    const cleaned = sanitizeInstructorList(next);
+                                                                    if (cleaned.length === 0) {
+                                                                        delete updated[dayValue];
+                                                                    } else {
+                                                                        updated[dayValue] = cleaned;
+                                                                    }
+                                                                    field.onChange(updated);
+                                                                    syncPoolConflictError({ allowed_instructors_by_day: updated });
+                                                                }}
+                                                                options={instructorOptions}
+                                                                placeholder="Select instructors"
+                                                                searchPlaceholder="Search instructor..."
+                                                                emptyText="No instructor found."
+                                                            />
+
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="icon-sm"
+                                                                onClick={() => {
+                                                                    const current =
+                                                                        field.value && typeof field.value === "object"
+                                                                            ? (field.value as DayInstructorPools)
+                                                                            : {};
+                                                                    const updated: DayInstructorPools = { ...current };
+                                                                    delete updated[dayValue];
+                                                                    field.onChange(updated);
+                                                                    syncPoolConflictError({ allowed_instructors_by_day: updated });
+                                                                }}
+                                                                aria-label="Remove day"
+                                                                title="Remove day"
+                                                            >
+                                                                <X />
+                                                            </Button>
+                                                        </div>
+                                                    );
+                                                })}
+                                                <div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            if (!nextAvailableDay) return;
+                                                            const current =
+                                                                field.value && typeof field.value === "object"
+                                                                    ? (field.value as DayInstructorPools)
+                                                                    : {};
+                                                            const updated: DayInstructorPools = {
+                                                                ...current,
+                                                                [nextAvailableDay.value]: [],
+                                                            };
+                                                            field.onChange(updated);
+                                                            syncPoolConflictError({ allowed_instructors_by_day: updated });
+                                                        }}
+                                                        disabled={!nextAvailableDay}
+                                                    >
+                                                        <Plus />
+                                                        Add day
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            <FieldDescription>
+                                                Add instructors for specific days.
+                                            </FieldDescription>
+                                        </Field>
+                                    );
+                                }}
+                            />
+
+                            <Controller
+                                control={form.control}
                                 name="blocked_instructors"
                                 render={({ field, fieldState }) => (
                                     <Field data-invalid={fieldState.invalid}>
                                         <FieldLabel htmlFor={field.name}>Negative pool</FieldLabel>
                                         <InstructorMultiSelect
                                             value={field.value}
-                                            onChange={field.onChange}
+                                            onChange={(next) => {
+                                                const cleaned = sanitizeInstructorList(next);
+                                                field.onChange(cleaned);
+                                                syncPoolConflictError({ blocked_instructors: cleaned });
+                                            }}
                                             options={instructorOptions}
                                             placeholder="Select instructors"
                                             searchPlaceholder="Search instructor..."
@@ -734,7 +1042,7 @@ export function PoolsPage() {
                                             />
                                             <InputGroupAddon align="block-end">
                                                 <InputGroupText className="tabular-nums">
-                                                    {countWords(field.value)}/{NOTES_MAX_WORDS}
+                                                    {countWords(field.value ?? "")}/{NOTES_MAX_WORDS}
                                                 </InputGroupText>
                                             </InputGroupAddon>
                                         </InputGroup>
@@ -759,7 +1067,11 @@ export function PoolsPage() {
                                                 If enabled, only positive-pool instructors are valid.
                                             </span>
                                         </Label>
-                                        <Switch id={field.name} checked={field.value} onCheckedChange={field.onChange} />
+                                        <Switch
+                                            id={field.name}
+                                            checked={field.value}
+                                            onCheckedChange={field.onChange}
+                                        />
                                     </div>
                                 )}
                             />

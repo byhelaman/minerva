@@ -144,7 +144,7 @@ export function ScheduleDataTable<TData, TValue>({
 
     const [pagination, setPagination] = React.useState({
         pageIndex: 0,
-        pageSize: props.initialPageSize || 25,
+        pageSize: props.initialPageSize || 50,
     });
 
     // Aplicar/quitar filtros de tiempo y fecha cuando Live mode cambia

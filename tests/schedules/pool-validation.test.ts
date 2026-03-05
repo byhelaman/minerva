@@ -23,6 +23,8 @@ function makeRule(overrides: Partial<PoolRule>): PoolRule {
         id: "rule-1",
         owner_id: "owner-1",
         program_query: "PIA ENGLISH 4",
+        days_of_week: [],
+        allowed_instructors_by_day: {},
         allowed_instructors: ["Nora Velez", "Iker Salas"],
         blocked_instructors: [],
         hard_lock: false,
@@ -58,12 +60,12 @@ describe("programMatchesPoolRule", () => {
 });
 
 describe("evaluatePoolIssues", () => {
-    it("flags instructor outside positive pool", () => {
+    it("does not flag instructor outside positive pool when rule is not strict", () => {
         const schedule = makeSchedule({ instructor: "Bruno Paredes" });
         const rules = [makeRule({ allowed_instructors: ["Nora Velez"] })];
 
         const result = evaluatePoolIssues([schedule], rules);
-        expect(result.violationCount).toBe(1);
+        expect(result.violationCount).toBe(0);
     });
 
     it("flags instructor in negative pool", () => {
@@ -98,7 +100,7 @@ describe("evaluatePoolIssues", () => {
 
         const result = evaluatePoolIssues([schedule], rules);
         const reason = [...result.reasonsByRowKey.values()][0];
-        expect(reason).toContain("Regla estricta");
+        expect(reason).toContain("Regla estricta: no asignar a nadie más");
     });
 
     it("matches instructor names in positive pool with randomized names", () => {
@@ -127,5 +129,66 @@ describe("evaluatePoolIssues", () => {
         expect(result.violationCount).toBe(1);
         const reason = [...result.reasonsByRowKey.values()][0];
         expect(reason).toContain("Pool negativo");
+    });
+
+    it("uses day-specific positive pool and still accepts general pool on that day when not strict", () => {
+        const mondaySchedule = makeSchedule({ date: "2026-03-02", instructor: "Pepito Perez" });
+        const wednesdayPepito = makeSchedule({ date: "2026-03-04", instructor: "Pepito Perez" });
+        const wednesdayJuan = makeSchedule({ date: "2026-03-04", instructor: "Juan Gomez" });
+        const rules = [
+            makeRule({
+                allowed_instructors: ["Pepito Perez"],
+                allowed_instructors_by_day: {
+                    3: ["Juan Gomez"],
+                },
+            }),
+        ];
+
+        const mondayResult = evaluatePoolIssues([mondaySchedule], rules);
+        expect(mondayResult.violationCount).toBe(0);
+
+        const wednesdayPepitoResult = evaluatePoolIssues([wednesdayPepito], rules);
+        expect(wednesdayPepitoResult.violationCount).toBe(0);
+
+        const wednesdayJuanResult = evaluatePoolIssues([wednesdayJuan], rules);
+        expect(wednesdayJuanResult.violationCount).toBe(0);
+    });
+
+    it("enforces day-specific positive pool when strict lock is enabled", () => {
+        const wednesdayPepito = makeSchedule({ date: "2026-03-04", instructor: "Pepito Perez" });
+        const rules = [
+            makeRule({
+                hard_lock: true,
+                allowed_instructors: ["Pepito Perez"],
+                allowed_instructors_by_day: {
+                    3: ["Juan Gomez"],
+                },
+            }),
+        ];
+
+        const result = evaluatePoolIssues([wednesdayPepito], rules);
+        expect(result.violationCount).toBe(1);
+        const reason = [...result.reasonsByRowKey.values()][0];
+        expect(reason).toContain("Regla estricta (día específico)");
+    });
+
+    it("allows any instructor on days without day-specific pool while strict, but restricts configured day", () => {
+        const mondayJuansito = makeSchedule({ date: "2026-03-02", instructor: "Juansito" });
+        const mondayPepito = makeSchedule({ date: "2026-03-02", instructor: "Pepito Perez" });
+        const wednesdayPepito = makeSchedule({ date: "2026-03-04", instructor: "Pepito Perez" });
+
+        const rules = [
+            makeRule({
+                hard_lock: true,
+                allowed_instructors: [],
+                allowed_instructors_by_day: {
+                    1: ["Juansito"],
+                },
+            }),
+        ];
+
+        expect(evaluatePoolIssues([mondayJuansito], rules).violationCount).toBe(0);
+        expect(evaluatePoolIssues([mondayPepito], rules).violationCount).toBe(1);
+        expect(evaluatePoolIssues([wednesdayPepito], rules).violationCount).toBe(0);
     });
 });

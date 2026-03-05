@@ -74,7 +74,7 @@ export const getScheduleColumns = (
             accessorKey: "start_time",
             size: 130,
             header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Interval" className="justify-center" />
+                <DataTableColumnHeader column={column} title="Time" className="justify-center" />
             ),
             cell: ({ row }) => (
                 <div className="text-center">

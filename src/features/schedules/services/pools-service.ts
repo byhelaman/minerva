@@ -11,6 +11,8 @@ export const poolsService = {
     async createRule(input: PoolRuleInput): Promise<string> {
         const { data, error } = await supabase.rpc("create_pool_rule", {
             p_program_query: input.program_query,
+            p_days_of_week: input.days_of_week ?? [],
+            p_allowed_instructors_by_day: input.allowed_instructors_by_day ?? {},
             p_allowed_instructors: input.allowed_instructors,
             p_blocked_instructors: input.blocked_instructors,
             p_hard_lock: input.hard_lock,
@@ -29,6 +31,8 @@ export const poolsService = {
         const { error } = await supabase.rpc("update_my_pool_rule", {
             p_id: id,
             p_program_query: input.program_query,
+            p_days_of_week: input.days_of_week ?? [],
+            p_allowed_instructors_by_day: input.allowed_instructors_by_day ?? {},
             p_allowed_instructors: input.allowed_instructors,
             p_blocked_instructors: input.blocked_instructors,
             p_hard_lock: input.hard_lock,

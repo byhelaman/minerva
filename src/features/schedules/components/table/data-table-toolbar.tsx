@@ -72,6 +72,23 @@ export function DataTableToolbar<TData>({
     customExportFn,
 }: DataTableToolbarProps<TData>) {
 
+    const columnFilters = table.getState().columnFilters;
+    const hasLiveTimeFilter = columnFilters.some((filter) => filter.id === 'start_time');
+    const hasLiveDateFilter = columnFilters.some((filter) => filter.id === 'date');
+    const isLiveFiltered = hasLiveTimeFilter && hasLiveDateFilter;
+
+    const handleLiveButtonClick = () => {
+        if (!setShowLiveMode) return;
+
+        if (showLiveMode && !isLiveFiltered) {
+            setShowLiveMode(false);
+            globalThis.setTimeout(() => setShowLiveMode(true), 0);
+            return;
+        }
+
+        setShowLiveMode(!showLiveMode);
+    };
+
     return (
         <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2 w-full">
@@ -101,7 +118,7 @@ export function DataTableToolbar<TData>({
                             <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => setShowLiveMode(!showLiveMode)}
+                                onClick={handleLiveButtonClick}
                                 disabled={isLiveLoading || !fullData || fullData.length === 0}
                                 className={cn(
                                     "h-8 border-dashed",
