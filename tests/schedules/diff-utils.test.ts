@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { getFieldDiffs } from '../../src/features/schedules/utils/diff-utils';
 
 // =============================================================================
-// Helper
+// Helper — only base schedule fields (incidence fields deprecated)
 // =============================================================================
 
 const baseImported = {
@@ -12,13 +12,6 @@ const baseImported = {
     code: 'C01',
     minutes: '60',
     units: '2',
-    status: null as string | null,
-    substitute: null as string | null,
-    type: null as string | null,
-    subtype: null as string | null,
-    description: null as string | null,
-    department: null as string | null,
-    feedback: null as string | null,
 };
 
 const baseDb: Record<string, string> = {
@@ -28,13 +21,6 @@ const baseDb: Record<string, string> = {
     code: 'C01',
     minutes: '60',
     units: '2',
-    status: '',
-    substitute: '',
-    type: '',
-    subtype: '',
-    description: '',
-    department: '',
-    feedback: '',
 };
 
 // =============================================================================
@@ -46,48 +32,41 @@ describe('getFieldDiffs - identical data', () => {
         const diffs = getFieldDiffs(baseImported, baseDb);
         expect(diffs).toEqual([]);
     });
-
-    it('should return no diffs when both have same incidence values', () => {
-        const imported = { ...baseImported, type: 'absence', substitute: 'Jane' };
-        const db = { ...baseDb, type: 'absence', substitute: 'Jane' };
-        expect(getFieldDiffs(imported, db)).toEqual([]);
-    });
 });
 
 // =============================================================================
-// Null/Empty/Undefined equivalence (the core problem)
+// Null/Empty/Undefined equivalence
 // =============================================================================
 
 describe('getFieldDiffs - null/empty equivalence', () => {
     it('should treat null imported vs empty DB as identical (no diff)', () => {
-        const imported = { ...baseImported, status: null };
-        const db = { ...baseDb, status: '' };
+        const imported = { ...baseImported, shift: null as unknown as string };
+        const db = { ...baseDb, shift: '' };
         expect(getFieldDiffs(imported, db)).toEqual([]);
     });
 
     it('should treat undefined imported vs empty DB as identical', () => {
-        const imported = { ...baseImported, type: undefined as unknown as null };
-        const db = { ...baseDb, type: '' };
+        const imported = { ...baseImported, code: undefined as unknown as string };
+        const db = { ...baseDb, code: '' };
         expect(getFieldDiffs(imported, db)).toEqual([]);
     });
 
     it('should treat empty imported vs empty DB as identical', () => {
-        const imported = { ...baseImported, feedback: '' };
-        const db = { ...baseDb, feedback: '' };
+        const imported = { ...baseImported, code: '' };
+        const db = { ...baseDb, code: '' };
         expect(getFieldDiffs(imported, db)).toEqual([]);
     });
 
-    it('should treat null imported vs null-ish DB as identical (via ?? fallback)', () => {
-        // Simulates when DB returns undefined (e.g., missing key in record)
+    it('should treat null imported vs missing DB key as identical (via ?? fallback)', () => {
         const db = { ...baseDb };
-        delete (db as Record<string, unknown>).feedback;
-        const imported = { ...baseImported, feedback: null };
+        delete (db as Record<string, unknown>).code;
+        const imported = { ...baseImported, code: null as unknown as string };
         expect(getFieldDiffs(imported, db as Record<string, string>)).toEqual([]);
     });
 
     it('should treat whitespace-only imported vs empty DB as identical', () => {
-        const imported = { ...baseImported, description: '   ' };
-        const db = { ...baseDb, description: '' };
+        const imported = { ...baseImported, branch: '   ' };
+        const db = { ...baseDb, branch: '' };
         expect(getFieldDiffs(imported, db)).toEqual([]);
     });
 });
@@ -106,26 +85,17 @@ describe('getFieldDiffs - real differences', () => {
         expect(diffs[0]).toContain('afternoon');
     });
 
-    it('should detect new incidence value (null → value)', () => {
-        const imported = { ...baseImported, type: 'absence' };
+    it('should detect changed branch', () => {
+        const imported = { ...baseImported, branch: 'LA MOLINA' };
         const diffs = getFieldDiffs(imported, baseDb);
         expect(diffs).toHaveLength(1);
-        expect(diffs[0]).toContain('type');
-        expect(diffs[0]).toContain('absence');
-    });
-
-    it('should detect removed incidence value (value → empty)', () => {
-        const imported = { ...baseImported, type: null };
-        const db = { ...baseDb, type: 'absence' };
-        const diffs = getFieldDiffs(imported, db);
-        expect(diffs).toHaveLength(1);
-        expect(diffs[0]).toContain('type');
+        expect(diffs[0]).toContain('branch');
     });
 
     it('should detect multiple differences at once', () => {
-        const imported = { ...baseImported, shift: 'afternoon', branch: 'LA MOLINA', type: 'late' };
+        const imported = { ...baseImported, shift: 'afternoon', branch: 'LA MOLINA', code: 'C99' };
         const diffs = getFieldDiffs(imported, baseDb);
-        expect(diffs.length).toBeGreaterThanOrEqual(3);
+        expect(diffs.length).toBe(3);
     });
 
     it('should handle time format normalization (8:30 vs 08:30)', () => {
@@ -157,8 +127,8 @@ describe('getFieldDiffs - whitespace normalization', () => {
     });
 
     it('should collapse internal spaces before comparing', () => {
-        const imported = { ...baseImported, description: 'Late    arrival' };
-        const db = { ...baseDb, description: 'Late arrival' };
+        const imported = { ...baseImported, branch: 'LA    MOLINA' };
+        const db = { ...baseDb, branch: 'LA MOLINA' };
         const diffs = getFieldDiffs(imported, db);
         expect(diffs).toEqual([]);
     });

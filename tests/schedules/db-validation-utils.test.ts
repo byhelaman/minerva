@@ -182,23 +182,21 @@ describe('validateAgainstDb - categorization', () => {
         expect(reason).toContain('shift');
     });
 
-    it('should correctly report modified rows with incidence changes', async () => {
-        const s = makeSchedule({ program: 'P1', type: 'absence' }); // has new incidence
+    it('should NOT report incidence-only changes as modifications (incidences deprecated)', async () => {
+        const s = makeSchedule({ program: 'P1' }); // no base field changes — type not tracked
         const pk = getSchedulePrimaryKey(s);
 
         const dbMap = new Map([[pk, {
             shift: 'morning', branch: 'HUB', end_time: '10:00',
             code: 'C01', minutes: '60', units: '2',
-            status: '', substitute: '', type: '', subtype: '',
-            description: '', department: '', feedback: '',
         }]]);
         mockGetFull.mockResolvedValue(dbMap);
 
         const result = await validateAgainstDb([s]);
 
-        expect(result.modifiedKeys.size).toBe(1);
-        const reason = result.modifiedReasons.get(pk)!;
-        expect(reason).toContain('type');
+        // Incidence fields (type, status, etc.) no longer compared — row is identical
+        expect(result.identicalKeys.size).toBe(1);
+        expect(result.modifiedKeys.size).toBe(0);
     });
 
     it('should treat null incidence fields as identical to empty DB fields', async () => {

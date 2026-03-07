@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import type { Schedule } from "../types";
+import type { Schedule, DailyIncidence } from "../types";
 import { ensureTimeFormat } from "../utils/time-utils";
 import { normalizeString, getSchedulePrimaryKey } from "../utils/string-utils";
 
@@ -192,6 +192,19 @@ export const scheduleEntriesService = {
         return { upsertedCount: rows.length, duplicatesSkipped };
     },
 
+    /**
+     * @deprecated Incidences deprecated — no-op stub retained for store/publisher compat.
+     */
+    async updateIncidence(_key: { date: string, program: string, start_time: string, instructor: string }, _changes: Partial<DailyIncidence>): Promise<boolean> {
+        return false;
+    },
+
+    /**
+     * @deprecated Incidences deprecated — no-op stub retained for publisher compat.
+     */
+    async getAllIncidences(_startDate?: string, _endDate?: string): Promise<DailyIncidence[]> {
+        return [];
+    },
 
     /**
      * Eliminar múltiples entradas de horario en una sola llamada RPC.
