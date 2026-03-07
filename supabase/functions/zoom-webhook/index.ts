@@ -7,9 +7,10 @@
 // FIX: Comparación timing-safe para firmas
 // FIX: Tipos estrictos (unknown en lugar de any)
 
-
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getValidAccessToken } from '../_shared/zoom-token-utils.ts'
+import { getCorsHeaders } from '../_shared/cors-utils.ts'
+import { constantTimeEqual } from '../_shared/auth-utils.ts'
 
 const ZOOM_WEBHOOK_SECRET = Deno.env.get('ZOOM_WEBHOOK_SECRET') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -21,8 +22,6 @@ declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void } | 
 
 // Única instancia a nivel de módulo (reutilizada entre ejecuciones en el mismo contexto)
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-
-import { getCorsHeaders } from '../_shared/cors-utils.ts'
 
 // =============================================
 // Web Crypto HMAC (reemplaza Node.js createHmac)
@@ -42,7 +41,6 @@ async function computeHmacHex(key: string, data: string): Promise<string> {
         .join('')
 }
 
-import { constantTimeEqual } from '../_shared/auth-utils.ts'
 
 // =============================================
 // Verificación de firma del webhook
@@ -95,7 +93,13 @@ Deno.serve(async (req) => {
             return new Response('Unauthorized', { status: 401 })
         }
 
-        const event = JSON.parse(body)
+        let event: Record<string, unknown>
+        try {
+            event = JSON.parse(body)
+        } catch {
+            console.error('Webhook: malformed JSON body')
+            return new Response('Bad Request', { status: 400 })
+        }
 
         // Manejar desafío de validación de URL de Zoom
         if (event.event === 'endpoint.url_validation') {
@@ -284,6 +288,12 @@ interface ZoomMeetingPayload {
 }
 
 async function fetchMeetingFromZoom(supabase: SupabaseClient, meetingId: string): Promise<ZoomMeetingPayload | null> {
+    // Validate meetingId is numeric to prevent path injection
+    if (!/^\d+$/.test(meetingId)) {
+        console.warn(`Webhook: invalid meetingId format: ${meetingId}`)
+        return null
+    }
+
     try {
         const accessToken = await getValidAccessToken(supabase)
         const response = await fetch(`${ZOOM_API_BASE}/meetings/${meetingId}`, {
@@ -300,7 +310,7 @@ async function fetchMeetingFromZoom(supabase: SupabaseClient, meetingId: string)
         const zoomMeeting = await response.json() as ZoomMeetingPayload
         return zoomMeeting
     } catch (error: unknown) {
-        console.error(`Webhook: zoom meeting hydrate exception for ${meetingId}`, error)
+        console.error(`Webhook: zoom meeting hydrate exception for ${meetingId}:`, error instanceof Error ? error.message : 'Unknown error')
         return null
     }
 }
@@ -327,32 +337,20 @@ async function upsertMeeting(supabase: SupabaseClient, meeting: ZoomMeetingPaylo
         }
     }
 
-    let existingHostId: string | null = null
+    // Single query to check existing record (stale event protection + host_id fallback)
+    const { data: existing } = await supabase
+        .from('zoom_meetings')
+        .select('last_event_timestamp, host_id')
+        .eq('meeting_id', meetingId)
+        .maybeSingle()
 
-    // Validar si el evento es obsoleto (protección contra webhooks desordenados)
-    if (eventTimestamp) {
-        const { data: existing } = await supabase
-            .from('zoom_meetings')
-            .select('last_event_timestamp, host_id')
-            .eq('meeting_id', meetingId)
-            .maybeSingle()
+    const existingHostId = (existing?.host_id as string | null) ?? null
 
-        existingHostId = (existing?.host_id as string | null) ?? null
-
-        if (existing?.last_event_timestamp) {
-            if (eventTimestamp <= existing.last_event_timestamp) {
-                console.log(`Webhook: Ignoring stale event for meeting ${meetingId}`)
-                return
-            }
+    if (eventTimestamp && existing?.last_event_timestamp) {
+        if (eventTimestamp <= existing.last_event_timestamp) {
+            console.log(`Webhook: Ignoring stale event for meeting ${meetingId}`)
+            return
         }
-    } else {
-        const { data: existing } = await supabase
-            .from('zoom_meetings')
-            .select('host_id')
-            .eq('meeting_id', meetingId)
-            .maybeSingle()
-
-        existingHostId = (existing?.host_id as string | null) ?? null
     }
 
     const resolvedHostId = workingMeeting.host_id || existingHostId || 'unknown'
