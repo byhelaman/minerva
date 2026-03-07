@@ -113,7 +113,9 @@ export function ScheduleDashboard() {
     const { fetchActiveMeetings, isLoadingData } = useZoomStore();
 
     // Estado del Live Mode
-    const [showLiveMode, setShowLiveMode] = useState(false);
+    const [showLiveMode, setShowLiveMode] = useState(() => {
+        return sessionStorage.getItem('minerva:live-mode') === 'true';
+    });
     const [isLiveLoading, setIsLiveLoading] = useState(false);
     const [activePrograms, setActivePrograms] = useState<Set<string>>(new Set());
     const [liveTimeFilter, setLiveTimeFilter] = useState<string | undefined>(undefined);
@@ -189,6 +191,7 @@ export function ScheduleDashboard() {
     // Lógica del Live Mode
     const handleLiveModeToggle = useCallback(async (enabled: boolean) => {
         setShowLiveMode(enabled);
+        sessionStorage.setItem('minerva:live-mode', String(enabled));
 
         if (!enabled) {
             setActivePrograms(new Set());
@@ -250,6 +253,13 @@ export function ScheduleDashboard() {
             setIsLiveLoading(false);
         }
     }, [fetchActiveMeetings]);
+
+    // Restaurar el fetch de datos del Live Mode si estaba activo en sessionStorage al montar
+    useEffect(() => {
+        if (sessionStorage.getItem('minerva:live-mode') === 'true') {
+            handleLiveModeToggle(true);
+        }
+    }, [handleLiveModeToggle]);
 
     // Auto-refresh del Live: cada minuto actualizar filtro de hora y re-ejecutar matching local
     useEffect(() => {
