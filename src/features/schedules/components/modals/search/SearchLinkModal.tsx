@@ -107,9 +107,9 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
     const searchColumns = useMemo((): ColumnDef<MeetingRow>[] => [
         {
             id: "select",
-            size: 36,
+            size: 24,
             header: ({ table }) => (
-                <div className="flex justify-center items-center mb-1 w-8">
+                <div className="flex justify-center items-center mb-1 w-6">
                     <Checkbox
                         checked={
                             table.getIsAllPageRowsSelected() ||
@@ -191,7 +191,7 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
                             });
                         } : undefined}
                         instructors={uniqueInstructors}
-                        className="w-45"
+                        className="w-42"
                         popoverClassName="max-w-50"
                     />
                 );
@@ -371,6 +371,7 @@ export function SearchLinkModal({ open, onOpenChange }: SearchLinkModalProps) {
                                 onBulkCopy={handleBulkCopy}
                                 onBulkDelete={canDelete ? (rows) => setMeetingsToDelete(rows as MeetingRow[]) : undefined}
                                 getRowClassName={(row) => pendingHostChanges.has(row.meeting_id) ? "bg-amber-50 dark:bg-amber-950/20 border-l-2 border-l-amber-500" : undefined}
+                                disablePersistence
                             />
                         )}
                     </div>

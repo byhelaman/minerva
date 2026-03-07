@@ -1,8 +1,18 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
     Dialog,
     DialogContent,
@@ -36,6 +46,8 @@ export function PoolsImportPreviewModal({
     onConfirm,
     onRemoveRows,
 }: PoolsImportPreviewModalProps) {
+    const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
+
     const columns = useMemo<ColumnDef<PoolImportPreviewRow>[]>(() => [
         {
             id: "select",
@@ -54,7 +66,7 @@ export function PoolsImportPreviewModal({
                 </div>
             ),
             cell: ({ row }) => (
-                <div className="flex justify-center">
+                <div className="flex justify-center w-9">
                     <Checkbox
                         checked={row.getIsSelected()}
                         onCheckedChange={(value) => row.toggleSelected(!!value)}
@@ -65,6 +77,17 @@ export function PoolsImportPreviewModal({
             ),
             enableSorting: false,
             enableHiding: false,
+        },
+        {
+            id: "branch",
+            accessorKey: "branch",
+            size: 120,
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title="Branch" />
+            ),
+            cell: ({ row }) => (
+                <div className="truncate max-w-28" title={row.original.branch}>{row.original.branch}</div>
+            ),
         },
         {
             id: "program",
@@ -118,6 +141,15 @@ export function PoolsImportPreviewModal({
             ),
         },
         {
+            id: "strict",
+            accessorFn: (row) => row.hard_lock,
+            size: 90,
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title="Strict" className="justify-center" />
+            ),
+            cell: ({ row }) => <div className="text-center text-sm">{row.original.hard_lock ? "Yes" : "No"}</div>,
+        },
+        {
             id: "status",
             accessorFn: (row) => row.status,
             size: 130,
@@ -142,14 +174,13 @@ export function PoolsImportPreviewModal({
                 <Button
                     type="button"
                     variant="ghost"
-                    size="icon"
-                    className="size-8"
+                    size="icon-sm"
                     aria-label="Remove import row"
                     onClick={() => {
-                        onRemoveRows([row.original.id]);
+                        setPendingDeleteIds([row.original.id]);
                     }}
                 >
-                    <X className="size-4" />
+                    <X />
                 </Button>
             ),
         },
@@ -159,42 +190,28 @@ export function PoolsImportPreviewModal({
         <Dialog open={open} onOpenChange={(nextOpen) => !isApplying && onOpenChange(nextOpen)}>
             <DialogContent className="max-w-7xl! max-h-[85vh] flex flex-col gap-6">
                 <DialogHeader>
-                    <DialogTitle>Preview Pool Import</DialogTitle>
+                    <DialogTitle>Preview Import</DialogTitle>
                     <DialogDescription>
                         Review {rows.length} rows before applying changes.
                     </DialogDescription>
                 </DialogHeader>
-
-                <div className="text-sm text-muted-foreground">
-                    <span>New: <strong className="text-foreground font-medium">{summary.newCount}</strong></span>
-                    <span className="mx-2 text-border">|</span>
-                    <span>Modified: <strong className="text-foreground font-medium">{summary.modifiedCount}</strong></span>
-                    <span className="mx-2 text-border">|</span>
-                    <span>Identical: <strong className="text-foreground font-medium">{summary.identicalCount}</strong></span>
-                    <span className="mx-2 text-border">|</span>
-                    <span>Conflicts: <strong className="text-foreground font-medium">{summary.unresolvedCount}</strong></span>
-                </div>
-
-                {summary.unresolvedCount > 0 && (
-                    <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                        Resolve duplicate/invalid/ambiguous rows before importing.
-                    </div>
-                )}
 
                 <div className="flex-1 min-h-0 overflow-hidden">
                     <ScheduleDataTable
                         columns={columns}
                         data={rows}
                         initialPageSize={100}
+                        hideActions
                         hideUpload
                         hideDefaultActions
                         hideOverlaps
                         hideFilters
                         hideBulkCopy
+                        disablePersistence
                         getRowKey={(row) => (row as PoolImportPreviewRow).id}
                         onBulkDelete={(selectedRows) => {
                             const selectedIds = (selectedRows as PoolImportPreviewRow[]).map((row) => row.id);
-                            onRemoveRows(selectedIds);
+                            setPendingDeleteIds(selectedIds);
                         }}
                         getRowClassName={(row) => {
                             const item = row as PoolImportPreviewRow;
@@ -210,35 +227,77 @@ export function PoolsImportPreviewModal({
                     />
                 </div>
 
-                <DialogFooter>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        disabled={isApplying}
-                        onClick={() => onOpenChange(false)}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        type="button"
-                        disabled={
-                            isApplying
-                            || rows.length === 0
-                            || summary.unresolvedCount > 0
-                        }
-                        onClick={onConfirm}
-                    >
+                <DialogFooter className="mt-auto flex-col sm:flex-row gap-4">
+                    <div className="flex items-center gap-3 mr-auto text-sm text-muted-foreground">
                         {isApplying ? (
-                            <>
-                                <Loader2 className="animate-spin" />
-                                Applying...
-                            </>
+                            <span className="text-muted-foreground">Processing...</span>
                         ) : (
-                            "Apply Import"
+                            <>
+                                <span>New: <strong className="text-foreground font-medium">{summary.newCount}</strong></span>
+                                <span className="text-border">|</span>
+                                <span>Modified: <strong className="text-foreground font-medium">{summary.modifiedCount}</strong></span>
+                                <span className="text-border">|</span>
+                                <span>Identical: <strong className="text-foreground font-medium">{summary.identicalCount}</strong></span>
+                                <span className="text-border">|</span>
+                                <span>Conflicts: <strong className="text-foreground font-medium">{summary.unresolvedCount}</strong></span>
+                            </>
                         )}
-                    </Button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            disabled={isApplying}
+                            onClick={() => onOpenChange(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            disabled={
+                                isApplying
+                                || rows.length === 0
+                                || summary.unresolvedCount > 0
+                            }
+                            onClick={onConfirm}
+                        >
+                            {isApplying ? (
+                                <>
+                                    <Loader2 className="animate-spin" />
+                                    Applying...
+                                </>
+                            ) : (
+                                "Import"
+                            )}
+                        </Button>
+                    </div>
                 </DialogFooter>
             </DialogContent>
+
+            <AlertDialog open={pendingDeleteIds.length > 0} onOpenChange={(open) => !open && setPendingDeleteIds([])}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {pendingDeleteIds.length === 1 ? "Remove row?" : `Remove ${pendingDeleteIds.length} rows?`}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will remove the selected row(s) from the import preview.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => {
+                                onRemoveRows(pendingDeleteIds);
+                                setPendingDeleteIds([]);
+                            }}
+                        >
+                            Remove
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </Dialog>
     );
 }

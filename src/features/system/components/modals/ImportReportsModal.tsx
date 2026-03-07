@@ -53,6 +53,7 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
 
     // Working copy of data that the user can modify (remove rows)
     const [workingData, setWorkingData] = useState<Schedule[]>([]);
+    const [pendingDeleteRows, setPendingDeleteRows] = useState<Schedule[]>([]);
 
     // DB validation state
     const [dbValidation, setDbValidation] = useState<DbValidationResult>({
@@ -238,6 +239,7 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
                         hideActions
                         hideUpload
                         hideOverlaps
+                        disablePersistence
                         getRowClassName={(row) => {
                             const key = getScheduleKey(row);
                             if (duplicateKeys.has(key)) return ROW_STYLE_DUPLICATE;
@@ -264,9 +266,7 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
                         issueRowKeys={issueRowKeys}
                         hideBulkCopy
                         onBulkDelete={(rows) => {
-                            const toRemove = new Set(rows);
-                            setWorkingData(prev => prev.filter(s => !toRemove.has(s)));
-                            toast.success(`${rows.length} row(s) removed`);
+                            setPendingDeleteRows(rows as Schedule[]);
                         }}
                     />
                 </div>
@@ -329,6 +329,37 @@ export function ImportReportsModal({ open, onOpenChange, data, onConfirm }: Impo
                     </div>
                 </DialogFooter>
             </DialogContent>
+
+            <AlertDialog
+                open={pendingDeleteRows.length > 0}
+                onOpenChange={(nextOpen) => {
+                    if (!nextOpen) setPendingDeleteRows([]);
+                }}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {pendingDeleteRows.length === 1 ? "Remove row?" : `Remove ${pendingDeleteRows.length} rows?`}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This removes the selected row(s) from the import preview list.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => {
+                                const keys = new Set(pendingDeleteRows.map((item) => getSchedulePrimaryKey(item)));
+                                setWorkingData((prev) => prev.filter((item) => !keys.has(getSchedulePrimaryKey(item))));
+                                toast.success(`${pendingDeleteRows.length} row(s) removed`);
+                                setPendingDeleteRows([]);
+                            }}
+                        >
+                            Remove
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </Dialog>
     );
 }

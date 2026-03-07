@@ -35,6 +35,34 @@ import { toast } from "sonner";
 import { formatDateForDisplay } from "@/lib/date-utils";
 import { mapScheduleToExcelRow } from "@schedules/utils/export-utils";
 import { Blend } from "lucide-react";
+import { useLocation } from "react-router-dom";
+import {
+    ROW_MARKERS_UPDATED_EVENT,
+    getMarkerRowClass,
+    getScheduleRowMarker,
+    isScheduleLike,
+} from "@/features/schedules/utils/row-markers";
+
+interface PersistedTableState {
+    columnVisibility?: VisibilityState;
+    columnFilters?: ColumnFiltersState;
+    sorting?: SortingState;
+    globalFilter?: string;
+    selectedIssueKeys?: string[];
+}
+
+function loadPersistedTableState(storageKey: string): PersistedTableState {
+    try {
+        const raw = localStorage.getItem(storageKey);
+        if (!raw) return {};
+
+        const parsed = JSON.parse(raw) as PersistedTableState;
+        if (!parsed || typeof parsed !== "object") return {};
+        return parsed;
+    } catch {
+        return {};
+    }
+}
 
 interface ScheduleDataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[] | ((addStatusFilter: (status: string) => void) => ColumnDef<TData, TValue>[]);
@@ -99,6 +127,9 @@ interface ScheduleDataTableProps<TData, TValue> {
     issueRowKeys?: Record<string, Set<string>>;
     /** Optional custom row key extractor for independent data models */
     getRowKey?: (row: TData) => string;
+
+    /** Skip reading/writing table state to localStorage (use in modals to avoid search leaking to main table) */
+    disablePersistence?: boolean;
 }
 
 export function ScheduleDataTable<TData, TValue>({
@@ -114,6 +145,12 @@ export function ScheduleDataTable<TData, TValue>({
     ...props
 }: ScheduleDataTableProps<TData, TValue>) {
     const tableContainerRef = React.useRef<HTMLDivElement>(null);
+    const location = useLocation();
+    const stateStorageKey = React.useMemo(() => `minerva:table-state:${location.pathname}`, [location.pathname]);
+    const persistedState = React.useMemo(
+        () => props.disablePersistence ? {} : loadPersistedTableState(stateStorageKey),
+        [stateStorageKey, props.disablePersistence]
+    );
 
     // Use controlled selection if provided, otherwise use internal state
     const [internalSelection, setInternalSelection] = React.useState({});
@@ -127,13 +164,21 @@ export function ScheduleDataTable<TData, TValue>({
         : setInternalSelection;
     // Columna shift oculta por defecto, pero permite sobrescribir con props
     const [columnVisibility, setColumnVisibility] =
-        React.useState<VisibilityState>({ shift: false, type: false, ...props.initialColumnVisibility });
+        React.useState<VisibilityState>({
+            shift: false,
+            type: false,
+            ...props.initialColumnVisibility,
+            ...(persistedState.columnVisibility ?? {}),
+        });
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-        []
+        persistedState.columnFilters ?? []
     );
-    const [sorting, setSorting] = React.useState<SortingState>([]);
-    const [globalFilter, setGlobalFilter] = React.useState("");
-    const [selectedIssueKeys, setSelectedIssueKeys] = React.useState<Set<string>>(new Set());
+    const [sorting, setSorting] = React.useState<SortingState>(persistedState.sorting ?? []);
+    const [globalFilter, setGlobalFilter] = React.useState(persistedState.globalFilter ?? "");
+    const [selectedIssueKeys, setSelectedIssueKeys] = React.useState<Set<string>>(
+        new Set(persistedState.selectedIssueKeys ?? [])
+    );
+    const [, setMarkerVersion] = React.useState(0);
     const globalFilterTerms = React.useMemo(
         () => String(globalFilter)
             .split(',')
@@ -144,8 +189,33 @@ export function ScheduleDataTable<TData, TValue>({
 
     const [pagination, setPagination] = React.useState({
         pageIndex: 0,
-        pageSize: props.initialPageSize || 50,
+        pageSize: props.initialPageSize || 100,
     });
+
+    React.useEffect(() => {
+        const handleMarkersUpdated = () => {
+            setMarkerVersion((current) => current + 1);
+        };
+
+        window.addEventListener(ROW_MARKERS_UPDATED_EVENT, handleMarkersUpdated);
+        return () => {
+            window.removeEventListener(ROW_MARKERS_UPDATED_EVENT, handleMarkersUpdated);
+        };
+    }, []);
+
+    React.useEffect(() => {
+        if (props.disablePersistence) return;
+
+        const snapshot: PersistedTableState = {
+            columnVisibility,
+            columnFilters,
+            sorting,
+            globalFilter,
+            selectedIssueKeys: Array.from(selectedIssueKeys),
+        };
+
+        localStorage.setItem(stateStorageKey, JSON.stringify(snapshot));
+    }, [columnVisibility, columnFilters, sorting, globalFilter, selectedIssueKeys, stateStorageKey, props.disablePersistence]);
 
     // Aplicar/quitar filtros de tiempo y fecha cuando Live mode cambia
     React.useEffect(() => {
@@ -647,6 +717,7 @@ export function ScheduleDataTable<TData, TValue>({
                                     {visibleRows.map((row) => {
                                         const rowKey = getScheduleKey(row.original as Schedule);
                                         const isConflict = overlapResult.allOverlaps.has(rowKey);
+                                        const rowMarker = isScheduleLike(row.original) ? getScheduleRowMarker(row.original) : null;
 
                                         const original = row.original as { meeting_id?: string; meetingId?: string; program?: string };
                                         const rowMeetingId = original.meeting_id || original.meetingId;
@@ -661,6 +732,7 @@ export function ScheduleDataTable<TData, TValue>({
                                                 onMouseDown={handleRowModifierMouseDown}
                                                 onClick={(event) => handleRowModifierSelection(event, row.id)}
                                                 className={cn(
+                                                    rowMarker ? getMarkerRowClass(rowMarker.color) : undefined,
                                                     isConflict && "bg-red-50 dark:bg-red-950/20 border-l-2 border-l-red-500",
                                                     isActive && "bg-green-50 dark:bg-green-950/20 border-l-2 border-l-green-500",
                                                     props.getRowClassName?.(row.original)

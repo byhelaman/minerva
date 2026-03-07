@@ -408,6 +408,7 @@ export function SyncFromExcelModal({ open, onOpenChange, onImportComplete }: Syn
                             hideUpload
                             hideOverlaps
                             initialPageSize={100}
+                            disablePersistence
                             initialColumnVisibility={initialColumnVisibility}
                             externalIssueCategories={externalIssueCategories}
                             issueRowKeys={issueRowKeys}

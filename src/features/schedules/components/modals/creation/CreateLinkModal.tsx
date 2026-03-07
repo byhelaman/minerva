@@ -442,6 +442,7 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
                                     onControlledSelectionChange={setRowSelection}
                                     onBulkCopy={handleBulkCopy}
                                     initialPageSize={50}
+                                    disablePersistence
                                     statusOptions={[
                                         { label: "New", value: "to_create", icon: PlusCircle },
                                         { label: "Exists", value: "exists", icon: RefreshCw },

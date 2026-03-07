@@ -413,6 +413,7 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
                             hideBulkCopy
                             disableRefresh={isExecuting}
                             initialPageSize={100}
+                            disablePersistence
                         />
                     )}
                 </div>
