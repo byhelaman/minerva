@@ -218,7 +218,11 @@ export function ScheduleDataTable<TData, TValue>({
     }, [columnVisibility, columnFilters, sorting, globalFilter, selectedIssueKeys, stateStorageKey, props.disablePersistence]);
 
     // Aplicar/quitar filtros de tiempo y fecha cuando Live mode cambia
+    const prevLiveModeRef = React.useRef(props.showLiveMode);
     React.useEffect(() => {
+        const wasLive = prevLiveModeRef.current;
+        prevLiveModeRef.current = props.showLiveMode;
+
         if (props.showLiveMode && props.liveTimeFilter) {
             // Activar Live: aplicar filtros de hora y fecha actual
             setColumnFilters(prev => {
@@ -229,8 +233,9 @@ export function ScheduleDataTable<TData, TValue>({
                 }
                 return newFilters;
             });
-        } else if (!props.showLiveMode) {
-            // Desactivar Live: quitar filtros de hora y fecha
+        } else if (!props.showLiveMode && wasLive) {
+            // Solo limpiar filtros de hora/fecha cuando Live se desactiva explícitamente,
+            // NO en el mount inicial (para preservar filtros restaurados de localStorage)
             setColumnFilters(prev => {
                 const hasLiveFilters = prev.some(f => f.id === 'start_time' || f.id === 'date');
                 if (hasLiveFilters) {
