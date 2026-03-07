@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import { Schedule, DailyIncidence } from "../types";
+import type { Schedule } from "../types";
 import { ensureTimeFormat } from "../utils/time-utils";
 import { normalizeString, getSchedulePrimaryKey } from "../utils/string-utils";
 
@@ -46,7 +46,7 @@ export const scheduleEntriesService = {
     async getSchedulesByDate(date: string) {
         const { data, error } = await supabase
             .from('schedule_entries')
-            .select('*')
+            .select('date, program, start_time, instructor, shift, branch, end_time, code, minutes, units')
             .eq('date', date);
 
         if (error) throw error;
@@ -57,7 +57,7 @@ export const scheduleEntriesService = {
             schedules.push(mapEntryToSchedule(row));
         });
 
-        return { schedules, incidences: [] as DailyIncidence[] };
+        return { schedules, incidences: [] as Schedule[] };
     },
 
     /**
@@ -67,7 +67,7 @@ export const scheduleEntriesService = {
     async getSchedulesByDateRange(startDate: string, endDate: string) {
         const { data, error } = await supabase
             .from('schedule_entries')
-            .select('*')
+            .select('date, program, start_time, instructor, shift, branch, end_time, code, minutes, units')
             .gte('date', startDate)
             .lte('date', endDate)
             .order('date', { ascending: true })
@@ -83,7 +83,7 @@ export const scheduleEntriesService = {
             schedules.push(mapEntryToSchedule(row));
         });
 
-        return { schedules, incidences: [] as DailyIncidence[] };
+        return { schedules, incidences: [] as Schedule[] };
     },
 
     /**
@@ -192,43 +192,6 @@ export const scheduleEntriesService = {
         return { upsertedCount: rows.length, duplicatesSkipped };
     },
 
-    /**
-     * Actualizar datos de incidencia de una entrada específica (IncidenceModal).
-     * Retorna true si la actualización fue exitosa (la fila existía), false si no.
-     */
-    async updateIncidence(_key: { date: string, program: string, start_time: string, instructor: string }, _changes: Partial<DailyIncidence>): Promise<boolean> {
-        return false;
-    },
-
-    /**
-     * Para Sync: Obtener entradas que necesitan sincronizarse a Excel
-     */
-    async getEntriesPendingSync(date: string) {
-        date;
-        return [];
-    },
-
-    /**
-     * Buscar fechas que parecen necesitar sincronización.
-     */
-    async getPendingSyncDates(): Promise<string[]> {
-        return [];
-    },
-
-    /**
-     * Obtener todas las entradas que tienen datos de incidencia.
-     * Usado para la exportación consolidada de incidencias a Excel.
-     */
-    async getAllIncidences(_startDate?: string, _endDate?: string): Promise<DailyIncidence[]> {
-        return [];
-    },
-
-    /**
-     * Marcar una fecha como sincronizada
-     */
-    async markDateAsSynced(date: string) {
-        date;
-    },
 
     /**
      * Eliminar múltiples entradas de horario en una sola llamada RPC.
