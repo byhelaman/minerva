@@ -1,6 +1,6 @@
 import { useState, useRef, ComponentPropsWithoutRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Check, ChevronsUpDown, X } from "lucide-react";
+import { Check, ChevronDown, X } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -65,7 +65,7 @@ export function InstructorSelector({
                         aria-expanded={open}
                         disabled={disabled}
                         className={cn(
-                            "w-full justify-between gap-2 px-3 rounded-lg",
+                            "w-42 h-8 justify-between gap-2 rounded-lg",
                             className
                         )}
                         {...props}
@@ -73,7 +73,8 @@ export function InstructorSelector({
                         <span className={cn("truncate font-normal", !value && "text-muted-foreground")}>
                             {value || "Select instructor"}
                         </span>
-                        <ChevronsUpDown className="w-4 h-4 text-muted-foreground opacity-50" />
+                        <ChevronDown className="text-muted-foreground opacity-50" />
+                        {/* <ChevronsUpDown className="text-muted-foreground opacity-50" /> */}
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent

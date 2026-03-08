@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Controller, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -70,20 +72,77 @@ import {
     formatDayInstructorPools,
     normalizeDayInstructorPools,
     WEEKDAY_OPTIONS,
-    type DayInstructorPools,
 } from "@/features/schedules/utils/weekdays";
 
-interface RuleFormState {
-    program_query: string;
-    allowed_instructors_by_day: DayInstructorPools;
-    allowed_instructors: string[];
-    blocked_instructors: string[];
-    hard_lock: boolean;
-    is_active: boolean;
-    notes: string;
+const NOTES_MAX_WORDS = 30;
+const MAX_POSITIVE_POOL_INSTRUCTORS = 5;
+const DEFAULT_BRANCH_OPTIONS = ["CORPORATE", "HUB", "LA MOLINA"];
+const POOL_STATUS_OPTIONS = [
+    { label: "Active", value: "active", icon: CircleCheck },
+    { label: "Inactive", value: "inactive", icon: CircleSlash },
+];
+const MAX_VISIBLE_POOL_TAGS = 4;
+const MAX_VISIBLE_DAY_BADGES = 3;
+
+const poolRuleFormSchema = z.object({
+    branch: z.string().trim().min(1, "Branch is required"),
+    program_query: z.string().trim().min(1, "Program is required"),
+    allowed_instructors_by_day: z.record(z.string(), z.array(z.string())),
+    allowed_instructors: z.array(z.string()),
+    blocked_instructors: z.array(z.string()),
+    hard_lock: z.boolean(),
+    is_active: z.boolean(),
+    notes: z.string().refine((value) => countWords(value) <= NOTES_MAX_WORDS, {
+        error: `Notes must be ${NOTES_MAX_WORDS} words or less`,
+    }),
+}).superRefine((values, ctx) => {
+    const payload = toPayload(values);
+
+    if (payload.hard_lock && !hasAtLeastOnePositiveInstructor(payload)) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["allowed_instructors"],
+            message: "Hard lock requires at least one allowed instructor",
+        });
+    }
+
+    const intersections = findPoolIntersections(payload);
+    if (intersections.length > 0) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["blocked_instructors"],
+            message: "An instructor cannot be in both positive and negative pool",
+        });
+    }
+
+    const positivePoolCount = countPositivePoolInstructors(payload);
+    if (positivePoolCount > MAX_POSITIVE_POOL_INSTRUCTORS) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["allowed_instructors"],
+            message: `Positive pool supports up to ${MAX_POSITIVE_POOL_INSTRUCTORS} instructors (3 fixed + 2 backups).`,
+        });
+    }
+});
+
+type RuleFormInput = z.input<typeof poolRuleFormSchema>;
+type RuleFormState = z.output<typeof poolRuleFormSchema>;
+
+function toDayPoolRecord(value: unknown): Record<string, string[]> {
+    const normalized = normalizeDayInstructorPools(value);
+    const record: Record<string, string[]> = {};
+
+    Object.entries(normalized).forEach(([day, instructors]) => {
+        if (Array.isArray(instructors)) {
+            record[String(day)] = [...instructors];
+        }
+    });
+
+    return record;
 }
 
 const emptyForm: RuleFormState = {
+    branch: "",
     program_query: "",
     allowed_instructors_by_day: {},
     allowed_instructors: [],
@@ -93,24 +152,13 @@ const emptyForm: RuleFormState = {
     notes: "",
 };
 
-const NOTES_MAX_WORDS = 30;
-const POOL_STATUS_OPTIONS = [
-    { label: "Active", value: "active", icon: CircleCheck },
-    { label: "Inactive", value: "inactive", icon: CircleSlash },
-];
-const MAX_VISIBLE_POOL_TAGS = 4;
-const MAX_VISIBLE_DAY_BADGES = 3;
-
-const maxWords = (max: number) => (value: string): boolean => {
-    return countWords(value) <= max;
-};
-
 function normalizeProgramKey(value: string): string {
     return value.trim().toLowerCase();
 }
 
 function toPayload(form: RuleFormState): PoolRuleInput {
     return {
+        branch: form.branch.trim(),
         program_query: form.program_query.trim(),
         allowed_instructors_by_day: normalizeDayInstructorPools(form.allowed_instructors_by_day),
         allowed_instructors: sanitizeInstructorList(form.allowed_instructors),
@@ -119,6 +167,13 @@ function toPayload(form: RuleFormState): PoolRuleInput {
         is_active: form.is_active,
         notes: form.notes.trim() || null,
     };
+}
+
+function countPositivePoolInstructors(payload: PoolRuleInput): number {
+    const dayAllowed = Object.values(normalizeDayInstructorPools(payload.allowed_instructors_by_day))
+        .flatMap((list) => list ?? []);
+
+    return sanitizeInstructorList([...payload.allowed_instructors, ...dayAllowed]).length;
 }
 
 function findPoolIntersections(payload: PoolRuleInput): string[] {
@@ -166,8 +221,9 @@ function mapPoolRuleSaveErrorMessage(error: unknown): string | null {
 
 function toForm(rule: PoolRule): RuleFormState {
     return {
+        branch: rule.branch,
         program_query: rule.program_query,
-        allowed_instructors_by_day: normalizeDayInstructorPools(rule.allowed_instructors_by_day),
+        allowed_instructors_by_day: toDayPoolRecord(rule.allowed_instructors_by_day),
         allowed_instructors: [...rule.allowed_instructors],
         blocked_instructors: [...rule.blocked_instructors],
         hard_lock: rule.hard_lock,
@@ -193,7 +249,8 @@ export function PoolsPage() {
     const instructors = useInstructors();
     const { settings } = useSettings();
 
-    const form = useForm<RuleFormState>({
+    const form = useForm<RuleFormInput, unknown, RuleFormState>({
+        resolver: zodResolver(poolRuleFormSchema),
         defaultValues: emptyForm,
     });
 
@@ -240,6 +297,16 @@ export function PoolsPage() {
 
         return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
     }, [instructors, rules]);
+
+    const branchOptions = useMemo(() => {
+        const known = new Set(DEFAULT_BRANCH_OPTIONS);
+        for (const rule of rules) {
+            const branch = rule.branch?.trim();
+            if (branch) known.add(branch);
+        }
+
+        return Array.from(known).sort((a, b) => a.localeCompare(b));
+    }, [rules]);
 
     const formatDateTime = (value: string) => {
         const formatted = formatTimestampForDisplay(value);
@@ -292,6 +359,17 @@ export function PoolsPage() {
             enableSorting: false,
         },
         {
+            id: "branch",
+            accessorKey: "branch",
+            size: 120,
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title="Branch" />
+            ),
+            cell: ({ row }) => (
+                <div className="truncate max-w-28" title={row.original.branch}>{row.original.branch}</div>
+            ),
+        },
+        {
             id: "program",
             accessorKey: "program_query",
             size: 400,
@@ -339,7 +417,9 @@ export function PoolsPage() {
 
                 return (
                     <div className="space-y-2 max-w-90">
-                        {/* <div className="text-[11px] text-muted-foreground">General</div> */}
+                        <div className="text-[11px] text-muted-foreground">
+                            General ({row.original.allowed_instructors.length})
+                        </div>
                         <div
                             className="flex flex-wrap gap-1"
                             title={row.original.allowed_instructors.join(", ") || "Any"}
@@ -361,7 +441,7 @@ export function PoolsPage() {
                         </div>
                         {dayEntries.length > 0 && (
                             <div className="space-y-1" title={formatDayInstructorPools(row.original.allowed_instructors_by_day)}>
-                                {/* <div className="text-[11px] text-muted-foreground">By day</div> */}
+                                <div className="text-[11px] text-muted-foreground">By day ({dayEntries.length})</div>
                                 <div className="flex flex-wrap gap-1">
                                     {visibleDayEntries.map((entry) => (
                                         <Badge
@@ -496,29 +576,7 @@ export function PoolsPage() {
     };
 
     const handleSave = form.handleSubmit(async (values) => {
-        if (!values.program_query.trim()) {
-            form.setError("program_query", { message: "Program is required" });
-            return;
-        }
-
-        if (!maxWords(NOTES_MAX_WORDS)(values.notes)) {
-            form.setError("notes", { message: `Notes must be ${NOTES_MAX_WORDS} words or less` });
-            return;
-        }
-
         const payload = toPayload(values);
-
-        if (payload.hard_lock && !hasAtLeastOnePositiveInstructor(payload)) {
-            form.setError("allowed_instructors", { message: "Hard lock requires at least one allowed instructor" });
-            return;
-        }
-
-        const intersections = findPoolIntersections(payload);
-
-        if (intersections.length > 0) {
-            form.setError("blocked_instructors", { message: "An instructor cannot be in both positive and negative pool" });
-            return;
-        }
 
         const payloadProgramKey = normalizeProgramKey(payload.program_query);
         const hasConflictingRule = rules.some((rule) => {
@@ -601,19 +659,25 @@ export function PoolsPage() {
     const handleExportRules = async (data: PoolRule[]) => {
         try {
             const rows = data.map((rule) => ({
-                program_query: rule.program_query,
-                allowed_instructors: rule.allowed_instructors.join(", "),
+                branch: rule.branch,
+                program: rule.program_query,
+                positive_pool: rule.allowed_instructors.join(", "),
                 positive_pool_by_day: formatDayInstructorPools(rule.allowed_instructors_by_day),
-                blocked_instructors: rule.blocked_instructors.join(", "),
+                negative_pool: rule.blocked_instructors.join(", "),
+                hard_lock: rule.hard_lock,
+                is_active: rule.is_active,
                 notes: rule.notes ?? "",
             }));
 
             const worksheet = utils.json_to_sheet(rows, {
                 header: [
-                    "program_query",
-                    "allowed_instructors",
+                    "branch",
+                    "program",
+                    "positive_pool",
                     "positive_pool_by_day",
-                    "blocked_instructors",
+                    "negative_pool",
+                    "hard_lock",
+                    "is_active",
                     "notes",
                 ],
             });
@@ -683,6 +747,7 @@ export function PoolsPage() {
             .filter((row) => row.status === "new" || row.status === "modified")
             .map((row) => {
                 const payload: PoolRuleInput = {
+                    branch: row.branch,
                     program_query: row.program_query,
                     allowed_instructors_by_day: normalizeDayInstructorPools(row.allowed_instructors_by_day),
                     allowed_instructors: row.allowed_instructors,
@@ -787,14 +852,10 @@ export function PoolsPage() {
                     getRowKey={(row) => (row as PoolRule).id}
                     customExportFn={(data) => handleExportRules(data as PoolRule[])}
                     customActionItems={
-                        <>
-                            <DropdownMenuItem
-                                onClick={() => setIsUploadModalOpen(true)}
-                            >
-                                <CloudUpload />
-                                Import Data
-                            </DropdownMenuItem>
-                        </>
+                        <DropdownMenuItem onClick={() => setIsUploadModalOpen(true)}>
+                            <CloudUpload />
+                            Import Data
+                        </DropdownMenuItem>
                     }
                 />
             </div>
@@ -817,6 +878,32 @@ export function PoolsPage() {
 
                     <form onSubmit={handleSave} className="flex flex-col min-h-0 gap-6">
                         <FieldGroup className="gap-5 overflow-y-auto p-1">
+                            <Controller
+                                control={form.control}
+                                name="branch"
+                                render={({ field, fieldState }) => (
+                                    <Field data-invalid={fieldState.invalid}>
+                                        <FieldLabel htmlFor={field.name}>Branch</FieldLabel>
+                                        <Select value={field.value} onValueChange={field.onChange}>
+                                            <SelectTrigger id={field.name} aria-invalid={fieldState.invalid}>
+                                                <SelectValue placeholder="Select branch" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {branchOptions.map((branch) => (
+                                                    <SelectItem key={branch} value={branch}>
+                                                        {branch}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FieldDescription>
+                                            Branch is required to create or update a rule.
+                                        </FieldDescription>
+                                        <FieldError errors={[fieldState.error]} />
+                                    </Field>
+                                )}
+                            />
+
                             <Controller
                                 control={form.control}
                                 name="program_query"
@@ -869,7 +956,7 @@ export function PoolsPage() {
                                 render={({ field }) => {
                                     const rawDayPools =
                                         field.value && typeof field.value === "object"
-                                            ? (field.value as DayInstructorPools)
+                                            ? (field.value as Record<string, string[]>)
                                             : {};
                                     const dayPools = normalizeDayInstructorPools(field.value);
                                     const usedDays = Object.keys(rawDayPools)
@@ -898,12 +985,12 @@ export function PoolsPage() {
 
                                                                     const current =
                                                                         field.value && typeof field.value === "object"
-                                                                            ? (field.value as DayInstructorPools)
+                                                                            ? (field.value as Record<string, string[]>)
                                                                             : {};
-                                                                    const list = current[dayValue] ?? [];
-                                                                    const updated: DayInstructorPools = { ...current };
-                                                                    delete updated[dayValue];
-                                                                    updated[nextDay] = list;
+                                                                    const list = current[String(dayValue)] ?? [];
+                                                                    const updated: Record<string, string[]> = { ...current };
+                                                                    delete updated[String(dayValue)];
+                                                                    updated[String(nextDay)] = list;
                                                                     field.onChange(updated);
                                                                 }}
                                                             >
@@ -922,18 +1009,18 @@ export function PoolsPage() {
                                                             </Select>
 
                                                             <InstructorMultiSelect
-                                                                value={rawDayPools[dayValue] ?? dayPools[dayValue] ?? []}
+                                                                value={rawDayPools[String(dayValue)] ?? dayPools[dayValue] ?? []}
                                                                 onChange={(next) => {
                                                                     const current =
                                                                         field.value && typeof field.value === "object"
-                                                                            ? (field.value as DayInstructorPools)
+                                                                            ? (field.value as Record<string, string[]>)
                                                                             : {};
-                                                                    const updated: DayInstructorPools = { ...current };
+                                                                    const updated: Record<string, string[]> = { ...current };
                                                                     const cleaned = sanitizeInstructorList(next);
                                                                     if (cleaned.length === 0) {
-                                                                        delete updated[dayValue];
+                                                                        delete updated[String(dayValue)];
                                                                     } else {
-                                                                        updated[dayValue] = cleaned;
+                                                                        updated[String(dayValue)] = cleaned;
                                                                     }
                                                                     field.onChange(updated);
                                                                     syncPoolConflictError({ allowed_instructors_by_day: updated });
@@ -951,10 +1038,10 @@ export function PoolsPage() {
                                                                 onClick={() => {
                                                                     const current =
                                                                         field.value && typeof field.value === "object"
-                                                                            ? (field.value as DayInstructorPools)
+                                                                            ? (field.value as Record<string, string[]>)
                                                                             : {};
-                                                                    const updated: DayInstructorPools = { ...current };
-                                                                    delete updated[dayValue];
+                                                                    const updated: Record<string, string[]> = { ...current };
+                                                                    delete updated[String(dayValue)];
                                                                     field.onChange(updated);
                                                                     syncPoolConflictError({ allowed_instructors_by_day: updated });
                                                                 }}
@@ -975,11 +1062,11 @@ export function PoolsPage() {
                                                             if (!nextAvailableDay) return;
                                                             const current =
                                                                 field.value && typeof field.value === "object"
-                                                                    ? (field.value as DayInstructorPools)
+                                                                    ? (field.value as Record<string, string[]>)
                                                                     : {};
-                                                            const updated: DayInstructorPools = {
+                                                            const updated: Record<string, string[]> = {
                                                                 ...current,
-                                                                [nextAvailableDay.value]: [],
+                                                                [String(nextAvailableDay.value)]: [],
                                                             };
                                                             field.onChange(updated);
                                                             syncPoolConflictError({ allowed_instructors_by_day: updated });

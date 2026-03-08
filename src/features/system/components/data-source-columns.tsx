@@ -7,6 +7,7 @@ import { formatDateForDisplay } from "@/lib/date-utils";
 import { Badge } from "@/components/ui/badge";
 import { Info } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { getMarkerBadgeClass, getScheduleRowMarker } from "@/features/schedules/utils/row-markers";
 
 export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDef<Schedule>[] => [
     {
@@ -108,6 +109,7 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDe
         ),
         cell: ({ row, table }) => {
             const issueData = (table.options.meta as { getRowIssueTooltip?: (row: Schedule) => string | { type: string; message: React.ReactNode | string } | undefined })?.getRowIssueTooltip?.(row.original);
+            const marker = getScheduleRowMarker(row.original);
 
             let isMod = false;
             let tooltipMessage: React.ReactNode | string | undefined = undefined;
@@ -123,6 +125,18 @@ export const getDataSourceColumns = (onDelete?: (s: Schedule) => void): ColumnDe
 
             return (
                 <div className="flex items-center gap-2">
+                    {marker && (
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Badge variant="outline" className={getMarkerBadgeClass(marker.color)}>
+                                    Note
+                                </Badge>
+                            </PopoverTrigger>
+                            <PopoverContent side="bottom" align="start" className="text-xs w-auto max-w-md">
+                                {marker.comment}
+                            </PopoverContent>
+                        </Popover>
+                    )}
                     {tooltipMessage && (
                         <Popover>
                             <PopoverTrigger asChild>

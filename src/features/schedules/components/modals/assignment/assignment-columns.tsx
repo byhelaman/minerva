@@ -39,9 +39,9 @@ export const getAssignmentColumns = (
 
         {
             id: "select",
-            size: 36,
+            size: 24,
             header: ({ table }) => (
-                <div className="flex justify-center items-center mb-1 w-9">
+                <div className="flex justify-center items-center mb-1 w-6">
                     <Checkbox
                         checked={
                             table.getIsAllPageRowsSelected() ||

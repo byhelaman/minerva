@@ -30,7 +30,7 @@ export function InstructorCell({ row, instructorsList, onInstructorChange, onRes
                 onReset={hasPendingChange && onResetRow ? () => onResetRow(row.original.id) : undefined}
                 instructors={instructorsList}
                 disabled={isMeetingNotFound}
-                className="w-45"
+                className="w-42"
                 popoverClassName="max-w-[220px]"
             />
         </div>

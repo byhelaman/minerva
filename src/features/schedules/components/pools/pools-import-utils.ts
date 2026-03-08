@@ -6,6 +6,7 @@ import {
 } from "@/features/schedules/utils/weekdays";
 
 export interface PoolImportRow {
+    branch?: unknown;
     program_query?: unknown;
     program?: unknown;
     allowed_instructors?: unknown;
@@ -14,6 +15,10 @@ export interface PoolImportRow {
     positive_pool?: unknown;
     blocked_instructors?: unknown;
     negative_pool?: unknown;
+    hard_lock?: unknown;
+    strict?: unknown;
+    is_active?: unknown;
+    status?: unknown;
     notes?: unknown;
 }
 
@@ -75,8 +80,18 @@ function normalizeProgramQuery(value: string): string {
     return value.trim().toLowerCase();
 }
 
-function normalizeNotes(value: string | null | undefined): string {
-    return (value ?? "").trim();
+function parseBooleanCell(value: unknown, fallback: boolean): boolean {
+    if (typeof value === "boolean") return value;
+    const normalized = String(value ?? "").trim().toLowerCase();
+    if (!normalized) return fallback;
+    if (["1", "true", "yes", "y", "si", "s", "on", "active", "strict"].includes(normalized)) return true;
+    if (["0", "false", "no", "n", "off", "inactive", "open"].includes(normalized)) return false;
+    return fallback;
+}
+
+function countPositivePoolInstructors(input: PoolRuleInput): number {
+    const dayAllowed = Object.values(normalizeDayPools(input.allowed_instructors_by_day)).flatMap((list) => list ?? []);
+    return sanitizeInstructorList([...input.allowed_instructors, ...dayAllowed]).length;
 }
 
 function getRuleIdentityKey(programQuery: string): string {
@@ -86,57 +101,6 @@ function getRuleIdentityKey(programQuery: string): string {
 
 function normalizeDayPools(value: unknown): Partial<Record<number, string[]>> {
     return normalizeDayInstructorPools(value);
-}
-
-function isSameDayPoolMap(left: unknown, right: unknown): boolean {
-    const leftMap = normalizeDayPools(left);
-    const rightMap = normalizeDayPools(right);
-
-    const keys = new Set<number>([
-        ...Object.keys(leftMap).map(Number),
-        ...Object.keys(rightMap).map(Number),
-    ]);
-
-    for (const key of keys) {
-        const leftValues = leftMap[key] ?? [];
-        const rightValues = rightMap[key] ?? [];
-        if (!isSameInstructorSet(leftValues, rightValues)) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-function normalizeInstructorSet(values: string[]): string[] {
-    return sanitizeInstructorList(values)
-        .map((entry) => entry.trim().toLowerCase())
-        .filter(Boolean)
-        .sort((a, b) => a.localeCompare(b));
-}
-
-function isSameInstructorSet(left: string[], right: string[]): boolean {
-    const leftNormalized = normalizeInstructorSet(left);
-    const rightNormalized = normalizeInstructorSet(right);
-    if (leftNormalized.length !== rightNormalized.length) return false;
-
-    for (let index = 0; index < leftNormalized.length; index++) {
-        if (leftNormalized[index] !== rightNormalized[index]) return false;
-    }
-
-    return true;
-}
-
-function isEquivalentPoolRule(input: PoolRuleInput, existing: PoolRule): boolean {
-    return (
-        normalizeProgramQuery(input.program_query) === normalizeProgramQuery(existing.program_query)
-        && isSameDayPoolMap(input.allowed_instructors_by_day, existing.allowed_instructors_by_day)
-        && isSameInstructorSet(input.allowed_instructors, existing.allowed_instructors)
-        && isSameInstructorSet(input.blocked_instructors, existing.blocked_instructors)
-        && input.hard_lock === existing.hard_lock
-        && input.is_active === existing.is_active
-        && normalizeNotes(input.notes) === normalizeNotes(existing.notes)
-    );
 }
 
 function findPoolIntersections(payload: PoolRuleInput): string[] {
@@ -184,12 +148,32 @@ export function buildPoolImportPreview(drafts: PoolImportDraft[], rules: PoolRul
             };
         }
 
+        if (!payload.branch.trim()) {
+            return {
+                ...payload,
+                id: draft.id,
+                status: "invalid",
+                reason: "Branch is required",
+                existingRuleId: null,
+            };
+        }
+
         if (duplicateCount > 1) {
             return {
                 ...payload,
                 id: draft.id,
                 status: "duplicate",
                 reason: "Duplicated program in import file",
+                existingRuleId: null,
+            };
+        }
+
+        if (countPositivePoolInstructors(payload) > 5) {
+            return {
+                ...payload,
+                id: draft.id,
+                status: "invalid",
+                reason: "Positive pool supports up to 5 instructors (3 fixed + 2 backups)",
                 existingRuleId: null,
             };
         }
@@ -215,16 +199,6 @@ export function buildPoolImportPreview(drafts: PoolImportDraft[], rules: PoolRul
         }
 
         const existing = existingByRuleKey.get(identityKey) ?? [];
-        if (existing.length > 1) {
-            return {
-                ...payload,
-                id: draft.id,
-                status: "ambiguous",
-                reason: "More than one existing rule matches this program",
-                existingRuleId: null,
-            };
-        }
-
         if (existing.length === 0) {
             return {
                 ...payload,
@@ -235,23 +209,12 @@ export function buildPoolImportPreview(drafts: PoolImportDraft[], rules: PoolRul
             };
         }
 
-        const targetRule = existing[0];
-        if (isEquivalentPoolRule(payload, targetRule)) {
-            return {
-                ...payload,
-                id: draft.id,
-                status: "identical",
-                reason: "Already up-to-date in database",
-                existingRuleId: targetRule.id,
-            };
-        }
-
         return {
             ...payload,
             id: draft.id,
-            status: "modified",
-            reason: "Will update existing rule",
-            existingRuleId: targetRule.id,
+            status: "duplicate",
+            reason: "Program already exists in database",
+            existingRuleId: existing[0]?.id ?? null,
         };
     });
 
@@ -304,16 +267,18 @@ export async function parsePoolImportFiles(files: File[]): Promise<{ payloads: P
             .map((row) => {
                 const programValue = String(row.program_query ?? row.program ?? "").trim();
                 if (!programValue) return null;
+                const branchValue = String(row.branch ?? "").trim();
 
                 return {
+                    branch: branchValue,
                     program_query: programValue,
                     allowed_instructors: parseInstructorCell(row.allowed_instructors ?? row.positive_pool),
                     allowed_instructors_by_day: parseDayInstructorPoolsCell(
                         row.allowed_instructors_by_day ?? row.positive_pool_by_day,
                     ),
                     blocked_instructors: parseInstructorCell(row.blocked_instructors ?? row.negative_pool),
-                    hard_lock: false,
-                    is_active: true,
+                    hard_lock: parseBooleanCell(row.hard_lock ?? row.strict, false),
+                    is_active: parseBooleanCell(row.is_active ?? row.status, true),
                     notes: String(row.notes ?? "").trim() || null,
                 } as PoolRuleInput;
             })

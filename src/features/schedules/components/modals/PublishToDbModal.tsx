@@ -108,7 +108,7 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
             <AlertDialogContent className="sm:max-w-100!">
                 <AlertDialogHeader>
                     <AlertDialogTitle>
-                        {isLoadingCheck ? "Checking..." : (validationError ? "Cannot Publish Schedule" : (isReplaceMode ? "Replace Published Schedule" : "Publish Schedule"))}
+                        {isLoadingCheck ? "Checking..." : (validationError ? "Cannot Publish Schedule" : (isReplaceMode ? "Schedule Already Exists" : "Publish Schedule"))}
                     </AlertDialogTitle>
                     <AlertDialogDescription asChild>
                         <div>
@@ -126,19 +126,24 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
                                 <>
                                     {isReplaceMode ? (
                                         <>
-                                            Replace published schedule for <strong>{formatDateForDisplay(activeDate!)}</strong>?
+                                            <p>A schedule for <strong>{formatDateForDisplay(activeDate!)}</strong> has already been published. Do you want to replace it?</p>
+                                            <span>This will update the version available to all users.</span>
                                         </>
                                     ) : (
                                         <>
                                             Publish schedule for <strong>{formatDateForDisplay(activeDate!)}</strong>?
                                         </>
                                     )}
-                                    <br /><br />
-                                    This will:
-                                    <ul className="list-disc pl-5 mt-2 space-y-1">
-                                        <li>{isReplaceMode ? `Replace published entries for ${formatDateForDisplay(activeDate!)} with ${baseSchedules.length} current draft entries` : `Save ${baseSchedules.length} entries to the database`}</li>
-                                        <li>Notify users of the update</li>
-                                    </ul>
+                                    {!isReplaceMode && (
+                                        <>
+                                            <br /><br />
+                                            This will:
+                                            <ul className="list-disc pl-5 mt-2 space-y-1">
+                                                <li>{`Save ${baseSchedules.length} entries to the database`}</li>
+                                                <li>Notify users of the update</li>
+                                            </ul>
+                                        </>
+                                    )}
                                 </>
                             )}
                         </div>
@@ -156,7 +161,7 @@ export function PublishToDbModal({ open, onOpenChange }: PublishToDbModalProps) 
                             </AlertDialogCancel>
                             <AlertDialogAction onClick={handlePublish} disabled={isPublishing || isLoadingCheck}>
                                 {isPublishing ? <Loader2 className="animate-spin" /> : null}
-                                {isLoadingCheck ? "Checking..." : (isReplaceMode ? "Replace" : "Publish")}
+                                {isLoadingCheck ? "Checking..." : (isReplaceMode ? "Confirm" : "Publish")}
                             </AlertDialogAction>
                         </>
                     )}

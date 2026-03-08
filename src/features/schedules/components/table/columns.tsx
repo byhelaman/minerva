@@ -1,21 +1,23 @@
 import { type ColumnDef } from "@tanstack/react-table";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import type { Schedule } from "@schedules/types";
 import { DataTableColumnHeader } from "./data-table-column-header";
 import { DataTableRowActions } from "./data-table-row-actions";
 import { formatDateForDisplay } from "@/lib/date-utils";
 import { Badge } from "@/components/ui/badge";
-import { Info } from "lucide-react";
+import { Info, Tag } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { getMarkerBadgeClass, getScheduleRowMarker } from "@/features/schedules/utils/row-markers";
 
 export const getScheduleColumns = (
     onDelete?: (s: Schedule) => void,
 ): ColumnDef<Schedule>[] => [
         {
             id: "select",
-            size: 36,
+            size: 24,
             header: ({ table }) => (
-                <div className="flex justify-center items-center mb-1 w-9">
+                <div className="flex justify-center items-center mb-1 w-6">
                     <Checkbox
                         checked={
                             table.getIsAllPageRowsSelected() ||
@@ -105,7 +107,13 @@ export const getScheduleColumns = (
                 <DataTableColumnHeader column={column} title="Instructor" />
             ),
             cell: ({ row }) => (
-                <div className="truncate max-w-45">{row.getValue("instructor")}</div>
+                <div className="flex justify-start">
+                    <Input
+                        className="h-8 w-45 border-transparent bg-transparent px-2 text-left shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background"
+                        defaultValue={String(row.getValue("instructor") || "")}
+                        aria-label={`Instructor for ${row.original.program}`}
+                    />
+                </div>
             ),
         },
         {
@@ -115,8 +123,22 @@ export const getScheduleColumns = (
             ),
             cell: ({ row, table }) => {
                 const issueTooltip = (table.options.meta as { getRowIssueTooltip?: (row: Schedule) => string | undefined })?.getRowIssueTooltip?.(row.original);
+                const marker = getScheduleRowMarker(row.original);
                 return (
                     <div className="flex items-center gap-2">
+                        {marker && (
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Badge variant="outline" className={getMarkerBadgeClass(marker.color)}>
+                                        <Tag />
+                                        Note
+                                    </Badge>
+                                </PopoverTrigger>
+                                <PopoverContent side="bottom" align="start" className="text-xs w-64">
+                                    {marker.comment}
+                                </PopoverContent>
+                            </Popover>
+                        )}
                         {issueTooltip && (
                             <Popover>
                                 <PopoverTrigger asChild>
