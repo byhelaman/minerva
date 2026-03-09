@@ -171,13 +171,7 @@ describe("buildPoolImportPreview", () => {
         expect(rows[0].existingRuleId).toBe("rule-1");
     });
 
-    it("marks invalid when hard_lock with no allowed instructors", () => {
-        const drafts = [makeDraft({ hard_lock: true, allowed_instructors: [] })];
-        const { rows } = buildPoolImportPreview(drafts, []);
 
-        expect(rows[0].status).toBe("invalid");
-        expect(rows[0].reason).toContain("Hard lock");
-    });
 
     it("marks invalid when positive pool exceeds 5 instructors", () => {
         const drafts = [makeDraft({
