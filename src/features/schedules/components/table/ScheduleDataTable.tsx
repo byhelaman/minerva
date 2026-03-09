@@ -95,7 +95,7 @@ interface ScheduleDataTableProps<TData, TValue> {
     hideOverlaps?: boolean;
     disableRefresh?: boolean;
     initialPageSize?: number;
-    statusOptions?: { label: string; value: string; count?: number; icon?: React.ComponentType<{ className?: string }> }[];
+    statusOptions?: { label: string; value: string; count?: number; icon?: React.ComponentType<{ className?: string }>; description?: string }[];
     activeMeetingIds?: string[];
     activePrograms?: Set<string>;
     showLiveMode?: boolean;

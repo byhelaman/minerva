@@ -69,7 +69,7 @@ interface ToolbarFiltersProps<TData> {
     hideUpload?: boolean;
     onUploadClick?: () => void;
     hideStatusFilter?: boolean;
-    statusOptions?: { label: string; value: string; icon?: React.ComponentType<{ className?: string }> }[];
+    statusOptions?: { label: string; value: string; icon?: React.ComponentType<{ className?: string }>; description?: string }[];
     showBranch?: boolean;
     showTime?: boolean;
     customFilterItems?: React.ReactNode;

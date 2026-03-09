@@ -12,7 +12,6 @@ export const poolsService = {
         const { data, error } = await supabase.rpc("create_pool_rule", {
             p_branch: input.branch,
             p_program_query: input.program_query,
-            p_days_of_week: input.days_of_week ?? [],
             p_allowed_instructors_by_day: input.allowed_instructors_by_day ?? {},
             p_allowed_instructors: input.allowed_instructors,
             p_blocked_instructors: input.blocked_instructors,
@@ -33,7 +32,6 @@ export const poolsService = {
             p_id: id,
             p_branch: input.branch,
             p_program_query: input.program_query,
-            p_days_of_week: input.days_of_week ?? [],
             p_allowed_instructors_by_day: input.allowed_instructors_by_day ?? {},
             p_allowed_instructors: input.allowed_instructors,
             p_blocked_instructors: input.blocked_instructors,

@@ -22,7 +22,7 @@ interface DataTableToolbarProps<TData> {
     hideUpload?: boolean;
     hideActions?: boolean;
     disableRefresh?: boolean;
-    statusOptions?: { label: string; value: string; icon?: React.ComponentType<{ className?: string }> }[];
+    statusOptions?: { label: string; value: string; icon?: React.ComponentType<{ className?: string }>; description?: string }[];
     showLiveMode?: boolean;
     setShowLiveMode?: (show: boolean) => void;
     isLiveLoading?: boolean;

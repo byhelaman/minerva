@@ -23,9 +23,20 @@ import {
 } from "@/components/ui/dialog";
 import { ScheduleDataTable } from "@schedules/components/table/ScheduleDataTable";
 import { DataTableColumnHeader } from "@schedules/components/table/data-table-column-header";
-import { ROW_STYLE_DUPLICATE, ROW_STYLE_MODIFIED, ROW_STYLE_NEW } from "@/features/schedules/utils/issue-styles";
-import { Loader2, X } from "lucide-react";
+import { ROW_STYLE_DUPLICATE } from "@/features/schedules/utils/issue-styles";
+import { Loader2, PlusCircle, XCircle, CheckCircle, X } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { PoolImportPreviewRow, PoolImportSummary } from "./pools-import-utils";
+import { PoolCellNegative } from "./PoolCellNegative";
+import { PoolCellPositive } from "./PoolCellPositive";
+
+const MAX_VISIBLE_POOL_TAGS = 3;
+
+const IMPORT_STATUS_OPTIONS = [
+    { label: "New", value: "new", icon: PlusCircle },
+    { label: "Identical", value: "identical", icon: CheckCircle },
+    { label: "Invalid", value: "invalid", icon: XCircle },
+];
 
 interface PoolsImportPreviewModalProps {
     open: boolean;
@@ -47,13 +58,14 @@ export function PoolsImportPreviewModal({
     onRemoveRows,
 }: PoolsImportPreviewModalProps) {
     const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
+    const [confirmApplyOpen, setConfirmApplyOpen] = useState(false);
 
     const columns = useMemo<ColumnDef<PoolImportPreviewRow>[]>(() => [
         {
             id: "select",
-            size: 36,
+            size: 24,
             header: ({ table }) => (
-                <div className="flex justify-center items-center mb-1 w-9">
+                <div className="flex justify-center items-center mb-1 w-6">
                     <Checkbox
                         checked={
                             table.getIsAllPageRowsSelected()
@@ -66,7 +78,7 @@ export function PoolsImportPreviewModal({
                 </div>
             ),
             cell: ({ row }) => (
-                <div className="flex justify-center w-9">
+                <div className="flex justify-center w-6">
                     <Checkbox
                         checked={row.getIsSelected()}
                         onCheckedChange={(value) => row.toggleSelected(!!value)}
@@ -92,58 +104,44 @@ export function PoolsImportPreviewModal({
         {
             id: "program",
             accessorKey: "program_query",
-            size: 280,
+            size: 320,
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Program" />
             ),
             cell: ({ row }) => (
-                <div className="font-medium truncate max-w-70" title={row.original.program_query}>
+                <div className="truncate max-w-75" title={row.original.program_query}>
                     {row.original.program_query}
                 </div>
             ),
         },
         {
-            id: "positive_pool",
-            accessorFn: (row) => row.allowed_instructors.join(", "),
-            size: 240,
-            header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Positive Pool" />
-            ),
+            id: "positivePool",
+            header: "Positive Pool",
             cell: ({ row }) => (
-                <div className="flex flex-wrap gap-1 max-w-70">
-                    {row.original.allowed_instructors.length === 0 ? (
-                        <span className="text-muted-foreground">Any</span>
-                    ) : (
-                        row.original.allowed_instructors.map((name) => (
-                            <Badge key={`${row.original.id}-allow-${name}`} variant="secondary">{name}</Badge>
-                        ))
-                    )}
+                <div className="max-w-60">
+                    <PoolCellPositive
+                        allowedInstructors={row.original.allowed_instructors}
+                        allowedInstructorsByDay={row.original.allowed_instructors_by_day ?? {}}
+                        maxVisibleTags={MAX_VISIBLE_POOL_TAGS}
+                    />
                 </div>
             ),
         },
         {
-            id: "negative_pool",
-            accessorFn: (row) => row.blocked_instructors.join(", "),
-            size: 240,
-            header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Negative Pool" />
-            ),
+            id: "negativePool",
+            header: "Negative Pool",
             cell: ({ row }) => (
-                <div className="flex flex-wrap gap-1 max-w-70">
-                    {row.original.blocked_instructors.length === 0 ? (
-                        <span className="text-muted-foreground">None</span>
-                    ) : (
-                        row.original.blocked_instructors.map((name) => (
-                            <Badge key={`${row.original.id}-block-${name}`} variant="outline">{name}</Badge>
-                        ))
-                    )}
+                <div className="max-w-60">
+                    <PoolCellNegative
+                        blockedInstructors={row.original.blocked_instructors}
+                        maxVisibleTags={MAX_VISIBLE_POOL_TAGS}
+                    />
                 </div>
             ),
         },
         {
             id: "strict",
             accessorFn: (row) => row.hard_lock,
-            size: 90,
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Strict" className="justify-center" />
             ),
@@ -152,18 +150,53 @@ export function PoolsImportPreviewModal({
         {
             id: "status",
             accessorFn: (row) => row.status,
-            size: 130,
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Status" className="justify-center" />
             ),
             cell: ({ row }) => {
                 const status = row.original.status;
-                if (status === "new") return <div className="text-center text-sm">New</div>;
-                if (status === "modified") return <div className="text-center text-sm">Modified</div>;
-                if (status === "identical") return <div className="text-center text-sm">Identical</div>;
-                if (status === "duplicate") return <div className="text-center text-sm">Duplicate</div>;
-                if (status === "ambiguous") return <div className="text-center text-sm">Ambiguous</div>;
-                return <div className="text-center text-sm">Invalid</div>;
+                const reason = row.original.reason;
+
+                let badge;
+                if (status === "new") {
+                    badge = <Badge variant="outline" className="border-green-600 text-green-600 bg-green-50 dark:bg-green-950/20 dark:border-green-500 dark:text-green-400 cursor-pointer hover:bg-green-100 dark:hover:bg-green-500/20"><PlusCircle />New</Badge>;
+                } else if (status === "invalid") {
+                    badge = <Badge variant="outline" className="border-destructive/50 text-destructive cursor-pointer bg-destructive/5 dark:border-destructive/50 hover:bg-destructive/10"><XCircle />Invalid</Badge>;
+                } else {
+                    badge = <Badge variant="outline" className="text-muted-foreground"><CheckCircle />Identical</Badge>;
+                }
+
+                if (!reason || status === "new" || status === "identical") {
+                    return <div className="flex justify-center">{badge}</div>;
+                }
+
+                return (
+                    <div className="flex justify-center">
+                        <Popover modal={false}>
+                            <PopoverTrigger asChild>
+                                {badge}
+                            </PopoverTrigger>
+                            <PopoverContent
+                                className="w-80 p-0 rounded-lg z-200 pointer-events-auto"
+                                onWheel={(e) => e.stopPropagation()}
+                            >
+                                <div className="p-4 space-y-4">
+                                    <div>
+                                        <h4 className="font-semibold text-sm mb-3 text-destructive">
+                                            {status.charAt(0).toUpperCase() + status.slice(1)}
+                                        </h4>
+                                        <div className="space-y-3">
+                                            <div className="text-xs font-medium text-muted-foreground mb-2">Reason</div>
+                                            <div className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">
+                                                {reason}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </PopoverContent>
+                        </Popover>
+                    </div>
+                );
             },
         },
         {
@@ -184,7 +217,7 @@ export function PoolsImportPreviewModal({
                 </Button>
             ),
         },
-    ], [onRemoveRows]);
+    ], []);
 
     return (
         <Dialog open={open} onOpenChange={(nextOpen) => !isApplying && onOpenChange(nextOpen)}>
@@ -208,6 +241,7 @@ export function PoolsImportPreviewModal({
                         hideFilters
                         hideBulkCopy
                         disablePersistence
+                        statusOptions={IMPORT_STATUS_OPTIONS}
                         getRowKey={(row) => (row as PoolImportPreviewRow).id}
                         onBulkDelete={(selectedRows) => {
                             const selectedIds = (selectedRows as PoolImportPreviewRow[]).map((row) => row.id);
@@ -215,9 +249,9 @@ export function PoolsImportPreviewModal({
                         }}
                         getRowClassName={(row) => {
                             const item = row as PoolImportPreviewRow;
-                            if (item.status === "new") return ROW_STYLE_NEW;
-                            if (item.status === "modified") return ROW_STYLE_MODIFIED;
-                            if (item.status === "identical") return undefined;
+                            // "new" and "identical" have no highlight
+                            if (item.status === "identical" || item.status === "new") return undefined;
+                            // "invalid" gets error style
                             return ROW_STYLE_DUPLICATE;
                         }}
                         getRowIssueTooltip={(row) => {
@@ -233,11 +267,7 @@ export function PoolsImportPreviewModal({
                             <span className="text-muted-foreground">Processing...</span>
                         ) : (
                             <>
-                                <span>New: <strong className="text-foreground font-medium">{summary.newCount}</strong></span>
-                                <span className="text-border">|</span>
-                                <span>Modified: <strong className="text-foreground font-medium">{summary.modifiedCount}</strong></span>
-                                <span className="text-border">|</span>
-                                <span>Identical: <strong className="text-foreground font-medium">{summary.identicalCount}</strong></span>
+                                <span>Ready: <strong className="text-foreground font-medium">{summary.newCount}</strong></span>
                                 <span className="text-border">|</span>
                                 <span>Conflicts: <strong className="text-foreground font-medium">{summary.unresolvedCount}</strong></span>
                             </>
@@ -258,9 +288,10 @@ export function PoolsImportPreviewModal({
                             disabled={
                                 isApplying
                                 || rows.length === 0
+                                || summary.newCount === 0
                                 || summary.unresolvedCount > 0
                             }
-                            onClick={onConfirm}
+                            onClick={() => setConfirmApplyOpen(true)}
                         >
                             {isApplying ? (
                                 <>
@@ -276,7 +307,7 @@ export function PoolsImportPreviewModal({
             </DialogContent>
 
             <AlertDialog open={pendingDeleteIds.length > 0} onOpenChange={(open) => !open && setPendingDeleteIds([])}>
-                <AlertDialogContent>
+                <AlertDialogContent className="sm:max-w-100!">
                     <AlertDialogHeader>
                         <AlertDialogTitle>
                             {pendingDeleteIds.length === 1 ? "Remove row?" : `Remove ${pendingDeleteIds.length} rows?`}
@@ -294,6 +325,28 @@ export function PoolsImportPreviewModal({
                             }}
                         >
                             Remove
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={confirmApplyOpen} onOpenChange={setConfirmApplyOpen}>
+                <AlertDialogContent className="sm:max-w-100!">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Apply Import</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to import these changes? This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => {
+                                setConfirmApplyOpen(false);
+                                onConfirm();
+                            }}
+                        >
+                            Confirm
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

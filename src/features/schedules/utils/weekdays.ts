@@ -1,3 +1,5 @@
+import { sanitizeInstructorList } from "./pool-utils";
+
 export interface WeekdayOption {
     value: number;
     label: string;
@@ -15,7 +17,6 @@ export const WEEKDAY_OPTIONS: WeekdayOption[] = [
     { value: 7, label: "Sun" },
 ];
 
-const dayLabelByValue = new Map(WEEKDAY_OPTIONS.map((item) => [item.value, item.label]));
 
 const dayAliases = new Map<string, number>([
     ["1", 1], ["mon", 1], ["monday", 1], ["lun", 1], ["lunes", 1],
@@ -26,53 +27,6 @@ const dayAliases = new Map<string, number>([
     ["6", 6], ["sat", 6], ["saturday", 6], ["sab", 6], ["sábado", 6], ["sabado", 6],
     ["7", 7], ["sun", 7], ["sunday", 7], ["dom", 7], ["domingo", 7],
 ]);
-
-export function normalizeDaysOfWeek(days: number[] | null | undefined): number[] {
-    if (!Array.isArray(days)) return [];
-    const unique = new Set<number>();
-
-    for (const value of days) {
-        const day = Number(value);
-        if (Number.isInteger(day) && day >= 1 && day <= 7) {
-            unique.add(day);
-        }
-    }
-
-    return Array.from(unique).sort((a, b) => a - b);
-}
-
-export function formatDaysOfWeek(days: number[] | null | undefined): string {
-    const normalized = normalizeDaysOfWeek(days);
-    if (normalized.length === 0) return "All days";
-
-    return normalized
-        .map((day) => dayLabelByValue.get(day) ?? String(day))
-        .join(", ");
-}
-
-export function parseDaysOfWeekCell(value: unknown): number[] {
-    if (Array.isArray(value)) {
-        return normalizeDaysOfWeek(value.map((item) => Number(item)));
-    }
-
-    const raw = String(value ?? "").trim();
-    if (!raw) return [];
-
-    const tokens = raw
-        .split(/[\n,;|/]+/)
-        .map((token) => token.trim().toLowerCase())
-        .filter(Boolean);
-
-    const parsed: number[] = [];
-    for (const token of tokens) {
-        const mapped = dayAliases.get(token);
-        if (mapped) {
-            parsed.push(mapped);
-        }
-    }
-
-    return normalizeDaysOfWeek(parsed);
-}
 
 export function getIsoWeekdayFromDateString(isoDate: string): number | null {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
@@ -87,21 +41,6 @@ export function getIsoWeekdayFromDateString(isoDate: string): number | null {
 
     const jsDay = utcDate.getUTCDay();
     return jsDay === 0 ? 7 : jsDay;
-}
-
-function sanitizeInstructorList(values: string[]): string[] {
-    const unique = new Map<string, string>();
-    values
-        .map((value) => value.trim())
-        .filter(Boolean)
-        .forEach((value) => {
-            const key = value.toLowerCase();
-            if (!unique.has(key)) {
-                unique.set(key, value);
-            }
-        });
-
-    return Array.from(unique.values());
 }
 
 function parseInstructorList(value: unknown): string[] {

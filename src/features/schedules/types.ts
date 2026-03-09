@@ -54,7 +54,6 @@ export interface PoolRule {
     owner_id: string;
     branch: string;
     program_query: string;
-    days_of_week?: number[];
     allowed_instructors_by_day?: Partial<Record<number, string[]>>;
     allowed_instructors: string[];
     blocked_instructors: string[];
@@ -68,7 +67,6 @@ export interface PoolRule {
 export interface PoolRuleInput {
     branch: string;
     program_query: string;
-    days_of_week?: number[] | null;
     allowed_instructors_by_day?: Partial<Record<number, string[]>>;
     allowed_instructors: string[];
     blocked_instructors: string[];

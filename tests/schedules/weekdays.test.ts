@@ -1,70 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-    normalizeDaysOfWeek,
-    formatDaysOfWeek,
-    parseDaysOfWeekCell,
     getIsoWeekdayFromDateString,
     normalizeDayInstructorPools,
     formatDayInstructorPools,
     parseDayInstructorPoolsCell,
 } from "../../src/features/schedules/utils/weekdays";
-
-describe("normalizeDaysOfWeek", () => {
-    it("returns sorted unique valid days", () => {
-        expect(normalizeDaysOfWeek([3, 1, 5, 1])).toEqual([1, 3, 5]);
-    });
-
-    it("filters out-of-range values", () => {
-        expect(normalizeDaysOfWeek([0, 8, -1, 4])).toEqual([4]);
-    });
-
-    it("returns empty for null/undefined", () => {
-        expect(normalizeDaysOfWeek(null)).toEqual([]);
-        expect(normalizeDaysOfWeek(undefined)).toEqual([]);
-    });
-
-    it("coerces string-like numbers", () => {
-        // @ts-expect-error testing runtime coercion
-        expect(normalizeDaysOfWeek(["2", "5"])).toEqual([2, 5]);
-    });
-});
-
-describe("formatDaysOfWeek", () => {
-    it("formats days to labels", () => {
-        expect(formatDaysOfWeek([1, 3, 5])).toBe("Mon, Wed, Fri");
-    });
-
-    it("returns 'All days' for empty/null", () => {
-        expect(formatDaysOfWeek([])).toBe("All days");
-        expect(formatDaysOfWeek(null)).toBe("All days");
-    });
-});
-
-describe("parseDaysOfWeekCell", () => {
-    it("parses comma-separated English labels", () => {
-        expect(parseDaysOfWeekCell("Mon, Wed, Fri")).toEqual([1, 3, 5]);
-    });
-
-    it("parses Spanish labels", () => {
-        expect(parseDaysOfWeekCell("lun, mie, vie")).toEqual([1, 3, 5]);
-    });
-
-    it("parses numeric array", () => {
-        expect(parseDaysOfWeekCell([2, 4])).toEqual([2, 4]);
-    });
-
-    it("parses pipe-separated values", () => {
-        expect(parseDaysOfWeekCell("Mon|Tue|Wed")).toEqual([1, 2, 3]);
-    });
-
-    it("returns empty for blank string", () => {
-        expect(parseDaysOfWeekCell("")).toEqual([]);
-    });
-
-    it("ignores unknown tokens", () => {
-        expect(parseDaysOfWeekCell("Mon, invalid, Fri")).toEqual([1, 5]);
-    });
-});
 
 describe("getIsoWeekdayFromDateString", () => {
     it("returns correct ISO weekday (Mon=1, Sun=7)", () => {

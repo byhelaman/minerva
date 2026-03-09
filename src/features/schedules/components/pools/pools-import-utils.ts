@@ -4,6 +4,13 @@ import {
     normalizeDayInstructorPools,
     parseDayInstructorPoolsCell,
 } from "@/features/schedules/utils/weekdays";
+import {
+    countPositivePoolInstructors,
+    findPoolIntersections,
+    normalizeProgramKey,
+    parseInstructorCell,
+    sanitizeInstructorList,
+} from "@/features/schedules/utils/pool-utils";
 
 export interface PoolImportRow {
     branch?: unknown;
@@ -22,7 +29,7 @@ export interface PoolImportRow {
     comments?: unknown;
 }
 
-export type PoolImportStatus = "new" | "modified" | "identical" | "duplicate" | "invalid" | "ambiguous";
+export type PoolImportStatus = "new" | "identical" | "invalid";
 
 export interface PoolImportDraft {
     id: string;
@@ -38,46 +45,56 @@ export interface PoolImportPreviewRow extends PoolRuleInput {
 
 export interface PoolImportSummary {
     newCount: number;
-    modifiedCount: number;
     identicalCount: number;
-    duplicateCount: number;
     invalidCount: number;
-    ambiguousCount: number;
     unresolvedCount: number;
 }
 
-export function sanitizeInstructorList(values: string[]): string[] {
-    const unique = new Map<string, string>();
-    values
-        .map((value) => value.trim())
-        .filter(Boolean)
-        .forEach((value) => {
-            const key = value.toLowerCase();
-            if (!unique.has(key)) {
-                unique.set(key, value);
-            }
-        });
+function isPoolRuleChanged(existing: PoolRule, incoming: PoolRuleInput): boolean {
+    if (existing.branch !== incoming.branch) return true;
+    if (existing.hard_lock !== incoming.hard_lock) return true;
+    if (existing.is_active !== incoming.is_active) return true;
+    if ((existing.comments ?? "") !== (incoming.comments ?? "")) return true;
 
-    return Array.from(unique.values());
-}
-
-export function countWords(value: string): number {
-    return value.trim().split(/\s+/).filter(Boolean).length;
-}
-
-export function parseInstructorCell(value: unknown): string[] {
-    if (Array.isArray(value)) {
-        return sanitizeInstructorList(value.map((entry) => String(entry ?? "")));
+    const existingAllowed = sanitizeInstructorList(existing.allowed_instructors);
+    const incomingAllowed = sanitizeInstructorList(incoming.allowed_instructors);
+    if (existingAllowed.length !== incomingAllowed.length
+        || existingAllowed.some((v, i) => v.toLowerCase() !== incomingAllowed[i].toLowerCase())) {
+        return true;
     }
 
-    const raw = String(value ?? "").trim();
-    if (!raw) return [];
+    const existingBlocked = sanitizeInstructorList(existing.blocked_instructors);
+    const incomingBlocked = sanitizeInstructorList(incoming.blocked_instructors);
+    if (existingBlocked.length !== incomingBlocked.length
+        || existingBlocked.some((v, i) => v.toLowerCase() !== incomingBlocked[i].toLowerCase())) {
+        return true;
+    }
 
-    return sanitizeInstructorList(raw.split(/[\n,;|]+/).map((entry) => entry.trim()));
+    const existingByDay = normalizeDayInstructorPools(existing.allowed_instructors_by_day);
+    const incomingByDay = normalizeDayInstructorPools(incoming.allowed_instructors_by_day);
+    const existingDayKeys = Object.keys(existingByDay).map(Number).sort();
+    const incomingDayKeys = Object.keys(incomingByDay).map(Number).sort();
+    if (existingDayKeys.length !== incomingDayKeys.length
+        || existingDayKeys.some((v, i) => v !== incomingDayKeys[i])) {
+        return true;
+    }
+
+    for (const dayKey of existingDayKeys) {
+        const existingList = sanitizeInstructorList(existingByDay[dayKey] ?? []);
+        const incomingList = sanitizeInstructorList(incomingByDay[dayKey] ?? []);
+        if (existingList.length !== incomingList.length
+            || existingList.some((v, i) => v.toLowerCase() !== incomingList[i].toLowerCase())) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
-function normalizeProgramQuery(value: string): string {
-    return value.trim().toLowerCase();
+function getRuleIdentityKey(branch: string, programQuery: string): string {
+    const normalizedBranch = branch.trim().toLowerCase();
+    const normalizedProgram = normalizeProgramKey(programQuery);
+    return `${normalizedBranch}::${normalizedProgram}`;
 }
 
 function parseBooleanCell(value: unknown, fallback: boolean): boolean {
@@ -89,34 +106,10 @@ function parseBooleanCell(value: unknown, fallback: boolean): boolean {
     return fallback;
 }
 
-function countPositivePoolInstructors(input: PoolRuleInput): number {
-    const dayAllowed = Object.values(normalizeDayPools(input.allowed_instructors_by_day)).flatMap((list) => list ?? []);
-    return sanitizeInstructorList([...input.allowed_instructors, ...dayAllowed]).length;
-}
-
-function getRuleIdentityKey(programQuery: string): string {
-    const normalizedProgram = normalizeProgramQuery(programQuery);
-    return normalizedProgram;
-}
-
-function normalizeDayPools(value: unknown): Partial<Record<number, string[]>> {
-    return normalizeDayInstructorPools(value);
-}
-
-function findPoolIntersections(payload: PoolRuleInput): string[] {
-    const dayAllowed = Object.values(normalizeDayPools(payload.allowed_instructors_by_day))
-        .flatMap((list) => list ?? []);
-    const allPositive = sanitizeInstructorList([...payload.allowed_instructors, ...dayAllowed]);
-
-    return allPositive.filter((value) =>
-        payload.blocked_instructors.some((blocked) => blocked.toLowerCase() === value.toLowerCase())
-    );
-}
-
 export function buildPoolImportPreview(drafts: PoolImportDraft[], rules: PoolRule[]): { rows: PoolImportPreviewRow[]; summary: PoolImportSummary } {
     const existingByRuleKey = new Map<string, PoolRule[]>();
     for (const rule of rules) {
-        const key = getRuleIdentityKey(rule.program_query);
+        const key = getRuleIdentityKey(rule.branch, rule.program_query);
         if (!key) continue;
         const bucket = existingByRuleKey.get(key) ?? [];
         bucket.push(rule);
@@ -125,15 +118,15 @@ export function buildPoolImportPreview(drafts: PoolImportDraft[], rules: PoolRul
 
     const ruleKeyCounts = new Map<string, number>();
     for (const draft of drafts) {
-        const key = getRuleIdentityKey(draft.payload.program_query);
+        const key = getRuleIdentityKey(draft.payload.branch, draft.payload.program_query);
         if (!key) continue;
         ruleKeyCounts.set(key, (ruleKeyCounts.get(key) ?? 0) + 1);
     }
 
     const rows: PoolImportPreviewRow[] = drafts.map((draft) => {
         const payload = draft.payload;
-        const normalizedProgram = normalizeProgramQuery(payload.program_query);
-        const identityKey = getRuleIdentityKey(payload.program_query);
+        const normalizedProgram = normalizeProgramKey(payload.program_query);
+        const identityKey = getRuleIdentityKey(payload.branch, payload.program_query);
         const duplicateCount = normalizedProgram ? (ruleKeyCounts.get(identityKey) ?? 0) : 0;
 
         const intersections = findPoolIntersections(payload);
@@ -142,7 +135,7 @@ export function buildPoolImportPreview(drafts: PoolImportDraft[], rules: PoolRul
             return {
                 ...payload,
                 id: draft.id,
-                status: "invalid",
+                status: "invalid" as const,
                 reason: "Program is required",
                 existingRuleId: null,
             };
@@ -152,7 +145,7 @@ export function buildPoolImportPreview(drafts: PoolImportDraft[], rules: PoolRul
             return {
                 ...payload,
                 id: draft.id,
-                status: "invalid",
+                status: "invalid" as const,
                 reason: "Branch is required",
                 existingRuleId: null,
             };
@@ -162,8 +155,8 @@ export function buildPoolImportPreview(drafts: PoolImportDraft[], rules: PoolRul
             return {
                 ...payload,
                 id: draft.id,
-                status: "duplicate",
-                reason: "Duplicated program in import file",
+                status: "invalid" as const,
+                reason: "Duplicated branch + program in import file",
                 existingRuleId: null,
             };
         }
@@ -172,18 +165,17 @@ export function buildPoolImportPreview(drafts: PoolImportDraft[], rules: PoolRul
             return {
                 ...payload,
                 id: draft.id,
-                status: "invalid",
+                status: "invalid" as const,
                 reason: "Positive pool supports up to 5 instructors",
                 existingRuleId: null,
             };
         }
 
-        // Removed: Hard lock no longer requires positive instructors.
         if (intersections.length > 0) {
             return {
                 ...payload,
                 id: draft.id,
-                status: "invalid",
+                status: "invalid" as const,
                 reason: "An instructor cannot be in both positive and negative pool",
                 existingRuleId: null,
             };
@@ -194,40 +186,55 @@ export function buildPoolImportPreview(drafts: PoolImportDraft[], rules: PoolRul
             return {
                 ...payload,
                 id: draft.id,
-                status: "new",
-                reason: "Will create a new rule",
+                status: "new" as const,
+                reason: null,
                 existingRuleId: null,
+            };
+        }
+
+        if (existing.length > 1) {
+            return {
+                ...payload,
+                id: draft.id,
+                status: "invalid" as const,
+                reason: `Found ${existing.length} existing rules for same branch + program`,
+                existingRuleId: null,
+            };
+        }
+
+        const matchedRule = existing[0];
+        if (isPoolRuleChanged(matchedRule, payload)) {
+            return {
+                ...payload,
+                id: draft.id,
+                status: "new" as const,
+                reason: "Will update existing rule",
+                existingRuleId: matchedRule.id,
             };
         }
 
         return {
             ...payload,
             id: draft.id,
-            status: "duplicate",
-            reason: "Program already exists in database",
-            existingRuleId: existing[0]?.id ?? null,
+            status: "identical" as const,
+            reason: "No changes detected",
+            existingRuleId: matchedRule.id,
         };
     });
 
     const summary = rows.reduce<PoolImportSummary>((acc, row) => {
         if (row.status === "new") acc.newCount += 1;
-        if (row.status === "modified") acc.modifiedCount += 1;
         if (row.status === "identical") acc.identicalCount += 1;
-        if (row.status === "duplicate") acc.duplicateCount += 1;
         if (row.status === "invalid") acc.invalidCount += 1;
-        if (row.status === "ambiguous") acc.ambiguousCount += 1;
         return acc;
     }, {
         newCount: 0,
-        modifiedCount: 0,
         identicalCount: 0,
-        duplicateCount: 0,
         invalidCount: 0,
-        ambiguousCount: 0,
         unresolvedCount: 0,
     });
 
-    summary.unresolvedCount = summary.duplicateCount + summary.invalidCount + summary.ambiguousCount;
+    summary.unresolvedCount = summary.invalidCount;
 
     return { rows, summary };
 }

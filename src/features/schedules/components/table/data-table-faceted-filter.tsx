@@ -28,6 +28,7 @@ interface DataTableFacetedFilterProps<TData, TValue> {
         label: string;
         value: string;
         icon?: React.ComponentType<{ className?: string }>;
+        description?: string;
     }[];
     /** 
      * Strategy for counting matches:
@@ -157,7 +158,14 @@ export function DataTableFacetedFilter<TData, TValue>({
                                         {option.icon && (
                                             <option.icon className="text-muted-foreground size-4" />
                                         )}
-                                        <span>{option.label}</span>
+                                        <div className="min-w-0">
+                                            <span>{option.label}</span>
+                                            {option.description && (
+                                                <div className="text-muted-foreground text-xs leading-tight">
+                                                    {option.description}
+                                                </div>
+                                            )}
+                                        </div>
                                         {count !== undefined && (
                                             <span className="text-muted-foreground ml-auto flex size-4 items-center justify-center font-mono text-xs">
                                                 {Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(count)}

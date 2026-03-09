@@ -1,12 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PoolRule, PoolRuleInput } from "../../src/features/schedules/types";
-import {
-    sanitizeInstructorList,
-    countWords,
-    parseInstructorCell,
-    buildPoolImportPreview,
-    type PoolImportDraft,
-} from "../../src/features/schedules/components/pools/pools-import-utils";
+import { buildPoolImportPreview, type PoolImportDraft } from "../../src/features/schedules/components/pools/pools-import-utils";
+import { sanitizeInstructorList, countWords, parseInstructorCell } from "../../src/features/schedules/utils/pool-utils";
 
 // ─── sanitizeInstructorList ─────────────────────────────────────
 
@@ -110,7 +105,6 @@ function makeRule(overrides: Partial<PoolRule>): PoolRule {
         owner_id: "owner-1",
         branch: "CORPORATE",
         program_query: "PIA ENGLISH 4",
-        days_of_week: [],
         allowed_instructors_by_day: {},
         allowed_instructors: ["Nora Velez"],
         blocked_instructors: [],
@@ -151,27 +145,37 @@ describe("buildPoolImportPreview", () => {
         expect(summary.invalidCount).toBe(1);
     });
 
-    it("marks duplicate when same program appears twice in import", () => {
+    it("marks invalid when same branch + program appears twice in import", () => {
         const drafts = [
             makeDraft({ id: "d1", program_query: "SAME PROGRAM" }),
             makeDraft({ id: "d2", program_query: "SAME PROGRAM" }),
         ];
         const { rows, summary } = buildPoolImportPreview(drafts, []);
 
-        expect(rows.every((r) => r.status === "duplicate")).toBe(true);
-        expect(summary.duplicateCount).toBe(2);
+        expect(rows.every((r) => r.status === "invalid")).toBe(true);
+        expect(rows.every((r) => r.reason?.includes("Duplicated branch + program") ?? false)).toBe(true);
+        expect(summary.invalidCount).toBe(2);
     });
 
-    it("marks duplicate when program already exists in database", () => {
+    it("marks identical when rule perfectly matches existing rule in database", () => {
         const drafts = [makeDraft({ program_query: "PIA ENGLISH 4" })];
+        const existingRules = [makeRule({ program_query: "PIA ENGLISH 4" })];
+        const { rows, summary } = buildPoolImportPreview(drafts, existingRules);
+
+        expect(rows[0].status).toBe("identical");
+        expect(rows[0].existingRuleId).toBe("rule-1");
+        expect(summary.unresolvedCount).toBe(summary.invalidCount);
+    });
+
+    it("marks new when rule matches identity but has different fields", () => {
+        const drafts = [makeDraft({ program_query: "PIA ENGLISH 4", allowed_instructors: ["Different"] })];
+        // Existing rule has ["Nora Velez"]
         const existingRules = [makeRule({ program_query: "PIA ENGLISH 4" })];
         const { rows } = buildPoolImportPreview(drafts, existingRules);
 
-        expect(rows[0].status).toBe("duplicate");
+        expect(rows[0].status).toBe("new");
         expect(rows[0].existingRuleId).toBe("rule-1");
     });
-
-
 
     it("marks invalid when positive pool exceeds 5 instructors", () => {
         const drafts = [makeDraft({
@@ -194,7 +198,7 @@ describe("buildPoolImportPreview", () => {
         expect(rows[0].reason).toContain("positive and negative");
     });
 
-    it("calculates unresolvedCount as sum of duplicate + invalid + ambiguous", () => {
+    it("calculates unresolvedCount from invalid rows", () => {
         const drafts = [
             makeDraft({ id: "d1", program_query: "" }),
             makeDraft({ id: "d2", program_query: "DUP" }),
@@ -203,9 +207,8 @@ describe("buildPoolImportPreview", () => {
         ];
         const { summary } = buildPoolImportPreview(drafts, []);
 
-        expect(summary.invalidCount).toBe(1);
-        expect(summary.duplicateCount).toBe(2);
+        expect(summary.invalidCount).toBe(3);
         expect(summary.newCount).toBe(1);
-        expect(summary.unresolvedCount).toBe(summary.duplicateCount + summary.invalidCount + summary.ambiguousCount);
+        expect(summary.unresolvedCount).toBe(summary.invalidCount);
     });
 });

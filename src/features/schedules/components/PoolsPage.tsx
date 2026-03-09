@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -14,8 +14,6 @@ import {
 } from "@/components/ui/input-group";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
     Select,
     SelectContent,
@@ -49,7 +47,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { CircleCheck, CircleSlash, CloudUpload, MoreHorizontal, Plus, X } from "lucide-react";
+import { CircleCheck, CircleSlash, CloudUpload, Loader2, MoreHorizontal, Plus, X } from "lucide-react";
 import { poolsService } from "@/features/schedules/services/pools-service";
 import type { PoolRule, PoolRuleInput } from "@/features/schedules/types";
 import { ScheduleDataTable } from "@schedules/components/table/ScheduleDataTable";
@@ -61,14 +59,22 @@ import { secureSaveFile } from "@/lib/secure-export";
 import { UploadModal } from "@/features/schedules/components/modals/UploadModal";
 import { useSettings } from "@/components/settings-provider";
 import { InstructorMultiSelect } from "@/features/schedules/components/pools/InstructorMultiSelect";
+import { PoolCellNegative } from "@/features/schedules/components/pools/PoolCellNegative";
+import { PoolCellPositive } from "@/features/schedules/components/pools/PoolCellPositive";
 import { PoolsImportPreviewModal } from "@/features/schedules/components/pools/PoolsImportPreviewModal";
 import {
     buildPoolImportPreview,
-    countWords,
     parsePoolImportFiles,
-    sanitizeInstructorList,
     type PoolImportDraft,
 } from "@/features/schedules/components/pools/pools-import-utils";
+import {
+    countWords,
+    countPositivePoolInstructors,
+    findPoolIntersections,
+    normalizeProgramKey,
+    sanitizeInstructorList,
+    MAX_POSITIVE_POOL_INSTRUCTORS,
+} from "@/features/schedules/utils/pool-utils";
 import {
     formatDayInstructorPools,
     normalizeDayInstructorPools,
@@ -76,7 +82,6 @@ import {
 } from "@/features/schedules/utils/weekdays";
 
 const NOTES_MAX_WORDS = 30;
-const MAX_POSITIVE_POOL_INSTRUCTORS = 5;
 const DEFAULT_BRANCH_OPTIONS = ["CORPORATE", "HUB", "LA MOLINA"];
 const POOL_STATUS_OPTIONS = [
     { label: "Active", value: "active", icon: CircleCheck },
@@ -111,7 +116,7 @@ const poolRuleFormSchema = z.object({
         ctx.addIssue({
             code: "custom",
             path: ["allowed_instructors"],
-            message: `Positive pool supports up to ${MAX_POSITIVE_POOL_INSTRUCTORS} instructors (3 fixed + 2 backups).`,
+            message: `Positive pool supports up to ${MAX_POSITIVE_POOL_INSTRUCTORS} instructors`,
         });
     }
 });
@@ -143,10 +148,6 @@ const emptyForm: RuleFormState = {
     comments: "",
 };
 
-function normalizeProgramKey(value: string): string {
-    return value.trim().toLowerCase();
-}
-
 function toPayload(form: RuleFormState): PoolRuleInput {
     return {
         branch: form.branch.trim(),
@@ -158,23 +159,6 @@ function toPayload(form: RuleFormState): PoolRuleInput {
         is_active: form.is_active,
         comments: form.comments.trim() || null,
     };
-}
-
-function countPositivePoolInstructors(payload: PoolRuleInput): number {
-    const dayAllowed = Object.values(normalizeDayInstructorPools(payload.allowed_instructors_by_day))
-        .flatMap((list) => list ?? []);
-
-    return sanitizeInstructorList([...payload.allowed_instructors, ...dayAllowed]).length;
-}
-
-function findPoolIntersections(payload: PoolRuleInput): string[] {
-    const dayAllowed = Object.values(normalizeDayInstructorPools(payload.allowed_instructors_by_day))
-        .flatMap((list) => list ?? []);
-    const allPositive = sanitizeInstructorList([...payload.allowed_instructors, ...dayAllowed]);
-
-    return allPositive.filter((value) =>
-        payload.blocked_instructors.some((blocked) => blocked.toLowerCase() === value.toLowerCase())
-    );
 }
 
 function mapPoolRuleSaveErrorMessage(error: unknown): string | null {
@@ -220,11 +204,12 @@ export function PoolsPage() {
     const [editingRule, setEditingRule] = useState<PoolRule | null>(null);
     const [isSaving, setIsSaving] = useState(false);
 
-    const [ruleToDelete, setRuleToDelete] = useState<PoolRule | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [isApplyingImport, setIsApplyingImport] = useState(false);
+    const [pendingDeleteRules, setPendingDeleteRules] = useState<PoolRule[]>([]);
+    const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
     const [importDrafts, setImportDrafts] = useState<PoolImportDraft[]>([]);
     const instructors = useInstructors();
     const { settings } = useSettings();
@@ -376,80 +361,13 @@ export function PoolsPage() {
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Positive Pool" />
             ),
-            cell: ({ row }) => {
-                const dayPools = normalizeDayInstructorPools(row.original.allowed_instructors_by_day);
-                const dayEntries = WEEKDAY_OPTIONS
-                    .map((day) => {
-                        const list = dayPools[day.value];
-                        if (!list || list.length === 0) return null;
-
-                        return {
-                            label: day.label,
-                            count: list.length,
-                            instructors: list,
-                        };
-                    })
-                    .filter((entry): entry is { label: string; count: number; instructors: string[] } => entry !== null);
-
-                // Flat list of unique instructors across general and day pools
-                const allUniqueInstructors = Array.from(new Set([
-                    ...row.original.allowed_instructors,
-                    ...dayEntries.flatMap(e => e.instructors)
-                ]));
-                
-                const visibleItems = allUniqueInstructors.slice(0, MAX_VISIBLE_POOL_TAGS);
-                const hiddenCount = allUniqueInstructors.length - visibleItems.length;
-
-                return (
-                    <div className="flex flex-wrap gap-1 max-w-90">
-                        {allUniqueInstructors.length === 0 ? (
-                            <span className="text-xs text-muted-foreground">Any</span>
-                        ) : (
-                            visibleItems.map((name, i) => (
-                                <Badge key={`${row.original.id}-allow-${i}`} variant="secondary">{name}</Badge>
-                            ))
-                        )}
-                        {hiddenCount > 0 && (
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80">
-                                        +{hiddenCount} more
-                                    </Badge>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-72 p-4 space-y-4" align="start" onWheel={(e) => e.stopPropagation()}>
-                                    {row.original.allowed_instructors.length > 0 && (
-                                        <div className="space-y-2">
-                                            <h4 className="font-medium text-xs text-muted-foreground">General Pool</h4>
-                                            <div className="flex flex-wrap gap-1">
-                                                {row.original.allowed_instructors.map((name) => (
-                                                    <Badge key={`pop-gen-${name}`} variant="secondary">{name}</Badge>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                    {dayEntries.length > 0 && (
-                                        <div className="space-y-2">
-                                            <h4 className="font-medium text-xs text-muted-foreground">By Day ({dayEntries.length})</h4>
-                                            <div className="space-y-2">
-                                                {dayEntries.map((entry) => (
-                                                    <div key={`pop-day-${entry.label}`} className="space-y-1">
-                                                        <span className="text-xs font-medium text-muted-foreground">{entry.label}</span>
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {entry.instructors.map((inst) => (
-                                                                <Badge key={`pop-day-${entry.label}-${inst}`} variant="outline" className="text-[11px]">{inst}</Badge>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </PopoverContent>
-                            </Popover>
-                        )}
-                    </div>
-                );
-            },
+            cell: ({ row }) => (
+                <PoolCellPositive
+                    allowedInstructors={row.original.allowed_instructors}
+                    allowedInstructorsByDay={row.original.allowed_instructors_by_day ?? {}}
+                    maxVisibleTags={MAX_VISIBLE_POOL_TAGS}
+                />
+            ),
         },
         {
             id: "negative_pool",
@@ -458,38 +376,12 @@ export function PoolsPage() {
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Negative Pool" />
             ),
-            cell: ({ row }) => {
-                const hiddenCount = row.original.blocked_instructors.length - MAX_VISIBLE_POOL_TAGS;
-                
-                return (
-                    <div className="flex flex-wrap gap-1 max-w-90">
-                        {row.original.blocked_instructors.length === 0 ? (
-                            <span className="text-xs text-muted-foreground">None</span>
-                        ) : (
-                            row.original.blocked_instructors.slice(0, MAX_VISIBLE_POOL_TAGS).map((name) => (
-                                <Badge key={`${row.original.id}-block-${name}`} variant="outline">{name}</Badge>
-                            ))
-                        )}
-                        {hiddenCount > 0 && (
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Badge variant="outline" className="cursor-pointer hover:bg-accent">
-                                        +{hiddenCount} more
-                                    </Badge>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-72 p-4 space-y-2" align="start" onWheel={(e) => e.stopPropagation()}>
-                                    <h4 className="font-medium text-xs text-muted-foreground">Negative Pool</h4>
-                                    <div className="flex flex-wrap gap-1">
-                                        {row.original.blocked_instructors.map((name) => (
-                                            <Badge key={`pop-block-${name}`} variant="outline">{name}</Badge>
-                                        ))}
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
-                        )}
-                    </div>
-                );
-            },
+            cell: ({ row }) => (
+                <PoolCellNegative
+                    blockedInstructors={row.original.blocked_instructors}
+                    maxVisibleTags={MAX_VISIBLE_POOL_TAGS}
+                />
+            ),
         },
         {
             id: "strict",
@@ -537,7 +429,7 @@ export function PoolsPage() {
                         <DropdownMenuItem onClick={() => openEditDialog(row.original)}>
                             Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem variant="destructive" onClick={() => setRuleToDelete(row.original)}>
+                        <DropdownMenuItem variant="destructive" onClick={() => setPendingDeleteRules([row.original])}>
                             Delete
                         </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -548,9 +440,9 @@ export function PoolsPage() {
 
     const importPreview = useMemo(() => buildPoolImportPreview(importDrafts, rules), [importDrafts, rules]);
 
-    const loadRules = async () => {
-        setIsLoading(true);
+    const loadRules = useCallback(async () => {
         try {
+            setIsLoading(true);
             const data = await poolsService.listMyRules();
             setRules(data);
         } catch (error) {
@@ -559,11 +451,11 @@ export function PoolsPage() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         loadRules();
-    }, []);
+    }, [loadRules]);
 
     const openCreateDialog = () => {
         setEditingRule(null);
@@ -580,18 +472,27 @@ export function PoolsPage() {
     const handleSave = form.handleSubmit(async (values) => {
         const payload = toPayload(values);
 
-        const payloadProgramKey = normalizeProgramKey(payload.program_query);
+        const normalizedProgram = normalizeProgramKey(payload.program_query);
+        const normalizedBranch = payload.branch.trim().toLowerCase();
+
         const hasConflictingRule = rules.some((rule) => {
+            // If we are editing, skip the current rule itself when checking for conflicts
             if (editingRule && rule.id === editingRule.id) {
                 return false;
             }
 
-            return normalizeProgramKey(rule.program_query) === payloadProgramKey;
+            const sameBranch = rule.branch.trim().toLowerCase() === normalizedBranch;
+            const sameProgram = normalizeProgramKey(rule.program_query) === normalizedProgram;
+
+            return sameBranch && sameProgram;
         });
 
         if (hasConflictingRule) {
             form.setError("program_query", {
-                message: "There is already a rule for this program.",
+                message: "There is already a rule for this branch and program combination.",
+            });
+            form.setError("branch", {
+                message: "There is already a rule for this branch and program combination.",
             });
             return;
         }
@@ -616,45 +517,46 @@ export function PoolsPage() {
         }
     });
 
-    const handleDelete = async () => {
-        if (!ruleToDelete) return;
+    const handleConfirmDelete = async () => {
+        if (pendingDeleteRules.length === 0) return;
 
+        // Optimistic: hide rows immediately
+        const ids = pendingDeleteRules.map((r) => r.id);
+        const newPendingIds = new Set(pendingDeleteIds);
+        ids.forEach((id) => newPendingIds.add(id));
+        setPendingDeleteIds(newPendingIds);
+
+        const count = ids.length;
+        setPendingDeleteRules([]); // Close dialog
         setIsDeleting(true);
+
         try {
-            await poolsService.deleteRule(ruleToDelete.id);
-            toast.success("Pool rule deleted");
-            setRuleToDelete(null);
-            await loadRules();
+            if (count === 1) {
+                await poolsService.deleteRule(ids[0]);
+                toast.success("Pool rule deleted");
+            } else {
+                const results = await Promise.allSettled(ids.map((id) => poolsService.deleteRule(id)));
+                const successCount = results.filter((result) => result.status === "fulfilled").length;
+                const failCount = results.length - successCount;
+
+                if (successCount > 0) {
+                    toast.success(`${successCount} pool rule${successCount > 1 ? "s" : ""} deleted`);
+                }
+                if (failCount > 0) {
+                    toast.error(`${failCount} pool rule${failCount > 1 ? "s" : ""} failed to delete`);
+                }
+            }
         } catch (error) {
-            console.error("Failed to delete pool rule", error);
-            toast.error("Failed to delete pool rule");
+            console.error("Failed to delete pool rule(s)", error);
+            toast.error("Failed to delete pool rule(s)");
         } finally {
             setIsDeleting(false);
-        }
-    };
-
-    const handleBulkDelete = async (selected: PoolRule[]) => {
-        if (selected.length === 0) return;
-
-        setIsDeleting(true);
-        try {
-            const results = await Promise.allSettled(selected.map((rule) => poolsService.deleteRule(rule.id)));
-            const successCount = results.filter((result) => result.status === "fulfilled").length;
-            const failCount = results.length - successCount;
-
-            if (successCount > 0) {
-                toast.success(`${successCount} pool rule${successCount > 1 ? "s" : ""} deleted`);
-            }
-            if (failCount > 0) {
-                toast.error(`${failCount} pool rule${failCount > 1 ? "s" : ""} failed to delete`);
-            }
-
+            setPendingDeleteIds((prev) => {
+                const next = new Set(prev);
+                ids.forEach((id) => next.delete(id));
+                return next;
+            });
             await loadRules();
-        } catch (error) {
-            console.error("Failed to bulk delete pool rules", error);
-            toast.error("Failed to bulk delete pool rules");
-        } finally {
-            setIsDeleting(false);
         }
     };
 
@@ -741,12 +643,17 @@ export function PoolsPage() {
         }
 
         if (importPreview.summary.unresolvedCount > 0) {
-            toast.error("Resolve duplicate/invalid/ambiguous rows before importing");
+            toast.error("Resolve invalid rows before importing");
+            return;
+        }
+
+        if (importPreview.summary.newCount === 0) {
+            toast.warning("No new or updated rows to import");
             return;
         }
 
         const operations = importPreview.rows
-            .filter((row) => row.status === "new" || row.status === "modified")
+            .filter((row) => row.status === "new")
             .map((row) => {
                 const payload: PoolRuleInput = {
                     branch: row.branch,
@@ -759,7 +666,7 @@ export function PoolsPage() {
                     comments: row.comments,
                 };
 
-                if (row.status === "new") {
+                if (!row.existingRuleId) {
                     return {
                         kind: "create" as const,
                         run: () => poolsService.createRule(payload),
@@ -822,6 +729,10 @@ export function PoolsPage() {
         }
     };
 
+    const tableData = useMemo(() => {
+        return rules.filter((r) => !pendingDeleteIds.has(r.id));
+    }, [rules, pendingDeleteIds]);
+
     return (
         <div className="flex flex-col h-full min-h-0">
             <div className="flex py-8 my-4 gap-6 justify-between items-center">
@@ -841,14 +752,14 @@ export function PoolsPage() {
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden pr-2">
                 <ScheduleDataTable
                     columns={columns}
-                    data={rules}
+                    data={tableData}
                     initialPageSize={100}
                     statusOptions={POOL_STATUS_OPTIONS}
                     hideUpload
                     hideDefaultActions
                     hideOverlaps
                     hideBulkCopy
-                    onBulkDelete={(rows) => handleBulkDelete(rows as PoolRule[])}
+                    onBulkDelete={(rows) => setPendingDeleteRules(rows as PoolRule[])}
                     onRefresh={loadRules}
                     disableRefresh={isLoading}
                     getRowKey={(row) => (row as PoolRule).id}
@@ -859,6 +770,9 @@ export function PoolsPage() {
                             Import Data
                         </DropdownMenuItem>
                     }
+                    initialColumnVisibility={{
+                        branch: false,
+                    }}
                 />
             </div>
 
@@ -868,6 +782,34 @@ export function PoolsPage() {
                 onUploadComplete={() => { }}
                 processFiles={handleImportFiles}
             />
+
+            <AlertDialog open={pendingDeleteRules.length > 0} onOpenChange={(open) => !open && setPendingDeleteRules([])}>
+                <AlertDialogContent className="sm:max-w-100!">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {pendingDeleteRules.length === 1 ? "Delete Pool Rule?" : `Delete ${pendingDeleteRules.length} Pool Rules?`}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {pendingDeleteRules.length === 1 ? (
+                                <>This will permanently delete the pool rule for <span className="font-semibold text-foreground">{pendingDeleteRules[0]?.program_query}</span>. This action cannot be undone.</>
+                            ) : (
+                                <>Are you sure you want to delete {pendingDeleteRules.length} pool rules? This action cannot be undone.</>
+                            )}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground shadow-xs hover:bg-destructive/90"
+                            onClick={handleConfirmDelete}
+                            disabled={isDeleting}
+                        >
+                            {isDeleting ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                 <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col gap-6">
@@ -1180,7 +1122,7 @@ export function PoolsPage() {
                                             </span>
                                         </Label>
                                         <div className="h-8 py-2">
-                                        <Switch id={field.name} checked={field.value} onCheckedChange={field.onChange} />
+                                            <Switch id={field.name} checked={field.value} onCheckedChange={field.onChange} />
                                         </div>
                                     </div>
                                 )}
@@ -1214,22 +1156,7 @@ export function PoolsPage() {
                 }}
             />
 
-            <AlertDialog open={!!ruleToDelete} onOpenChange={(open) => !open && setRuleToDelete(null)}>
-                <AlertDialogContent className="sm:max-w-100!">
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Delete rule</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This action cannot be undone. The pool rule will be removed permanently.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
-                            {isDeleting ? "Deleting..." : "Delete"}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+
         </div>
     );
 }

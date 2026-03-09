@@ -24,7 +24,6 @@ function makeRule(overrides: Partial<PoolRule>): PoolRule {
         owner_id: "owner-1",
         branch: "HUB",
         program_query: "PIA ENGLISH 4",
-        days_of_week: [],
         allowed_instructors_by_day: {},
         allowed_instructors: ["Nora Velez", "Iker Salas"],
         blocked_instructors: [],
