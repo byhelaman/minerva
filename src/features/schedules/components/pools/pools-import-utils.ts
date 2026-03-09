@@ -19,7 +19,7 @@ export interface PoolImportRow {
     strict?: unknown;
     is_active?: unknown;
     status?: unknown;
-    notes?: unknown;
+    comments?: unknown;
 }
 
 export type PoolImportStatus = "new" | "modified" | "identical" | "duplicate" | "invalid" | "ambiguous";
@@ -173,27 +173,18 @@ export function buildPoolImportPreview(drafts: PoolImportDraft[], rules: PoolRul
                 ...payload,
                 id: draft.id,
                 status: "invalid",
-                reason: "Positive pool supports up to 5 instructors (3 fixed + 2 backups)",
+                reason: "Positive pool supports up to 5 instructors",
                 existingRuleId: null,
             };
         }
 
-        if (payload.hard_lock && payload.allowed_instructors.length === 0) {
-            return {
-                ...payload,
-                id: draft.id,
-                status: "invalid",
-                reason: "Hard lock requires at least one allowed instructor",
-                existingRuleId: null,
-            };
-        }
-
+        // Removed: Hard lock no longer requires positive instructors.
         if (intersections.length > 0) {
             return {
                 ...payload,
                 id: draft.id,
                 status: "invalid",
-                reason: "An instructor cannot be in both positive and negative pool (general/day)",
+                reason: "An instructor cannot be in both positive and negative pool",
                 existingRuleId: null,
             };
         }
@@ -279,7 +270,7 @@ export async function parsePoolImportFiles(files: File[]): Promise<{ payloads: P
                     blocked_instructors: parseInstructorCell(row.blocked_instructors ?? row.negative_pool),
                     hard_lock: parseBooleanCell(row.hard_lock ?? row.strict, false),
                     is_active: parseBooleanCell(row.is_active ?? row.status, true),
-                    notes: String(row.notes ?? "").trim() || null,
+                    comments: String(row.comments ?? "").trim() || null,
                 } as PoolRuleInput;
             })
             .filter((item): item is PoolRuleInput => item !== null);

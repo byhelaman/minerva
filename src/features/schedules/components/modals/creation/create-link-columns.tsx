@@ -10,7 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { CheckCircle2, HelpCircle, RefreshCw, MoreHorizontal, Hand, Plus, Undo2, CalendarDays, Clock2, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { formatTimestampForDisplay } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
@@ -366,7 +366,7 @@ export const getCreateLinkColumns = (
                                 variant="outline"
                                 size="sm"
                                 className={cn(
-                                    "h-9 w-full justify-between text-left font-normal",
+                                    "w-full justify-between text-left font-normal",
                                     !hasDate && !hasTime && "text-muted-foreground"
                                 )}
                             >
@@ -380,8 +380,7 @@ export const getCreateLinkColumns = (
                                 <ChevronDown className="opacity-50" />
                             </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start" onWheel={(e) => e.stopPropagation()}>
-                            <div className="border-b p-3">
+                        <PopoverContent className="w-54 space-y-5" align="end" onWheel={(e) => e.stopPropagation()}>
                                 <Field className="gap-2">
                                     <FieldLabel htmlFor={`time-${result.id}`}>
                                         <div className="w-full flex items-center justify-between">
@@ -415,39 +414,50 @@ export const getCreateLinkColumns = (
                                             45min
                                         </InputGroupAddon>
                                     </InputGroup>
-                                    {(!hasDate || !hasTime) && (
-                                        <FieldDescription className="text-xs">
-                                            Defaults: {!hasDate && 'Today'}{!hasDate && !hasTime && ', '}{!hasTime && '09:00'}
-                                        </FieldDescription>
-                                    )}
                                 </Field>
-                            </div>
-                            <Calendar
-                                mode="single"
-                                selected={selectedDate}
-                                onSelect={(date) => {
-                                    if (date) {
-                                        const y = date.getFullYear();
-                                        const m = String(date.getMonth() + 1).padStart(2, '0');
-                                        const d = String(date.getDate()).padStart(2, '0');
-                                        onDateChange?.(result.id, `${y}-${m}-${d}`);
-                                    }
-                                }}
-                                disabled={{ before: new Date() }}
+                                <Field>
+                                    <FieldLabel>Date</FieldLabel>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                className={cn(
+                                                    "w-full justify-start text-left font-normal bg-background",
+                                                    !hasDate && "text-muted-foreground"
+                                                )}
+                                            >
+                                                <CalendarDays className="opacity-50" />
+                                                {hasDate ? format(selectedDate, "dd/MM/yyyy") : "Pick a date"}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="center" side="right" onWheel={(e) => e.stopPropagation()}>
+                                            <Calendar
+                                                mode="single"
+                                                selected={selectedDate}
+                                                onSelect={(date) => {
+                                                    if (date) {
+                                                        const y = date.getFullYear();
+                                                        const m = String(date.getMonth() + 1).padStart(2, '0');
+                                                        const d = String(date.getDate()).padStart(2, '0');
+                                                        onDateChange?.(result.id, `${y}-${m}-${d}`);
+                                                    }
+                                                }}
+                                                disabled={{ before: new Date() }}
                                 className="[--cell-size:--spacing(7.5)]"
-                            />
-                            <div className="border-t p-3 bg-muted/20">
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
+                                </Field>
                                 <Field className="gap-2">
                                     <FieldLabel>Host</FieldLabel>
                                     <InstructorSelector
                                         value={result.selected_host || ''}
                                         onChange={(host, email, id) => onHostChange?.(result.id, host, email, id)}
                                         instructors={hostsList || []}
-                                        className="h-9"
+                                        className="w-full h-9"
                                         popoverClassName="max-w-50"
                                     />
                                 </Field>
-                            </div>
                         </PopoverContent>
                     </Popover>
                 );

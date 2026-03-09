@@ -15,6 +15,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
     Select,
     SelectContent,
@@ -81,8 +82,7 @@ const POOL_STATUS_OPTIONS = [
     { label: "Active", value: "active", icon: CircleCheck },
     { label: "Inactive", value: "inactive", icon: CircleSlash },
 ];
-const MAX_VISIBLE_POOL_TAGS = 4;
-const MAX_VISIBLE_DAY_BADGES = 3;
+const MAX_VISIBLE_POOL_TAGS = 3;
 
 const poolRuleFormSchema = z.object({
     branch: z.string().trim().min(1, "Branch is required"),
@@ -92,24 +92,15 @@ const poolRuleFormSchema = z.object({
     blocked_instructors: z.array(z.string()),
     hard_lock: z.boolean(),
     is_active: z.boolean(),
-    notes: z.string().refine((value) => countWords(value) <= NOTES_MAX_WORDS, {
-        error: `Notes must be ${NOTES_MAX_WORDS} words or less`,
+    comments: z.string().refine((value) => countWords(value) <= NOTES_MAX_WORDS, {
     }),
 }).superRefine((values, ctx) => {
     const payload = toPayload(values);
 
-    if (payload.hard_lock && !hasAtLeastOnePositiveInstructor(payload)) {
-        ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["allowed_instructors"],
-            message: "Hard lock requires at least one allowed instructor",
-        });
-    }
-
     const intersections = findPoolIntersections(payload);
     if (intersections.length > 0) {
         ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: "custom",
             path: ["blocked_instructors"],
             message: "An instructor cannot be in both positive and negative pool",
         });
@@ -118,7 +109,7 @@ const poolRuleFormSchema = z.object({
     const positivePoolCount = countPositivePoolInstructors(payload);
     if (positivePoolCount > MAX_POSITIVE_POOL_INSTRUCTORS) {
         ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: "custom",
             path: ["allowed_instructors"],
             message: `Positive pool supports up to ${MAX_POSITIVE_POOL_INSTRUCTORS} instructors (3 fixed + 2 backups).`,
         });
@@ -149,7 +140,7 @@ const emptyForm: RuleFormState = {
     blocked_instructors: [],
     hard_lock: false,
     is_active: true,
-    notes: "",
+    comments: "",
 };
 
 function normalizeProgramKey(value: string): string {
@@ -165,7 +156,7 @@ function toPayload(form: RuleFormState): PoolRuleInput {
         blocked_instructors: sanitizeInstructorList(form.blocked_instructors),
         hard_lock: form.hard_lock,
         is_active: form.is_active,
-        notes: form.notes.trim() || null,
+        comments: form.comments.trim() || null,
     };
 }
 
@@ -184,17 +175,6 @@ function findPoolIntersections(payload: PoolRuleInput): string[] {
     return allPositive.filter((value) =>
         payload.blocked_instructors.some((blocked) => blocked.toLowerCase() === value.toLowerCase())
     );
-}
-
-function hasAtLeastOnePositiveInstructor(payload: PoolRuleInput): boolean {
-    if (payload.allowed_instructors.length > 0) {
-        return true;
-    }
-
-    const dayAllowed = Object.values(normalizeDayInstructorPools(payload.allowed_instructors_by_day))
-        .flatMap((list) => list ?? []);
-
-    return sanitizeInstructorList(dayAllowed).length > 0;
 }
 
 function mapPoolRuleSaveErrorMessage(error: unknown): string | null {
@@ -228,7 +208,7 @@ function toForm(rule: PoolRule): RuleFormState {
         blocked_instructors: [...rule.blocked_instructors],
         hard_lock: rule.hard_lock,
         is_active: rule.is_active,
-        notes: rule.notes ?? "",
+        comments: rule.comments ?? "",
     };
 }
 
@@ -317,9 +297,9 @@ export function PoolsPage() {
     const columns = useMemo<ColumnDef<PoolRule>[]>(() => [
         {
             id: "select",
-            size: 36,
+            size: 24,
             header: ({ table }) => (
-                <div className="flex justify-center items-center mb-1 w-9">
+                <div className="flex justify-center items-center mb-1 w-6">
                     <Checkbox
                         checked={
                             table.getIsAllPageRowsSelected() ||
@@ -381,9 +361,9 @@ export function PoolsPage() {
                     <div className="truncate max-w-90" title={row.original.program_query}>
                         {row.original.program_query}
                     </div>
-                    {row.original.notes && (
-                        <div className="text-xs text-muted-foreground truncate max-w-90" title={row.original.notes}>
-                            {row.original.notes}
+                    {row.original.comments && (
+                        <div className="text-xs text-muted-foreground truncate max-w-90" title={row.original.comments}>
+                            {row.original.comments}
                         </div>
                     )}
                 </div>
@@ -406,59 +386,66 @@ export function PoolsPage() {
                         return {
                             label: day.label,
                             count: list.length,
+                            instructors: list,
                         };
                     })
-                    .filter((entry): entry is { label: string; count: number } => entry !== null);
+                    .filter((entry): entry is { label: string; count: number; instructors: string[] } => entry !== null);
 
-                const visibleAllowed = row.original.allowed_instructors.slice(0, MAX_VISIBLE_POOL_TAGS);
-                const hiddenAllowedCount = row.original.allowed_instructors.length - visibleAllowed.length;
-                const visibleDayEntries = dayEntries.slice(0, MAX_VISIBLE_DAY_BADGES);
-                const hiddenDayEntriesCount = dayEntries.length - visibleDayEntries.length;
+                // Flat list of unique instructors across general and day pools
+                const allUniqueInstructors = Array.from(new Set([
+                    ...row.original.allowed_instructors,
+                    ...dayEntries.flatMap(e => e.instructors)
+                ]));
+                
+                const visibleItems = allUniqueInstructors.slice(0, MAX_VISIBLE_POOL_TAGS);
+                const hiddenCount = allUniqueInstructors.length - visibleItems.length;
 
                 return (
-                    <div className="space-y-2 max-w-90">
-                        <div className="text-[11px] text-muted-foreground">
-                            General ({row.original.allowed_instructors.length})
-                        </div>
-                        <div
-                            className="flex flex-wrap gap-1"
-                            title={row.original.allowed_instructors.join(", ") || "Any"}
-                        >
-                            {row.original.allowed_instructors.length === 0 ? (
-                                <span className="text-xs text-muted-foreground">Any</span>
-                            ) : (
-                                visibleAllowed.map((name) => (
-                                    <Badge key={`${row.original.id}-allow-${name}`} variant="secondary">{name}</Badge>
-                                ))
-                            )}
-                            {hiddenAllowedCount > 0 && (
-                                <span
-                                    className="font-medium text-xs select-none cursor-default px-1 my-auto"
-                                >
-                                    +{hiddenAllowedCount} more
-                                </span>
-                            )}
-                        </div>
-                        {dayEntries.length > 0 && (
-                            <div className="space-y-1" title={formatDayInstructorPools(row.original.allowed_instructors_by_day)}>
-                                <div className="text-[11px] text-muted-foreground">By day ({dayEntries.length})</div>
-                                <div className="flex flex-wrap gap-1">
-                                    {visibleDayEntries.map((entry) => (
-                                        <Badge
-                                            key={`${row.original.id}-day-${entry.label}`}
-                                            variant="outline"
-                                            className="text-[11px]"
-                                        >
-                                            {entry.label} · {entry.count}
-                                        </Badge>
-                                    ))}
-                                    {hiddenDayEntriesCount > 0 && (
-                                        <span className="font-medium text-xs select-none cursor-default px-1 my-auto">
-                                            +{hiddenDayEntriesCount} day rule{hiddenDayEntriesCount > 1 ? "s" : ""}
-                                        </span>
+                    <div className="flex flex-wrap gap-1 max-w-90">
+                        {allUniqueInstructors.length === 0 ? (
+                            <span className="text-xs text-muted-foreground">Any</span>
+                        ) : (
+                            visibleItems.map((name, i) => (
+                                <Badge key={`${row.original.id}-allow-${i}`} variant="secondary">{name}</Badge>
+                            ))
+                        )}
+                        {hiddenCount > 0 && (
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80">
+                                        +{hiddenCount} more
+                                    </Badge>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-72 p-4 space-y-4" align="start" onWheel={(e) => e.stopPropagation()}>
+                                    {row.original.allowed_instructors.length > 0 && (
+                                        <div className="space-y-2">
+                                            <h4 className="font-medium text-xs text-muted-foreground">General Pool</h4>
+                                            <div className="flex flex-wrap gap-1">
+                                                {row.original.allowed_instructors.map((name) => (
+                                                    <Badge key={`pop-gen-${name}`} variant="secondary">{name}</Badge>
+                                                ))}
+                                            </div>
+                                        </div>
                                     )}
-                                </div>
-                            </div>
+                                    {dayEntries.length > 0 && (
+                                        <div className="space-y-2">
+                                            <h4 className="font-medium text-xs text-muted-foreground">By Day ({dayEntries.length})</h4>
+                                            <div className="space-y-2">
+                                                {dayEntries.map((entry) => (
+                                                    <div key={`pop-day-${entry.label}`} className="space-y-1">
+                                                        <span className="text-xs font-medium text-muted-foreground">{entry.label}</span>
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {entry.instructors.map((inst) => (
+                                                                <Badge key={`pop-day-${entry.label}-${inst}`} variant="outline" className="text-[11px]">{inst}</Badge>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </PopoverContent>
+                            </Popover>
                         )}
                     </div>
                 );
@@ -471,23 +458,38 @@ export function PoolsPage() {
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Negative Pool" />
             ),
-            cell: ({ row }) => (
-                <div
-                    className="flex flex-wrap gap-1 max-w-90"
-                    title={row.original.blocked_instructors.join(", ") || "None"}
-                >
-                    {row.original.blocked_instructors.length === 0 ? (
-                        <span className="text-xs    text-muted-foreground">None</span>
-                    ) : (
-                        row.original.blocked_instructors.slice(0, MAX_VISIBLE_POOL_TAGS).map((name) => (
-                            <Badge key={`${row.original.id}-block-${name}`} variant="outline">{name}</Badge>
-                        ))
-                    )}
-                    {row.original.blocked_instructors.length > MAX_VISIBLE_POOL_TAGS && (
-                        <Badge variant="outline">+{row.original.blocked_instructors.length - MAX_VISIBLE_POOL_TAGS} more</Badge>
-                    )}
-                </div>
-            ),
+            cell: ({ row }) => {
+                const hiddenCount = row.original.blocked_instructors.length - MAX_VISIBLE_POOL_TAGS;
+                
+                return (
+                    <div className="flex flex-wrap gap-1 max-w-90">
+                        {row.original.blocked_instructors.length === 0 ? (
+                            <span className="text-xs text-muted-foreground">None</span>
+                        ) : (
+                            row.original.blocked_instructors.slice(0, MAX_VISIBLE_POOL_TAGS).map((name) => (
+                                <Badge key={`${row.original.id}-block-${name}`} variant="outline">{name}</Badge>
+                            ))
+                        )}
+                        {hiddenCount > 0 && (
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Badge variant="outline" className="cursor-pointer hover:bg-accent">
+                                        +{hiddenCount} more
+                                    </Badge>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-72 p-4 space-y-2" align="start" onWheel={(e) => e.stopPropagation()}>
+                                    <h4 className="font-medium text-xs text-muted-foreground">Negative Pool</h4>
+                                    <div className="flex flex-wrap gap-1">
+                                        {row.original.blocked_instructors.map((name) => (
+                                            <Badge key={`pop-block-${name}`} variant="outline">{name}</Badge>
+                                        ))}
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
+                        )}
+                    </div>
+                );
+            },
         },
         {
             id: "strict",
@@ -658,15 +660,15 @@ export function PoolsPage() {
 
     const handleExportRules = async (data: PoolRule[]) => {
         try {
-            const rows = data.map((rule) => ({
+            const rows: Record<string, string>[] = data.map((rule) => ({
                 branch: rule.branch,
                 program: rule.program_query,
                 positive_pool: rule.allowed_instructors.join(", "),
                 positive_pool_by_day: formatDayInstructorPools(rule.allowed_instructors_by_day),
                 negative_pool: rule.blocked_instructors.join(", "),
-                hard_lock: rule.hard_lock,
-                is_active: rule.is_active,
-                notes: rule.notes ?? "",
+                hard_lock: rule.hard_lock ? "TRUE" : "FALSE",
+                is_active: rule.is_active ? "TRUE" : "FALSE",
+                comments: rule.comments ?? "",
             }));
 
             const worksheet = utils.json_to_sheet(rows, {
@@ -678,7 +680,7 @@ export function PoolsPage() {
                     "negative_pool",
                     "hard_lock",
                     "is_active",
-                    "notes",
+                    "comments",
                 ],
             });
 
@@ -754,7 +756,7 @@ export function PoolsPage() {
                     blocked_instructors: row.blocked_instructors,
                     hard_lock: row.hard_lock,
                     is_active: row.is_active,
-                    notes: row.notes,
+                    comments: row.comments,
                 };
 
                 if (row.status === "new") {
@@ -1114,15 +1116,15 @@ export function PoolsPage() {
 
                             <Controller
                                 control={form.control}
-                                name="notes"
+                                name="comments"
                                 render={({ field, fieldState }) => (
                                     <Field data-invalid={fieldState.invalid}>
-                                        <FieldLabel htmlFor={field.name}>Notes</FieldLabel>
+                                        <FieldLabel htmlFor={field.name}>Comments</FieldLabel>
                                         <InputGroup>
                                             <InputGroupTextarea
                                                 {...field}
                                                 id={field.name}
-                                                placeholder="Optional notes"
+                                                placeholder="Add comments..."
                                                 rows={3}
                                                 className="min-h-20 resize-none max-h-40"
                                                 aria-invalid={fieldState.invalid}
@@ -1141,7 +1143,7 @@ export function PoolsPage() {
                                 )}
                             />
 
-                            <p className="text-sm font-semibold">Rule options</p>
+                            <p className="text-sm font-medium">Rule options</p>
 
                             <Controller
                                 control={form.control}
@@ -1154,11 +1156,14 @@ export function PoolsPage() {
                                                 If enabled, only positive-pool instructors are valid.
                                             </span>
                                         </Label>
-                                        <Switch
-                                            id={field.name}
-                                            checked={field.value}
-                                            onCheckedChange={field.onChange}
-                                        />
+                                        <div className="h-8 py-2">
+                                            <Switch
+                                                id={field.name}
+                                                checked={field.value}
+                                                onCheckedChange={field.onChange}
+                                                className="my-auto"
+                                            />
+                                        </div>
                                     </div>
                                 )}
                             />
@@ -1174,7 +1179,9 @@ export function PoolsPage() {
                                                 If disabled, this rule is saved but not applied.
                                             </span>
                                         </Label>
+                                        <div className="h-8 py-2">
                                         <Switch id={field.name} checked={field.value} onCheckedChange={field.onChange} />
+                                        </div>
                                     </div>
                                 )}
                             />

@@ -60,7 +60,7 @@ export interface PoolRule {
     blocked_instructors: string[];
     hard_lock: boolean;
     is_active: boolean;
-    notes: string | null;
+    comments: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -74,5 +74,5 @@ export interface PoolRuleInput {
     blocked_instructors: string[];
     hard_lock: boolean;
     is_active: boolean;
-    notes?: string | null;
+    comments?: string | null;
 }

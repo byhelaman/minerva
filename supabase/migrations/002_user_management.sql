@@ -357,7 +357,7 @@ BEGIN
 END;
 $$;
 
--- FIX: Proteger TODOS los roles del sistema (incluye moderator y guest)
+-- FIX: Proteger roles vitales del sistema (admin, viewer, guest)
 CREATE OR REPLACE FUNCTION public.delete_role(role_name TEXT)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -375,8 +375,8 @@ BEGIN
         RAISE EXCEPTION 'Permission denied: requires super_admin privileges';
     END IF;
 
-    -- Proteger todos los roles del sistema
-    IF role_name IN ('super_admin', 'admin', 'moderator', 'operator', 'viewer', 'guest') THEN
+    -- Proteger los roles vitales del sistema
+    IF role_name IN ('super_admin', 'admin', 'viewer', 'guest') THEN
         RAISE EXCEPTION 'Cannot delete system role: %', role_name;
     END IF;
 
@@ -421,7 +421,7 @@ AS $$
     ORDER BY rp.permission;
 $$;
 
--- FIX: Proteger moderator y guest de modificación de permisos
+-- FIX: Proteger roles vitales del sistema de modificación de permisos
 CREATE OR REPLACE FUNCTION public.assign_role_permission(
     target_role TEXT,
     permission_name TEXT
@@ -448,8 +448,8 @@ BEGIN
         RAISE EXCEPTION 'Role not found: %', target_role;
     END IF;
 
-    -- Proteger todos los roles del sistema
-    IF target_role IN ('super_admin', 'admin', 'moderator', 'operator', 'viewer', 'guest') THEN
+    -- Proteger roles vitales del sistema
+    IF target_role IN ('super_admin', 'admin', 'viewer', 'guest') THEN
         RAISE EXCEPTION 'Cannot modify permissions of system role: %', target_role;
     END IF;
 
@@ -469,7 +469,7 @@ BEGIN
 END;
 $$;
 
--- FIX: Proteger moderator y guest de modificación de permisos
+-- FIX: Proteger roles vitales de modificación de permisos
 CREATE OR REPLACE FUNCTION public.remove_role_permission(
     target_role TEXT,
     permission_name TEXT
@@ -496,8 +496,8 @@ BEGIN
         RAISE EXCEPTION 'Role not found: %', target_role;
     END IF;
 
-    -- Proteger todos los roles del sistema
-    IF target_role IN ('super_admin', 'admin', 'moderator', 'operator', 'viewer', 'guest') THEN
+    -- Proteger roles vitales del sistema
+    IF target_role IN ('super_admin', 'admin', 'viewer', 'guest') THEN
         RAISE EXCEPTION 'Cannot modify permissions of system role: %', target_role;
     END IF;
 

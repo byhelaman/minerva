@@ -18,7 +18,7 @@ export const poolsService = {
             p_blocked_instructors: input.blocked_instructors,
             p_hard_lock: input.hard_lock,
             p_is_active: input.is_active,
-            p_notes: input.notes ?? null,
+            p_comments: input.comments ?? null,
         });
 
         if (error) throw error;
@@ -39,7 +39,7 @@ export const poolsService = {
             p_blocked_instructors: input.blocked_instructors,
             p_hard_lock: input.hard_lock,
             p_is_active: input.is_active,
-            p_notes: input.notes ?? null,
+            p_comments: input.comments ?? null,
         });
 
         if (error) throw error;
