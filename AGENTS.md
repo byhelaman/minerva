@@ -2,7 +2,7 @@
 
 Tauri 2 desktop app (Rust + React 19 + Vite 7) for educational schedule management with Zoom matching and OneDrive integration. Backend: Supabase (PostgreSQL + Deno Edge Functions). Supports en/es/fr via i18next.
 
-**Current version:** 0.2.8
+**Current version:** 0.3.1
 
 ## Build & Test Commands
 

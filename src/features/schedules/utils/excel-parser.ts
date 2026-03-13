@@ -128,12 +128,24 @@ function isTravelClass(startTimeRaw: unknown, endTimeRaw: unknown, extraInfoVal:
     return false;
 }
 
-/** Extrae el texto que NO está entre paréntesis (el horario real de clase) */
+/**
+ * Extrae el horario efectivo de un campo de tiempo que puede contener paréntesis.
+ *
+ * Formato en el Excel:
+ *   "08:30 (08:00 - 09:30)"  →  el texto entre () es el rango COMPLETO (incluye travel)
+ *   "08:30"                   →  sin paréntesis, se usa directamente
+ *
+ * Para overlap detection usamos el rango completo cuando está disponible,
+ * ya que refleja el tiempo real que el instructor está ocupado.
+ */
 function extractBaseTime(text: string): string {
     if (!text) return "";
     const content = safeString(text);
-    // Eliminar todo lo que esté entre paréntesis y limpiar espacios extra
-    return content.replace(/\(.*?\)/g, "").trim().replace(/\s+/g, " ");
+    // Si hay paréntesis, usar el contenido dentro de ellos (horario completo con travel)
+    const parenMatch = content.match(/\(([^)]+)\)/);
+    if (parenMatch) return parenMatch[1].trim();
+    // Sin paréntesis: usar el texto tal cual
+    return content.trim();
 }
 
 function extractBranchKeyword(text: string): string | null {
