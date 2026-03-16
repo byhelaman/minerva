@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { PoolRule, Schedule } from "../../src/features/schedules/types";
-import { evaluatePoolIssues, programMatchesPoolRule } from "../../src/features/schedules/utils/pool-validation";
+import { evaluatePoolIssues, evaluatePoolRotationIssues, programMatchesPoolRule } from "../../src/features/schedules/utils/pool-validation";
 
 function makeSchedule(overrides: Partial<Schedule>): Schedule {
     return {
         date: "2026-03-03",
         shift: "morning",
-        branch: "online",
+        branch: "HUB",
         start_time: "08:00",
         end_time: "10:00",
         code: "C-001",
@@ -29,6 +29,7 @@ function makeRule(overrides: Partial<PoolRule>): PoolRule {
         blocked_instructors: [],
         hard_lock: false,
         is_active: true,
+        has_rotation_limit: false,
         comments: null,
         created_at: "2026-03-03T00:00:00.000Z",
         updated_at: "2026-03-03T00:00:00.000Z",
@@ -190,5 +191,103 @@ describe("evaluatePoolIssues", () => {
         expect(evaluatePoolIssues([mondayJuansito], rules).violationCount).toBe(0);
         expect(evaluatePoolIssues([mondayPepito], rules).violationCount).toBe(1);
         expect(evaluatePoolIssues([wednesdayPepito], rules).violationCount).toBe(0);
+    });
+});
+
+describe("evaluatePoolRotationIssues", () => {
+    it("does not flag if consecutive classes are within the rotation limit", () => {
+        const historical = [
+            makeSchedule({ date: "2026-03-01", instructor: "Nora Velez" }),
+            makeSchedule({ date: "2026-03-02", instructor: "Nora Velez" }),
+        ];
+        const current = [
+            makeSchedule({ date: "2026-03-03", instructor: "Nora Velez" }),
+        ];
+        const rules = [makeRule({ has_rotation_limit: true })];
+
+        const result = evaluatePoolRotationIssues(current, rules, { historicalSchedules: historical });
+        expect(result.violationCount).toBe(0);
+    });
+
+    it("flags when consecutive classes exceed the rotation limit on the current data", () => {
+        const historical = [
+            makeSchedule({ date: "2026-03-01", instructor: "Nora Velez" }),
+            makeSchedule({ date: "2026-03-02", instructor: "Nora Velez" }),
+            makeSchedule({ date: "2026-03-03", instructor: "Nora Velez" }),
+        ];
+        const current = [
+            makeSchedule({ date: "2026-03-04", instructor: "Nora Velez" }), // 4th consecutive
+        ];
+        const rules = [makeRule({ has_rotation_limit: true })];
+
+        const result = evaluatePoolRotationIssues(current, rules, { historicalSchedules: historical });
+        expect(result.violationCount).toBe(1);
+        const reason = [...result.reasonsByRowKey.values()][0];
+        expect(reason).toContain("excedió el límite de 3 clases consecutivas");
+    });
+
+    it("ignores limit violations that only occurred in the historical data, but flags new ones", () => {
+        const historical = [
+            makeSchedule({ date: "2026-03-01", instructor: "Nora Velez" }),
+            makeSchedule({ date: "2026-03-02", instructor: "Nora Velez" }),
+            makeSchedule({ date: "2026-03-03", instructor: "Nora Velez" }),
+            // Historical already exceeded limit, but we don't flag historicals
+            makeSchedule({ date: "2026-03-04", instructor: "Iker Salas" }), // Reset!
+            makeSchedule({ date: "2026-03-05", instructor: "Iker Salas" }),
+        ];
+        const current = [
+            makeSchedule({ date: "2026-03-06", instructor: "Iker Salas" }), 
+        ];
+        const rules = [makeRule({ has_rotation_limit: true })];
+
+        const result = evaluatePoolRotationIssues(current, rules, { historicalSchedules: historical });
+        expect(result.violationCount).toBe(0); // Iker played 3 times -> fine.
+    });
+
+    it("resets consecutive count when a different instructor teaches", () => {
+        const historical = [
+            makeSchedule({ date: "2026-03-01", instructor: "Nora Velez" }),
+            makeSchedule({ date: "2026-03-02", instructor: "Nora Velez" }),
+            makeSchedule({ date: "2026-03-03", instructor: "Iker Salas" }), // Diff instructor
+            makeSchedule({ date: "2026-03-04", instructor: "Nora Velez" }), // Reset counting for Nora
+            makeSchedule({ date: "2026-03-05", instructor: "Nora Velez" }),
+        ];
+        const current = [
+            makeSchedule({ date: "2026-03-06", instructor: "Nora Velez" }), 
+        ];
+        const rules = [makeRule({ has_rotation_limit: true })];
+
+        const result = evaluatePoolRotationIssues(current, rules, { historicalSchedules: historical });
+        expect(result.violationCount).toBe(0);
+    });
+
+    it("sorts by start time if dates are the same", () => {
+        const historical: Schedule[] = [];
+        const current = [
+            makeSchedule({ date: "2026-03-01", start_time: "10:00", instructor: "Nora Velez" }), 
+            makeSchedule({ date: "2026-03-01", start_time: "08:00", instructor: "Nora Velez" }), 
+            makeSchedule({ date: "2026-03-02", start_time: "08:00", instructor: "Nora Velez" }), 
+            makeSchedule({ date: "2026-03-02", start_time: "10:00", instructor: "Nora Velez" }), // the 4th consecutive class
+        ];
+        const rules = [makeRule({ has_rotation_limit: true })];
+
+        const result = evaluatePoolRotationIssues(current, rules, { historicalSchedules: historical });
+        expect(result.violationCount).toBe(1);
+    });
+
+    it("does not flag schedules from a different branch than the rule", () => {
+        const historical = [
+            makeSchedule({ date: "2026-03-01", branch: "CORPORATE", instructor: "Nora Velez" }),
+            makeSchedule({ date: "2026-03-02", branch: "CORPORATE", instructor: "Nora Velez" }),
+            makeSchedule({ date: "2026-03-03", branch: "CORPORATE", instructor: "Nora Velez" }),
+        ];
+        const current = [
+            makeSchedule({ date: "2026-03-04", branch: "CORPORATE", instructor: "Nora Velez" }), // 4th consecutive but different branch
+        ];
+        // Rule is for HUB, not CORPORATE
+        const rules = [makeRule({ has_rotation_limit: true, branch: "HUB" })];
+
+        const result = evaluatePoolRotationIssues(current, rules, { historicalSchedules: historical });
+        expect(result.violationCount).toBe(0);
     });
 });

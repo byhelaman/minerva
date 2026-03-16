@@ -26,10 +26,12 @@ export interface PoolImportRow {
     strict?: unknown;
     is_active?: unknown;
     status?: unknown;
+    has_rotation_limit?: unknown;
+    rotation_limit?: unknown;
     comments?: unknown;
 }
 
-export type PoolImportStatus = "new" | "identical" | "invalid";
+export type PoolImportStatus = "new" | "update" | "identical" | "invalid";
 
 export interface PoolImportDraft {
     id: string;
@@ -45,6 +47,7 @@ export interface PoolImportPreviewRow extends PoolRuleInput {
 
 export interface PoolImportSummary {
     newCount: number;
+    updateCount: number;
     identicalCount: number;
     invalidCount: number;
     unresolvedCount: number;
@@ -54,6 +57,7 @@ function isPoolRuleChanged(existing: PoolRule, incoming: PoolRuleInput): boolean
     if (existing.branch !== incoming.branch) return true;
     if (existing.hard_lock !== incoming.hard_lock) return true;
     if (existing.is_active !== incoming.is_active) return true;
+    if (existing.has_rotation_limit !== incoming.has_rotation_limit) return true;
     if ((existing.comments ?? "") !== (incoming.comments ?? "")) return true;
 
     const existingAllowed = sanitizeInstructorList(existing.allowed_instructors);
@@ -207,7 +211,7 @@ export function buildPoolImportPreview(drafts: PoolImportDraft[], rules: PoolRul
             return {
                 ...payload,
                 id: draft.id,
-                status: "new" as const,
+                status: "update" as const,
                 reason: "Will update existing rule",
                 existingRuleId: matchedRule.id,
             };
@@ -224,11 +228,13 @@ export function buildPoolImportPreview(drafts: PoolImportDraft[], rules: PoolRul
 
     const summary = rows.reduce<PoolImportSummary>((acc, row) => {
         if (row.status === "new") acc.newCount += 1;
+        if (row.status === "update") acc.updateCount += 1;
         if (row.status === "identical") acc.identicalCount += 1;
         if (row.status === "invalid") acc.invalidCount += 1;
         return acc;
     }, {
         newCount: 0,
+        updateCount: 0,
         identicalCount: 0,
         invalidCount: 0,
         unresolvedCount: 0,
@@ -277,6 +283,7 @@ export async function parsePoolImportFiles(files: File[]): Promise<{ payloads: P
                     blocked_instructors: parseInstructorCell(row.blocked_instructors ?? row.negative_pool),
                     hard_lock: parseBooleanCell(row.hard_lock ?? row.strict, false),
                     is_active: parseBooleanCell(row.is_active ?? row.status, true),
+                    has_rotation_limit: parseBooleanCell(row.has_rotation_limit ?? row.rotation_limit, false),
                     comments: String(row.comments ?? "").trim() || null,
                 } as PoolRuleInput;
             })

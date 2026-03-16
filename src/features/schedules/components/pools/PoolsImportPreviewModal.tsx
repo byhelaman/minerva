@@ -24,7 +24,7 @@ import {
 import { ScheduleDataTable } from "@schedules/components/table/ScheduleDataTable";
 import { DataTableColumnHeader } from "@schedules/components/table/data-table-column-header";
 import { ROW_STYLE_DUPLICATE } from "@/features/schedules/utils/issue-styles";
-import { Loader2, PlusCircle, XCircle, CheckCircle, X } from "lucide-react";
+import { Loader2, PlusCircle, XCircle, CheckCircle, RefreshCw, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { PoolImportPreviewRow, PoolImportSummary } from "./pools-import-utils";
 import { PoolCellNegative } from "./PoolCellNegative";
@@ -34,6 +34,7 @@ const MAX_VISIBLE_POOL_TAGS = 3;
 
 const IMPORT_STATUS_OPTIONS = [
     { label: "New", value: "new", icon: PlusCircle },
+    { label: "Update", value: "update", icon: RefreshCw },
     { label: "Identical", value: "identical", icon: CheckCircle },
     { label: "Invalid", value: "invalid", icon: XCircle },
 ];
@@ -148,6 +149,14 @@ export function PoolsImportPreviewModal({
             cell: ({ row }) => <div className="text-center text-sm">{row.original.hard_lock ? "Yes" : "No"}</div>,
         },
         {
+            id: "rotationLimit",
+            accessorFn: (row) => row.has_rotation_limit,
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title="Rotation Limit" className="justify-center" />
+            ),
+            cell: ({ row }) => <div className="text-center text-sm">{row.original.has_rotation_limit ? "Yes" : "No"}</div>,
+        },
+        {
             id: "status",
             accessorFn: (row) => row.status,
             header: ({ column }) => (
@@ -160,13 +169,15 @@ export function PoolsImportPreviewModal({
                 let badge;
                 if (status === "new") {
                     badge = <Badge variant="outline" className="border-green-600 text-green-600 bg-green-50 dark:bg-green-950/20 dark:border-green-500 dark:text-green-400 cursor-pointer hover:bg-green-100 dark:hover:bg-green-500/20"><PlusCircle />New</Badge>;
+                } else if (status === "update") {
+                    badge = <Badge variant="outline" className="border-blue-600 text-blue-600 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-500 dark:text-blue-400 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-500/20"><RefreshCw />Update</Badge>;
                 } else if (status === "invalid") {
                     badge = <Badge variant="outline" className="border-destructive/50 text-destructive cursor-pointer bg-destructive/5 dark:border-destructive/50 hover:bg-destructive/10"><XCircle />Invalid</Badge>;
                 } else {
                     badge = <Badge variant="outline" className="text-muted-foreground"><CheckCircle />Identical</Badge>;
                 }
 
-                if (!reason || status === "new" || status === "identical") {
+                if (!reason || status === "new" || status === "update" || status === "identical") {
                     return <div className="flex justify-center">{badge}</div>;
                 }
 
@@ -249,8 +260,7 @@ export function PoolsImportPreviewModal({
                         }}
                         getRowClassName={(row) => {
                             const item = row as PoolImportPreviewRow;
-                            // "new" and "identical" have no highlight
-                            if (item.status === "identical" || item.status === "new") return undefined;
+                            if (item.status === "identical" || item.status === "new" || item.status === "update") return undefined;
                             // "invalid" gets error style
                             return ROW_STYLE_DUPLICATE;
                         }}
@@ -267,7 +277,9 @@ export function PoolsImportPreviewModal({
                             <span className="text-muted-foreground">Processing...</span>
                         ) : (
                             <>
-                                <span>Ready: <strong className="text-foreground font-medium">{summary.newCount}</strong></span>
+                                <span>New: <strong className="text-foreground font-medium">{summary.newCount}</strong></span>
+                                <span className="text-border">|</span>
+                                <span>Update: <strong className="text-foreground font-medium">{summary.updateCount}</strong></span>
                                 <span className="text-border">|</span>
                                 <span>Conflicts: <strong className="text-foreground font-medium">{summary.unresolvedCount}</strong></span>
                             </>
@@ -288,7 +300,7 @@ export function PoolsImportPreviewModal({
                             disabled={
                                 isApplying
                                 || rows.length === 0
-                                || summary.newCount === 0
+                                || (summary.newCount === 0 && summary.updateCount === 0)
                                 || summary.unresolvedCount > 0
                             }
                             onClick={() => setConfirmApplyOpen(true)}

@@ -93,6 +93,7 @@ function makeDraft(overrides: Partial<PoolRuleInput> & { id?: string }): PoolImp
             blocked_instructors: [],
             hard_lock: false,
             is_active: true,
+            has_rotation_limit: false,
             comments: null,
             ...payloadOverrides,
         },
@@ -110,6 +111,7 @@ function makeRule(overrides: Partial<PoolRule>): PoolRule {
         blocked_instructors: [],
         hard_lock: false,
         is_active: true,
+        has_rotation_limit: false,
         comments: null,
         created_at: "2026-03-03T00:00:00.000Z",
         updated_at: "2026-03-03T00:00:00.000Z",
@@ -165,6 +167,7 @@ describe("buildPoolImportPreview", () => {
         expect(rows[0].status).toBe("identical");
         expect(rows[0].existingRuleId).toBe("rule-1");
         expect(summary.unresolvedCount).toBe(summary.invalidCount);
+        expect(summary.updateCount).toBe(0);
     });
 
     it("marks new when rule matches identity but has different fields", () => {
@@ -173,7 +176,7 @@ describe("buildPoolImportPreview", () => {
         const existingRules = [makeRule({ program_query: "PIA ENGLISH 4" })];
         const { rows } = buildPoolImportPreview(drafts, existingRules);
 
-        expect(rows[0].status).toBe("new");
+        expect(rows[0].status).toBe("update");
         expect(rows[0].existingRuleId).toBe("rule-1");
     });
 

@@ -12,6 +12,10 @@ export interface PoolValidationResult {
     violationCount: number;
 }
 
+export interface PoolRotationValidationContext {
+    historicalSchedules: Schedule[];
+}
+
 export function programMatchesPoolRule(program: string, ruleProgramQuery: string): boolean {
     const normalizedProgram = normalizeString(program);
     const normalizedRule = normalizeString(ruleProgramQuery);
@@ -158,6 +162,95 @@ export function evaluatePoolIssues(schedules: Schedule[], rules: PoolRule[]): Po
         if (reasons.length > 0) {
             violatingRowKeys.add(rowKey);
             reasonsByRowKey.set(rowKey, reasons.join(" · "));
+        }
+    }
+
+    return {
+        violatingRowKeys,
+        reasonsByRowKey,
+        violationCount: violatingRowKeys.size,
+    };
+}
+
+export function evaluatePoolRotationIssues(
+    currentSchedules: Schedule[],
+    rules: PoolRule[],
+    context: PoolRotationValidationContext
+): PoolValidationResult {
+    const violatingRowKeys = new Set<string>();
+    const reasonsByRowKey = new Map<string, string>();
+
+    const activeRulesWithLimit = rules.filter((rule) => rule.is_active && rule.has_rotation_limit);
+    if (activeRulesWithLimit.length === 0 || currentSchedules.length === 0) {
+        return { violatingRowKeys, reasonsByRowKey, violationCount: 0 };
+    }
+
+    // Process each rule with a rotation limit individually
+    for (const rule of activeRulesWithLimit) {
+        const rotationLimit = 3;
+
+        // 1. Gather relevant schedules (historical + current) that match this rule's program AND branch
+        const ruleBranch = (rule.branch ?? "").trim().toLowerCase();
+        const matchesBranch = (s: Schedule) => !ruleBranch || (s.branch ?? "").trim().toLowerCase() === ruleBranch;
+
+        const relevantHistorical = context.historicalSchedules.filter((s) => matchesBranch(s) && programMatchesPoolRule(s.program, rule.program_query));
+        const relevantCurrent = currentSchedules.filter((s) => matchesBranch(s) && programMatchesPoolRule(s.program, rule.program_query));
+
+        if (relevantCurrent.length === 0) continue;
+
+        // Ensure current schedules have a row key mapped for tracking violations
+        const currentWithKeys = relevantCurrent.map((s) => ({
+            ...s,
+            _isCurrent: true,
+            _rowKey: getScheduleKey(s),
+        }));
+        
+        const historicalWithKeys = relevantHistorical.map((s) => ({
+            ...s,
+            _isCurrent: false,
+            _rowKey: getScheduleKey(s),
+        }));
+
+        const allRelevantSchedules = [...historicalWithKeys, ...currentWithKeys];
+
+        // 2. Sort chronologically by date, then start_time
+        // Assuming date is YYYY-MM-DD and start_time is HH:MM
+        allRelevantSchedules.sort((a, b) => {
+            if (a.date !== b.date) {
+                return a.date.localeCompare(b.date);
+            }
+            return a.start_time.localeCompare(b.start_time);
+        });
+
+        // 3. Evaluate consecutive instructors
+        let currentInstructor = "";
+        let consecutiveCount = 0;
+
+        for (const schedule of allRelevantSchedules) {
+            const normalizedInst = normalizeString(schedule.instructor);
+            
+            // Re-evaluate consecutive count
+            if (normalizedInst && normalizedInst === currentInstructor) {
+                consecutiveCount++;
+            } else {
+                currentInstructor = normalizedInst;
+                consecutiveCount = 1;
+            }
+
+            // If it exceeds the limit AND the current failing record comes from the excel sheet, mark it as invalid
+            if (consecutiveCount > rotationLimit && schedule._isCurrent) {
+                const rowKey = schedule._rowKey;
+                violatingRowKeys.add(rowKey);
+                
+                const existingReason = reasonsByRowKey.get(rowKey);
+                const newReason = `Límite de rotación: ${schedule.instructor} excedió el límite de ${rotationLimit} clases consecutivas`;
+                
+                if (existingReason) {
+                    reasonsByRowKey.set(rowKey, `${existingReason} · ${newReason}`);
+                } else {
+                    reasonsByRowKey.set(rowKey, newReason);
+                }
+            }
         }
     }
 

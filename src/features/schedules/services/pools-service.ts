@@ -17,6 +17,7 @@ export const poolsService = {
             p_blocked_instructors: input.blocked_instructors,
             p_hard_lock: input.hard_lock,
             p_is_active: input.is_active,
+            p_has_rotation_limit: input.has_rotation_limit ?? false,
             p_comments: input.comments ?? null,
         });
 
@@ -37,6 +38,7 @@ export const poolsService = {
             p_blocked_instructors: input.blocked_instructors,
             p_hard_lock: input.hard_lock,
             p_is_active: input.is_active,
+            p_has_rotation_limit: input.has_rotation_limit ?? false,
             p_comments: input.comments ?? null,
         });
 

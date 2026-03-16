@@ -47,7 +47,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { CircleCheck, CircleSlash, CloudUpload, Loader2, MoreHorizontal, Plus, X } from "lucide-react";
+import { CircleCheck, CircleSlash, CloudUpload, Loader2, MoreHorizontal, Plus, Search, X } from "lucide-react";
 import { poolsService } from "@/features/schedules/services/pools-service";
 import type { PoolRule, PoolRuleInput } from "@/features/schedules/types";
 import { ScheduleDataTable } from "@schedules/components/table/ScheduleDataTable";
@@ -62,6 +62,7 @@ import { InstructorMultiSelect } from "@/features/schedules/components/pools/Ins
 import { PoolCellNegative } from "@/features/schedules/components/pools/PoolCellNegative";
 import { PoolCellPositive } from "@/features/schedules/components/pools/PoolCellPositive";
 import { PoolsImportPreviewModal } from "@/features/schedules/components/pools/PoolsImportPreviewModal";
+import { PoolsHistoryModal } from "@/features/schedules/components/pools/PoolsHistoryModal";
 import {
     buildPoolImportPreview,
     parsePoolImportFiles,
@@ -97,10 +98,19 @@ const poolRuleFormSchema = z.object({
     blocked_instructors: z.array(z.string()),
     hard_lock: z.boolean(),
     is_active: z.boolean(),
+    has_rotation_limit: z.boolean(),
     comments: z.string().refine((value) => countWords(value) <= NOTES_MAX_WORDS, {
     }),
 }).superRefine((values, ctx) => {
     const payload = toPayload(values);
+
+    if (payload.hard_lock && countPositivePoolInstructors(payload) === 0) {
+        ctx.addIssue({
+            code: "custom",
+            path: ["allowed_instructors"],
+            message: "Hard lock requires at least one allowed instructor in general pool or by-day pool.",
+        });
+    }
 
     const intersections = findPoolIntersections(payload);
     if (intersections.length > 0) {
@@ -145,6 +155,7 @@ const emptyForm: RuleFormState = {
     blocked_instructors: [],
     hard_lock: false,
     is_active: true,
+    has_rotation_limit: false,
     comments: "",
 };
 
@@ -157,6 +168,7 @@ function toPayload(form: RuleFormState): PoolRuleInput {
         blocked_instructors: sanitizeInstructorList(form.blocked_instructors),
         hard_lock: form.hard_lock,
         is_active: form.is_active,
+        has_rotation_limit: form.has_rotation_limit,
         comments: form.comments.trim() || null,
     };
 }
@@ -192,6 +204,7 @@ function toForm(rule: PoolRule): RuleFormState {
         blocked_instructors: [...rule.blocked_instructors],
         hard_lock: rule.hard_lock,
         is_active: rule.is_active,
+        has_rotation_limit: rule.has_rotation_limit,
         comments: rule.comments ?? "",
     };
 }
@@ -211,6 +224,11 @@ export function PoolsPage() {
     const [pendingDeleteRules, setPendingDeleteRules] = useState<PoolRule[]>([]);
     const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
     const [importDrafts, setImportDrafts] = useState<PoolImportDraft[]>([]);
+
+    // History Modal State
+    const [historyModalOpen, setHistoryModalOpen] = useState(false);
+    const [historyProgramQuery, setHistoryProgramQuery] = useState<string | null>(null);
+
     const instructors = useInstructors();
     const { settings } = useSettings();
 
@@ -357,7 +375,7 @@ export function PoolsPage() {
         {
             id: "positive_pool",
             accessorFn: (row) => row.allowed_instructors.join(", "),
-            size: 340,
+            size: 240,
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Positive Pool" />
             ),
@@ -372,7 +390,7 @@ export function PoolsPage() {
         {
             id: "negative_pool",
             accessorFn: (row) => row.blocked_instructors.join(", "),
-            size: 260,
+            size: 240,
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Negative Pool" />
             ),
@@ -393,6 +411,19 @@ export function PoolsPage() {
             cell: ({ row }) => (
                 <div className="text-center text-sm">
                     {row.original.hard_lock ? "Yes" : "No"}
+                </div>
+            ),
+        },
+        {
+            id: "rotationLimit",
+            accessorFn: (row) => row.has_rotation_limit,
+            size: 130,
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title="Rotation Limit" className="justify-center" />
+            ),
+            cell: ({ row }) => (
+                <div className="text-center text-sm">
+                    {row.original.has_rotation_limit ? "Yes" : "No"}
                 </div>
             ),
         },
@@ -426,6 +457,12 @@ export function PoolsPage() {
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => {
+                            setHistoryProgramQuery(row.original.program_query);
+                            setHistoryModalOpen(true);
+                        }}>
+                            History
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => openEditDialog(row.original)}>
                             Edit
                         </DropdownMenuItem>
@@ -570,6 +607,7 @@ export function PoolsPage() {
                 negative_pool: rule.blocked_instructors.join(", "),
                 hard_lock: rule.hard_lock ? "TRUE" : "FALSE",
                 is_active: rule.is_active ? "TRUE" : "FALSE",
+                has_rotation_limit: rule.has_rotation_limit ? "TRUE" : "FALSE",
                 comments: rule.comments ?? "",
             }));
 
@@ -582,6 +620,7 @@ export function PoolsPage() {
                     "negative_pool",
                     "hard_lock",
                     "is_active",
+                    "has_rotation_limit",
                     "comments",
                 ],
             });
@@ -647,13 +686,13 @@ export function PoolsPage() {
             return;
         }
 
-        if (importPreview.summary.newCount === 0) {
+        if (importPreview.summary.newCount === 0 && importPreview.summary.updateCount === 0) {
             toast.warning("No new or updated rows to import");
             return;
         }
 
         const operations = importPreview.rows
-            .filter((row) => row.status === "new")
+            .filter((row) => row.status === "new" || row.status === "update")
             .map((row) => {
                 const payload: PoolRuleInput = {
                     branch: row.branch,
@@ -663,6 +702,7 @@ export function PoolsPage() {
                     blocked_instructors: row.blocked_instructors,
                     hard_lock: row.hard_lock,
                     is_active: row.is_active,
+                    has_rotation_limit: row.has_rotation_limit,
                     comments: row.comments,
                 };
 
@@ -743,6 +783,10 @@ export function PoolsPage() {
                     </p>
                 </div>
                 <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => { setHistoryProgramQuery(""); setHistoryModalOpen(true); }}>
+                        <Search />
+                        Search History
+                    </Button>
                     <Button size="sm" onClick={openCreateDialog}>
                         <Plus />
                         New Rule
@@ -1089,6 +1133,24 @@ export function PoolsPage() {
 
                             <Controller
                                 control={form.control}
+                                name="has_rotation_limit"
+                                render={({ field }) => (
+                                    <div className="flex items-center justify-between gap-4">
+                                        <Label htmlFor={field.name} className="flex flex-col gap-0.5 cursor-pointer font-normal items-start">
+                                            <span className="text-sm">Rotation limit</span>
+                                            <span className="text-xs text-muted-foreground">
+                                                If enabled, an instructor cannot teach this program more than 3 consecutive times.
+                                            </span>
+                                        </Label>
+                                        <div className="h-8 py-2">
+                                            <Switch id={field.name} checked={field.value} onCheckedChange={field.onChange} />
+                                        </div>
+                                    </div>
+                                )}
+                            />
+
+                            <Controller
+                                control={form.control}
                                 name="hard_lock"
                                 render={({ field }) => (
                                     <div className="flex items-center justify-between gap-4">
@@ -1156,6 +1218,12 @@ export function PoolsPage() {
                 }}
             />
 
+
+            <PoolsHistoryModal
+                open={historyModalOpen}
+                onOpenChange={setHistoryModalOpen}
+                programQuery={historyProgramQuery}
+            />
 
         </div>
     );

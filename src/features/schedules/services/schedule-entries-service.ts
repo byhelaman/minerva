@@ -321,5 +321,42 @@ export const scheduleEntriesService = {
             });
 
         if (error) throw error;
+    },
+
+    /**
+     * Retrieve the most recent schedule entries for a specific program.
+     * Used for rotation pool validation across historical data.
+     */
+    async getHistoricalSchedulesByProgram(programQuery: string, maxLimit: number = 30, branch?: string): Promise<Schedule[]> {
+        const normalizedProgram = normalizeString(programQuery);
+        if (!normalizedProgram) return [];
+
+        let query = supabase
+            .from('schedule_entries')
+            .select('date, program, start_time, instructor, shift, branch, end_time, code, minutes, units');
+
+        // Split into tokens so "Juan Gomez" matches "Juan (ACME)(ONLINE), Gomez"
+        const tokens = normalizedProgram.split(/\s+/).filter(Boolean);
+        for (const token of tokens) {
+            query = query.ilike('program', `%${token}%`);
+        }
+
+        if (branch) {
+            query = query.ilike('branch', branch);
+        }
+
+        const { data, error } = await query
+            .order('date', { ascending: false })
+            .order('start_time', { ascending: false })
+            .limit(maxLimit);
+
+        if (error) throw error;
+
+        const schedules: Schedule[] = [];
+        (data as ScheduleEntryRow[] | null)?.forEach((row) => {
+            schedules.push(mapEntryToSchedule(row));
+        });
+
+        return schedules;
     }
 };

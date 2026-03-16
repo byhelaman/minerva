@@ -21,7 +21,8 @@ import { useZoomStore } from "@/features/matching/stores/useZoomStore";
 import { MatchingService } from "@/features/matching/services/matcher";
 import { useAuth } from "@/components/auth-provider";
 import { poolsService } from "@/features/schedules/services/pools-service";
-import { evaluatePoolIssues } from "@/features/schedules/utils/pool-validation";
+import { evaluatePoolIssues, evaluatePoolRotationIssues, programMatchesPoolRule } from "@/features/schedules/utils/pool-validation";
+import { scheduleEntriesService } from "@/features/schedules/services/schedule-entries-service";
 import type { PoolRule } from "@/features/schedules/types";
 // Atomic Stores
 import { useScheduleDataStore } from "@/features/schedules/stores/useScheduleDataStore";
@@ -74,6 +75,70 @@ export function ScheduleDashboard() {
         loadPoolRules();
     }, [canManagePools]);
 
+    const [historicalSchedules, setHistoricalSchedules] = useState<Schedule[]>([]);
+    const [isFetchingHistory, setIsFetchingHistory] = useState(false);
+
+    useEffect(() => {
+        if (!canManagePools || schedules.length === 0 || poolRules.length === 0) {
+            setHistoricalSchedules([]);
+            return;
+        }
+
+        const activeRulesWithLimit = poolRules.filter((r) => r.is_active && r.has_rotation_limit);
+        if (activeRulesWithLimit.length === 0) {
+            setHistoricalSchedules([]);
+            return;
+        }
+
+        const programsToFetch = new Map<string, { program: string; branch: string }>();
+        for (const schedule of schedules) {
+            for (const rule of activeRulesWithLimit) {
+                if (programMatchesPoolRule(schedule.program, rule.program_query)) {
+                    const key = `${(rule.branch ?? "").trim().toLowerCase()}::${rule.program_query.trim().toLowerCase()}`;
+                    if (!programsToFetch.has(key)) {
+                        programsToFetch.set(key, { program: rule.program_query, branch: rule.branch ?? "" });
+                    }
+                }
+            }
+        }
+
+        if (programsToFetch.size === 0) {
+            setHistoricalSchedules([]);
+            return;
+        }
+
+        const loadHistoricals = async () => {
+            setIsFetchingHistory(true);
+            try {
+                const results = await Promise.all(
+                    Array.from(programsToFetch.values()).map((entry) =>
+                        scheduleEntriesService.getHistoricalSchedulesByProgram(entry.program, 30, entry.branch || undefined)
+                    )
+                );
+
+                const allHistoricals = results.flat();
+                const uniqueHistoricals: Schedule[] = [];
+                const keys = new Set<string>();
+
+                for (const h of allHistoricals) {
+                    const k = getScheduleKey(h);
+                    if (!keys.has(k)) {
+                        keys.add(k);
+                        uniqueHistoricals.push(h);
+                    }
+                }
+
+                setHistoricalSchedules(uniqueHistoricals);
+            } catch (error) {
+                console.error("Failed to fetch historicals for rotation validation", error);
+            } finally {
+                setIsFetchingHistory(false);
+            }
+        };
+
+        loadHistoricals();
+    }, [canManagePools, schedules, poolRules]);
+
     const poolValidation = useMemo(() => {
         if (!canManagePools) {
             return {
@@ -83,8 +148,27 @@ export function ScheduleDashboard() {
             };
         }
 
-        return evaluatePoolIssues(schedules as Schedule[], poolRules);
-    }, [canManagePools, schedules, poolRules]);
+        const baseIssues = evaluatePoolIssues(schedules as Schedule[], poolRules);
+        const rotationIssues = evaluatePoolRotationIssues(schedules as Schedule[], poolRules, { historicalSchedules });
+
+        const violatingRowKeys = new Set([...baseIssues.violatingRowKeys, ...rotationIssues.violatingRowKeys]);
+        const reasonsByRowKey = new Map(baseIssues.reasonsByRowKey);
+
+        for (const [key, reason] of rotationIssues.reasonsByRowKey.entries()) {
+            const existing = reasonsByRowKey.get(key);
+            if (existing) {
+                reasonsByRowKey.set(key, `${existing} · ${reason}`);
+            } else {
+                reasonsByRowKey.set(key, reason);
+            }
+        }
+
+        return {
+            violatingRowKeys,
+            reasonsByRowKey,
+            violationCount: violatingRowKeys.size,
+        };
+    }, [canManagePools, schedules, poolRules, historicalSchedules]);
 
     const mergedIssueCategories = useMemo(() => {
         const categories: IssueCategory[] = [];
@@ -92,7 +176,7 @@ export function ScheduleDashboard() {
         if (poolValidation.violationCount > 0) {
             categories.push({
                 key: "pool",
-                label: "Pool",
+                label: "Pools",
                 count: poolValidation.violationCount,
                 icon: ShieldAlert,
             });
@@ -472,7 +556,7 @@ export function ScheduleDashboard() {
                 onUploadClick={() => setIsUploadModalOpen(true)}
                 showLiveMode={showLiveMode}
                 setShowLiveMode={handleLiveModeToggle}
-                isLiveLoading={isLiveLoading || isLoadingData}
+                isLiveLoading={isLiveLoading || isLoadingData || isFetchingHistory}
                 activePrograms={showLiveMode ? activePrograms : undefined}
                 liveTimeFilter={showLiveMode ? liveTimeFilter : undefined}
                 liveDateFilter={showLiveMode ? liveDateFilter : undefined}
