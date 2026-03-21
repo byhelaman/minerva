@@ -110,6 +110,12 @@ export interface GetEvaluatorsListInput {
   language?: string;
 }
 
+export interface FindInstructorsInput {
+  language?: string;
+  can_evaluate?: boolean;
+  eval_type?: string;
+}
+
 export interface FindEvaluatorsInput {
   date: string;
   start_time: string;

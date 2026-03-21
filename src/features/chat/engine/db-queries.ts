@@ -171,6 +171,23 @@ export async function dbGetEvaluatorsList(params: {
 }
 
 // ---------------------------------------------------------------------------
+// chat_find_instructors
+// ---------------------------------------------------------------------------
+export async function dbFindInstructors(params: {
+  language?: string;
+  canEvaluate?: boolean;
+  evalType?: string;
+}): Promise<unknown> {
+  const { data, error } = await supabase.rpc("chat_find_instructors", {
+    p_language:     params.language     ?? null,
+    p_can_evaluate: params.canEvaluate  ?? null,
+    p_eval_type:    params.evalType     ?? null,
+  });
+  if (error) return { error: error.message };
+  return data;
+}
+
+// ---------------------------------------------------------------------------
 // chat_find_evaluators
 // ---------------------------------------------------------------------------
 export async function dbFindEvaluators(params: {
