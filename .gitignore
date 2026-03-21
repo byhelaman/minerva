@@ -38,9 +38,11 @@ yarn.lock
 pnpm-lock.yaml
 
 # Archives and temp
-_archive/
 *.key
 *.temp/
+
+# Claude Code (plans, memory)
+.claude/
 
 # Test coverage
 coverage/

@@ -93,10 +93,10 @@ export function ScheduleDashboard() {
         const programsToFetch = new Map<string, { program: string; branch: string }>();
         for (const schedule of schedules) {
             for (const rule of activeRulesWithLimit) {
-                if (programMatchesPoolRule(schedule.program, rule.program_query)) {
-                    const key = `${(rule.branch ?? "").trim().toLowerCase()}::${rule.program_query.trim().toLowerCase()}`;
+                if (programMatchesPoolRule(schedule.program, rule.program_name)) {
+                    const key = `${(rule.branch ?? "").trim().toLowerCase()}::${rule.program_name.trim().toLowerCase()}`;
                     if (!programsToFetch.has(key)) {
-                        programsToFetch.set(key, { program: rule.program_query, branch: rule.branch ?? "" });
+                        programsToFetch.set(key, { program: rule.program_name, branch: rule.branch ?? "" });
                     }
                 }
             }

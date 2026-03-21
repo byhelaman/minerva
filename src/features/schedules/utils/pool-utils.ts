@@ -1,4 +1,3 @@
-import { normalizeDayInstructorPools } from "./weekdays";
 import type { PoolRuleInput } from "../types";
 
 const MAX_POSITIVE_POOL_INSTRUCTORS = 5;
@@ -38,15 +37,12 @@ export function normalizeProgramKey(value: string): string {
 }
 
 export function countPositivePoolInstructors(payload: PoolRuleInput): number {
-    const dayAllowed = Object.values(normalizeDayInstructorPools(payload.allowed_instructors_by_day))
-        .flatMap((list) => list ?? []);
-
+    const dayAllowed = (payload.day_overrides ?? []).flatMap((o) => o.allowed_instructors);
     return sanitizeInstructorList([...payload.allowed_instructors, ...dayAllowed]).length;
 }
 
 export function findPoolIntersections(payload: PoolRuleInput): string[] {
-    const dayAllowed = Object.values(normalizeDayInstructorPools(payload.allowed_instructors_by_day))
-        .flatMap((list) => list ?? []);
+    const dayAllowed = (payload.day_overrides ?? []).flatMap((o) => o.allowed_instructors);
     const allPositive = sanitizeInstructorList([...payload.allowed_instructors, ...dayAllowed]);
 
     return allPositive.filter((value) =>

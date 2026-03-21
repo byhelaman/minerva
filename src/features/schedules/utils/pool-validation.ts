@@ -4,7 +4,7 @@ import { normalizeString } from "@/features/matching/utils/normalizer";
 import { evaluateMatch } from "@/features/matching/scoring/scorer";
 import type { ZoomMeetingCandidate } from "@/features/matching/types";
 import { MatchingService } from "@/features/matching/services/matcher";
-import { getIsoWeekdayFromDateString, normalizeDayInstructorPools } from "./weekdays";
+import { getIsoWeekdayFromDateString } from "./weekdays";
 
 export interface PoolValidationResult {
     violatingRowKeys: Set<string>;
@@ -124,7 +124,7 @@ export function evaluatePoolIssues(schedules: Schedule[], rules: PoolRule[]): Po
 
     for (const schedule of schedules) {
         const scheduleWeekday = getIsoWeekdayFromDateString(schedule.date);
-        const matchingRules = activeRules.filter((rule) => programMatchesPoolRule(schedule.program, rule.program_query));
+        const matchingRules = activeRules.filter((rule) => programMatchesPoolRule(schedule.program, rule.program_name));
         if (matchingRules.length === 0) continue;
 
         const rowKey = getScheduleKey(schedule);
@@ -137,8 +137,15 @@ export function evaluatePoolIssues(schedules: Schedule[], rules: PoolRule[]): Po
                 continue;
             }
 
-            const byDayPools = normalizeDayInstructorPools(rule.allowed_instructors_by_day);
-            const daySpecificPool = scheduleWeekday ? (byDayPools[scheduleWeekday] ?? []) : [];
+            const matchingOverride = scheduleWeekday
+                ? rule.day_overrides.find(
+                      (o) =>
+                          o.day_of_week === scheduleWeekday &&
+                          o.start_time <= schedule.start_time &&
+                          (schedule.end_time === "" || o.end_time >= schedule.end_time),
+                  )
+                : undefined;
+            const daySpecificPool = matchingOverride?.allowed_instructors ?? [];
             const effectiveAllowedPool = daySpecificPool.length > 0
                 ? (rule.hard_lock
                     ? daySpecificPool
@@ -193,8 +200,8 @@ export function evaluatePoolRotationIssues(
         const ruleBranch = (rule.branch ?? "").trim().toLowerCase();
         const matchesBranch = (s: Schedule) => !ruleBranch || (s.branch ?? "").trim().toLowerCase() === ruleBranch;
 
-        const relevantHistorical = context.historicalSchedules.filter((s) => matchesBranch(s) && programMatchesPoolRule(s.program, rule.program_query));
-        const relevantCurrent = currentSchedules.filter((s) => matchesBranch(s) && programMatchesPoolRule(s.program, rule.program_query));
+        const relevantHistorical = context.historicalSchedules.filter((s) => matchesBranch(s) && programMatchesPoolRule(s.program, rule.program_name));
+        const relevantCurrent = currentSchedules.filter((s) => matchesBranch(s) && programMatchesPoolRule(s.program, rule.program_name));
 
         if (relevantCurrent.length === 0) continue;
 

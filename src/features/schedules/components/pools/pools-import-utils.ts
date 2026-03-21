@@ -1,10 +1,6 @@
 import { read, utils } from "xlsx";
 import type { PoolRule, PoolRuleInput } from "@/features/schedules/types";
 import {
-    normalizeDayInstructorPools,
-    parseDayInstructorPoolsCell,
-} from "@/features/schedules/utils/weekdays";
-import {
     countPositivePoolInstructors,
     findPoolIntersections,
     normalizeProgramKey,
@@ -14,11 +10,9 @@ import {
 
 export interface PoolImportRow {
     branch?: unknown;
-    program_query?: unknown;
+    program_name?: unknown;
     program?: unknown;
     allowed_instructors?: unknown;
-    positive_pool_by_day?: unknown;
-    allowed_instructors_by_day?: unknown;
     positive_pool?: unknown;
     blocked_instructors?: unknown;
     negative_pool?: unknown;
@@ -74,23 +68,10 @@ function isPoolRuleChanged(existing: PoolRule, incoming: PoolRuleInput): boolean
         return true;
     }
 
-    const existingByDay = normalizeDayInstructorPools(existing.allowed_instructors_by_day);
-    const incomingByDay = normalizeDayInstructorPools(incoming.allowed_instructors_by_day);
-    const existingDayKeys = Object.keys(existingByDay).map(Number).sort();
-    const incomingDayKeys = Object.keys(incomingByDay).map(Number).sort();
-    if (existingDayKeys.length !== incomingDayKeys.length
-        || existingDayKeys.some((v, i) => v !== incomingDayKeys[i])) {
-        return true;
-    }
-
-    for (const dayKey of existingDayKeys) {
-        const existingList = sanitizeInstructorList(existingByDay[dayKey] ?? []);
-        const incomingList = sanitizeInstructorList(incomingByDay[dayKey] ?? []);
-        if (existingList.length !== incomingList.length
-            || existingList.some((v, i) => v.toLowerCase() !== incomingList[i].toLowerCase())) {
-            return true;
-        }
-    }
+    // Excel import does not support day_overrides — if existing rule has overrides it will show as update
+    const existingOverrideCount = existing.day_overrides.length;
+    const incomingOverrideCount = (incoming.day_overrides ?? []).length;
+    if (existingOverrideCount !== incomingOverrideCount) return true;
 
     return false;
 }
@@ -113,7 +94,7 @@ function parseBooleanCell(value: unknown, fallback: boolean): boolean {
 export function buildPoolImportPreview(drafts: PoolImportDraft[], rules: PoolRule[]): { rows: PoolImportPreviewRow[]; summary: PoolImportSummary } {
     const existingByRuleKey = new Map<string, PoolRule[]>();
     for (const rule of rules) {
-        const key = getRuleIdentityKey(rule.branch, rule.program_query);
+        const key = getRuleIdentityKey(rule.branch, rule.program_name);
         if (!key) continue;
         const bucket = existingByRuleKey.get(key) ?? [];
         bucket.push(rule);
@@ -122,15 +103,15 @@ export function buildPoolImportPreview(drafts: PoolImportDraft[], rules: PoolRul
 
     const ruleKeyCounts = new Map<string, number>();
     for (const draft of drafts) {
-        const key = getRuleIdentityKey(draft.payload.branch, draft.payload.program_query);
+        const key = getRuleIdentityKey(draft.payload.branch, draft.payload.program_name);
         if (!key) continue;
         ruleKeyCounts.set(key, (ruleKeyCounts.get(key) ?? 0) + 1);
     }
 
     const rows: PoolImportPreviewRow[] = drafts.map((draft) => {
         const payload = draft.payload;
-        const normalizedProgram = normalizeProgramKey(payload.program_query);
-        const identityKey = getRuleIdentityKey(payload.branch, payload.program_query);
+        const normalizedProgram = normalizeProgramKey(payload.program_name);
+        const identityKey = getRuleIdentityKey(payload.branch, payload.program_name);
         const duplicateCount = normalizedProgram ? (ruleKeyCounts.get(identityKey) ?? 0) : 0;
 
         const intersections = findPoolIntersections(payload);
@@ -269,17 +250,15 @@ export async function parsePoolImportFiles(files: File[]): Promise<{ payloads: P
 
         const filePayloads = importedRows
             .map((row) => {
-                const programValue = String(row.program_query ?? row.program ?? "").trim();
+                const programValue = String(row.program_name ?? row.program ?? "").trim();
                 if (!programValue) return null;
                 const branchValue = String(row.branch ?? "").trim();
 
                 return {
                     branch: branchValue,
-                    program_query: programValue,
+                    program_name: programValue,
+                    day_overrides: [],
                     allowed_instructors: parseInstructorCell(row.allowed_instructors ?? row.positive_pool),
-                    allowed_instructors_by_day: parseDayInstructorPoolsCell(
-                        row.allowed_instructors_by_day ?? row.positive_pool_by_day,
-                    ),
                     blocked_instructors: parseInstructorCell(row.blocked_instructors ?? row.negative_pool),
                     hard_lock: parseBooleanCell(row.hard_lock ?? row.strict, false),
                     is_active: parseBooleanCell(row.is_active ?? row.status, true),

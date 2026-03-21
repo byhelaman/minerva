@@ -23,8 +23,8 @@ function makeRule(overrides: Partial<PoolRule>): PoolRule {
         id: "rule-1",
         owner_id: "owner-1",
         branch: "HUB",
-        program_query: "PIA ENGLISH 4",
-        allowed_instructors_by_day: {},
+        program_name: "PIA ENGLISH 4",
+        day_overrides: [],
         allowed_instructors: ["Nora Velez", "Iker Salas"],
         blocked_instructors: [],
         hard_lock: false,
@@ -81,7 +81,7 @@ describe("evaluatePoolIssues", () => {
 
     it("does not flag when rule does not match program", () => {
         const schedule = makeSchedule({ program: "PCA FRENCH 2" });
-        const rules = [makeRule({ program_query: "PIA ENGLISH 4" })];
+        const rules = [makeRule({ program_name: "PIA ENGLISH 4" })];
 
         const result = evaluatePoolIssues([schedule], rules);
         expect(result.violationCount).toBe(0);
@@ -139,9 +139,9 @@ describe("evaluatePoolIssues", () => {
         const rules = [
             makeRule({
                 allowed_instructors: ["Pepito Perez"],
-                allowed_instructors_by_day: {
-                    3: ["Juan Gomez"],
-                },
+                day_overrides: [
+                    { id: "o1", rule_id: "rule-1", day_of_week: 3, start_time: "00:00", end_time: "23:59", allowed_instructors: ["Juan Gomez"], created_at: "2026-03-03T00:00:00.000Z" },
+                ],
             }),
         ];
 
@@ -161,9 +161,9 @@ describe("evaluatePoolIssues", () => {
             makeRule({
                 hard_lock: true,
                 allowed_instructors: ["Pepito Perez"],
-                allowed_instructors_by_day: {
-                    3: ["Juan Gomez"],
-                },
+                day_overrides: [
+                    { id: "o1", rule_id: "rule-1", day_of_week: 3, start_time: "00:00", end_time: "23:59", allowed_instructors: ["Juan Gomez"], created_at: "2026-03-03T00:00:00.000Z" },
+                ],
             }),
         ];
 
@@ -182,9 +182,9 @@ describe("evaluatePoolIssues", () => {
             makeRule({
                 hard_lock: true,
                 allowed_instructors: [],
-                allowed_instructors_by_day: {
-                    1: ["Juansito"],
-                },
+                day_overrides: [
+                    { id: "o1", rule_id: "rule-1", day_of_week: 1, start_time: "00:00", end_time: "23:59", allowed_instructors: ["Juansito"], created_at: "2026-03-03T00:00:00.000Z" },
+                ],
             }),
         ];
 

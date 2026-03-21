@@ -67,20 +67,20 @@ describe("pool-utils shared functions", () => {
         it("sums general pool and day-specific unique instructors", () => {
             const rule = {
                 allowed_instructors: ["Alice", "Bob"],
-                allowed_instructors_by_day: {
-                    1: ["Charlie"],
-                    2: ["Alice", "Dave"], // Alice overlaps with general pool
-                },
+                day_overrides: [
+                    { day_of_week: 1, allowed_instructors: ["Charlie"] },
+                    { day_of_week: 2, allowed_instructors: ["Alice", "Dave"] }, // Alice overlaps with general pool
+                ],
                 blocked_instructors: [],
             } as any;
-            
+
             expect(countPositivePoolInstructors(rule)).toBe(4); // Alice, Bob, Charlie, Dave
         });
 
         it("returns 0 when pools are completely empty", () => {
             const rule = {
                 allowed_instructors: [],
-                allowed_instructors_by_day: {},
+                day_overrides: [],
                 blocked_instructors: [],
             } as any;
 
@@ -92,9 +92,9 @@ describe("pool-utils shared functions", () => {
         it("returns names that are in both positive and negative pools", () => {
             const rule = {
                 allowed_instructors: ["Alice", "Bob"],
-                allowed_instructors_by_day: {
-                    1: ["Charlie"],
-                },
+                day_overrides: [
+                    { day_of_week: 1, allowed_instructors: ["Charlie"] },
+                ],
                 blocked_instructors: ["Bob", "Dave", "Charlie"],
             } as any;
 
@@ -107,7 +107,7 @@ describe("pool-utils shared functions", () => {
         it("returns empty array if no overlap", () => {
             const rule = {
                 allowed_instructors: ["Alice"],
-                allowed_instructors_by_day: {},
+                day_overrides: [],
                 blocked_instructors: ["Bob", "Dave"],
             } as any;
 

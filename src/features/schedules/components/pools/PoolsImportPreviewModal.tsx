@@ -104,14 +104,14 @@ export function PoolsImportPreviewModal({
         },
         {
             id: "program",
-            accessorKey: "program_query",
+            accessorKey: "program_name",
             size: 320,
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Program" />
             ),
             cell: ({ row }) => (
-                <div className="truncate max-w-75" title={row.original.program_query}>
-                    {row.original.program_query}
+                <div className="truncate max-w-75" title={row.original.program_name}>
+                    {row.original.program_name}
                 </div>
             ),
         },
@@ -122,7 +122,7 @@ export function PoolsImportPreviewModal({
                 <div className="max-w-60">
                     <PoolCellPositive
                         allowedInstructors={row.original.allowed_instructors}
-                        allowedInstructorsByDay={row.original.allowed_instructors_by_day ?? {}}
+                        allowedInstructorsByDay={{}}
                         maxVisibleTags={MAX_VISIBLE_POOL_TAGS}
                     />
                 </div>

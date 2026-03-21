@@ -87,9 +87,9 @@ function makeDraft(overrides: Partial<PoolRuleInput> & { id?: string }): PoolImp
         id: id ?? "draft-1",
         payload: {
             branch: "CORPORATE",
-            program_query: "PIA ENGLISH 4",
+            program_name: "PIA ENGLISH 4",
             allowed_instructors: ["Nora Velez"],
-            allowed_instructors_by_day: {},
+            day_overrides: [],
             blocked_instructors: [],
             hard_lock: false,
             is_active: true,
@@ -105,8 +105,8 @@ function makeRule(overrides: Partial<PoolRule>): PoolRule {
         id: "rule-1",
         owner_id: "owner-1",
         branch: "CORPORATE",
-        program_query: "PIA ENGLISH 4",
-        allowed_instructors_by_day: {},
+        program_name: "PIA ENGLISH 4",
+        day_overrides: [],
         allowed_instructors: ["Nora Velez"],
         blocked_instructors: [],
         hard_lock: false,
@@ -129,8 +129,8 @@ describe("buildPoolImportPreview", () => {
         expect(summary.newCount).toBe(1);
     });
 
-    it("marks invalid when program_query is empty", () => {
-        const drafts = [makeDraft({ program_query: "" })];
+    it("marks invalid when program_name is empty", () => {
+        const drafts = [makeDraft({ program_name: "" })];
         const { rows, summary } = buildPoolImportPreview(drafts, []);
 
         expect(rows[0].status).toBe("invalid");
@@ -149,8 +149,8 @@ describe("buildPoolImportPreview", () => {
 
     it("marks invalid when same branch + program appears twice in import", () => {
         const drafts = [
-            makeDraft({ id: "d1", program_query: "SAME PROGRAM" }),
-            makeDraft({ id: "d2", program_query: "SAME PROGRAM" }),
+            makeDraft({ id: "d1", program_name: "SAME PROGRAM" }),
+            makeDraft({ id: "d2", program_name: "SAME PROGRAM" }),
         ];
         const { rows, summary } = buildPoolImportPreview(drafts, []);
 
@@ -160,8 +160,8 @@ describe("buildPoolImportPreview", () => {
     });
 
     it("marks identical when rule perfectly matches existing rule in database", () => {
-        const drafts = [makeDraft({ program_query: "PIA ENGLISH 4" })];
-        const existingRules = [makeRule({ program_query: "PIA ENGLISH 4" })];
+        const drafts = [makeDraft({ program_name: "PIA ENGLISH 4" })];
+        const existingRules = [makeRule({ program_name: "PIA ENGLISH 4" })];
         const { rows, summary } = buildPoolImportPreview(drafts, existingRules);
 
         expect(rows[0].status).toBe("identical");
@@ -171,9 +171,9 @@ describe("buildPoolImportPreview", () => {
     });
 
     it("marks new when rule matches identity but has different fields", () => {
-        const drafts = [makeDraft({ program_query: "PIA ENGLISH 4", allowed_instructors: ["Different"] })];
+        const drafts = [makeDraft({ program_name: "PIA ENGLISH 4", allowed_instructors: ["Different"] })];
         // Existing rule has ["Nora Velez"]
-        const existingRules = [makeRule({ program_query: "PIA ENGLISH 4" })];
+        const existingRules = [makeRule({ program_name: "PIA ENGLISH 4" })];
         const { rows } = buildPoolImportPreview(drafts, existingRules);
 
         expect(rows[0].status).toBe("update");
@@ -203,10 +203,10 @@ describe("buildPoolImportPreview", () => {
 
     it("calculates unresolvedCount from invalid rows", () => {
         const drafts = [
-            makeDraft({ id: "d1", program_query: "" }),
-            makeDraft({ id: "d2", program_query: "DUP" }),
-            makeDraft({ id: "d3", program_query: "DUP" }),
-            makeDraft({ id: "d4", program_query: "VALID NEW" }),
+            makeDraft({ id: "d1", program_name: "" }),
+            makeDraft({ id: "d2", program_name: "DUP" }),
+            makeDraft({ id: "d3", program_name: "DUP" }),
+            makeDraft({ id: "d4", program_name: "VALID NEW" }),
         ];
         const { summary } = buildPoolImportPreview(drafts, []);
 

@@ -49,12 +49,29 @@ export interface Instructor {
     email: string;
 }
 
+export interface PoolRuleDayOverride {
+    id: string;
+    rule_id: string;
+    day_of_week: number; // 1=Mon...7=Sun (ISO)
+    start_time: string;  // HH:MM
+    end_time: string;    // HH:MM
+    allowed_instructors: string[];
+    created_at: string;
+}
+
+export interface PoolRuleDayOverrideInput {
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+    allowed_instructors: string[];
+}
+
 export interface PoolRule {
     id: string;
     owner_id: string;
     branch: string;
-    program_query: string;
-    allowed_instructors_by_day?: Partial<Record<number, string[]>>;
+    program_name: string;
+    day_overrides: PoolRuleDayOverride[];
     allowed_instructors: string[];
     blocked_instructors: string[];
     hard_lock: boolean;
@@ -67,8 +84,8 @@ export interface PoolRule {
 
 export interface PoolRuleInput {
     branch: string;
-    program_query: string;
-    allowed_instructors_by_day?: Partial<Record<number, string[]>>;
+    program_name: string;
+    day_overrides?: PoolRuleDayOverrideInput[];
     allowed_instructors: string[];
     blocked_instructors: string[];
     hard_lock: boolean;

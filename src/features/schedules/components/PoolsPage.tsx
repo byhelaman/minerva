@@ -77,7 +77,6 @@ import {
     MAX_POSITIVE_POOL_INSTRUCTORS,
 } from "@/features/schedules/utils/pool-utils";
 import {
-    formatDayInstructorPools,
     normalizeDayInstructorPools,
     WEEKDAY_OPTIONS,
 } from "@/features/schedules/utils/weekdays";
@@ -92,7 +91,7 @@ const MAX_VISIBLE_POOL_TAGS = 3;
 
 const poolRuleFormSchema = z.object({
     branch: z.string().trim().min(1, "Branch is required"),
-    program_query: z.string().trim().min(1, "Program is required"),
+    program_name: z.string().trim().min(1, "Program is required"),
     allowed_instructors_by_day: z.record(z.string(), z.array(z.string())),
     allowed_instructors: z.array(z.string()),
     blocked_instructors: z.array(z.string()),
@@ -134,22 +133,10 @@ const poolRuleFormSchema = z.object({
 type RuleFormInput = z.input<typeof poolRuleFormSchema>;
 type RuleFormState = z.output<typeof poolRuleFormSchema>;
 
-function toDayPoolRecord(value: unknown): Record<string, string[]> {
-    const normalized = normalizeDayInstructorPools(value);
-    const record: Record<string, string[]> = {};
-
-    Object.entries(normalized).forEach(([day, instructors]) => {
-        if (Array.isArray(instructors)) {
-            record[String(day)] = [...instructors];
-        }
-    });
-
-    return record;
-}
 
 const emptyForm: RuleFormState = {
     branch: "",
-    program_query: "",
+    program_name: "",
     allowed_instructors_by_day: {},
     allowed_instructors: [],
     blocked_instructors: [],
@@ -162,8 +149,8 @@ const emptyForm: RuleFormState = {
 function toPayload(form: RuleFormState): PoolRuleInput {
     return {
         branch: form.branch.trim(),
-        program_query: form.program_query.trim(),
-        allowed_instructors_by_day: normalizeDayInstructorPools(form.allowed_instructors_by_day),
+        program_name: form.program_name.trim(),
+        day_overrides: Object.entries(normalizeDayInstructorPools(form.allowed_instructors_by_day)).map(([day, instructors]) => ({ day_of_week: Number(day), start_time: "00:00", end_time: "23:59", allowed_instructors: instructors ?? [] })),
         allowed_instructors: sanitizeInstructorList(form.allowed_instructors),
         blocked_instructors: sanitizeInstructorList(form.blocked_instructors),
         hard_lock: form.hard_lock,
@@ -198,8 +185,8 @@ function mapPoolRuleSaveErrorMessage(error: unknown): string | null {
 function toForm(rule: PoolRule): RuleFormState {
     return {
         branch: rule.branch,
-        program_query: rule.program_query,
-        allowed_instructors_by_day: toDayPoolRecord(rule.allowed_instructors_by_day),
+        program_name: rule.program_name,
+        allowed_instructors_by_day: rule.day_overrides.reduce<Record<string, string[]>>((acc, o) => { acc[String(o.day_of_week)] = [...o.allowed_instructors]; return acc; }, {}),
         allowed_instructors: [...rule.allowed_instructors],
         blocked_instructors: [...rule.blocked_instructors],
         hard_lock: rule.hard_lock,
@@ -354,15 +341,15 @@ export function PoolsPage() {
         },
         {
             id: "program",
-            accessorKey: "program_query",
+            accessorKey: "program_name",
             size: 400,
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Program" />
             ),
             cell: ({ row }) => (
                 <div className="space-y-1">
-                    <div className="truncate max-w-90" title={row.original.program_query}>
-                        {row.original.program_query}
+                    <div className="truncate max-w-90" title={row.original.program_name}>
+                        {row.original.program_name}
                     </div>
                     {row.original.comments && (
                         <div className="text-xs text-muted-foreground truncate max-w-90" title={row.original.comments}>
@@ -382,7 +369,7 @@ export function PoolsPage() {
             cell: ({ row }) => (
                 <PoolCellPositive
                     allowedInstructors={row.original.allowed_instructors}
-                    allowedInstructorsByDay={row.original.allowed_instructors_by_day ?? {}}
+                    allowedInstructorsByDay={row.original.day_overrides.reduce<Partial<Record<number, string[]>>>((acc, o) => { acc[o.day_of_week] = o.allowed_instructors; return acc; }, {})}
                     maxVisibleTags={MAX_VISIBLE_POOL_TAGS}
                 />
             ),
@@ -458,7 +445,7 @@ export function PoolsPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => {
-                            setHistoryProgramQuery(row.original.program_query);
+                            setHistoryProgramQuery(row.original.program_name);
                             setHistoryModalOpen(true);
                         }}>
                             History
@@ -509,7 +496,7 @@ export function PoolsPage() {
     const handleSave = form.handleSubmit(async (values) => {
         const payload = toPayload(values);
 
-        const normalizedProgram = normalizeProgramKey(payload.program_query);
+        const normalizedProgram = normalizeProgramKey(payload.program_name);
         const normalizedBranch = payload.branch.trim().toLowerCase();
 
         const hasConflictingRule = rules.some((rule) => {
@@ -519,13 +506,13 @@ export function PoolsPage() {
             }
 
             const sameBranch = rule.branch.trim().toLowerCase() === normalizedBranch;
-            const sameProgram = normalizeProgramKey(rule.program_query) === normalizedProgram;
+            const sameProgram = normalizeProgramKey(rule.program_name) === normalizedProgram;
 
             return sameBranch && sameProgram;
         });
 
         if (hasConflictingRule) {
-            form.setError("program_query", {
+            form.setError("program_name", {
                 message: "There is already a rule for this branch and program combination.",
             });
             form.setError("branch", {
@@ -601,9 +588,9 @@ export function PoolsPage() {
         try {
             const rows: Record<string, string>[] = data.map((rule) => ({
                 branch: rule.branch,
-                program: rule.program_query,
+                program: rule.program_name,
                 positive_pool: rule.allowed_instructors.join(", "),
-                positive_pool_by_day: formatDayInstructorPools(rule.allowed_instructors_by_day),
+                positive_pool_by_day: "",
                 negative_pool: rule.blocked_instructors.join(", "),
                 hard_lock: rule.hard_lock ? "TRUE" : "FALSE",
                 is_active: rule.is_active ? "TRUE" : "FALSE",
@@ -696,8 +683,8 @@ export function PoolsPage() {
             .map((row) => {
                 const payload: PoolRuleInput = {
                     branch: row.branch,
-                    program_query: row.program_query,
-                    allowed_instructors_by_day: normalizeDayInstructorPools(row.allowed_instructors_by_day),
+                    program_name: row.program_name,
+                    day_overrides: row.day_overrides ?? [],
                     allowed_instructors: row.allowed_instructors,
                     blocked_instructors: row.blocked_instructors,
                     hard_lock: row.hard_lock,
@@ -835,7 +822,7 @@ export function PoolsPage() {
                         </AlertDialogTitle>
                         <AlertDialogDescription>
                             {pendingDeleteRules.length === 1 ? (
-                                <>This will permanently delete the pool rule for <span className="font-semibold text-foreground">{pendingDeleteRules[0]?.program_query}</span>. This action cannot be undone.</>
+                                <>This will permanently delete the pool rule for <span className="font-semibold text-foreground">{pendingDeleteRules[0]?.program_name}</span>. This action cannot be undone.</>
                             ) : (
                                 <>Are you sure you want to delete {pendingDeleteRules.length} pool rules? This action cannot be undone.</>
                             )}
@@ -894,7 +881,7 @@ export function PoolsPage() {
 
                             <Controller
                                 control={form.control}
-                                name="program_query"
+                                name="program_name"
                                 render={({ field, fieldState }) => (
                                     <Field data-invalid={fieldState.invalid}>
                                         <FieldLabel htmlFor={field.name}>Program</FieldLabel>
