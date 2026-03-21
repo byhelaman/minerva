@@ -78,8 +78,11 @@ export const SCHEDULE_TOOLS = [
     function: {
       name: "check_instructor_availability",
       description:
-        "Checks if an instructor has schedule conflicts during a time range on a date. " +
-        "Use for: 'is María available from 9 to 10 on DATE', 'can Juan cover a class at 15:00'.",
+        "Checks if a SPECIFIC named instructor has schedule conflicts during a time range on a date. " +
+        "Use ONLY when the user asks about one instructor by name: " +
+        "'is María available from 9 to 10', 'does Juan have anything at 15:00'. " +
+        "Do NOT use to find substitutes or coverage — use find_available_instructors for that. " +
+        "Pass the instructor name exactly as it appears in the schedule if known.",
       parameters: {
         type: "object",
         properties: {
@@ -98,9 +101,11 @@ export const SCHEDULE_TOOLS = [
       name: "find_available_instructors",
       description:
         "Returns instructors who are free (no schedule conflict) during a time range on a date. " +
-        "Use for: 'who is available at 15:00 on DATE', 'who can cover an evaluation at 18:00'. " +
+        "Use for: 'who can cover this class', 'find a substitute for 11:00-12:00 on DATE', " +
+        "'who is available at 15:00', 'who can cover an evaluation at 18:00'. " +
+        "This is the correct tool when the user provides a class and wants to know who can replace or cover it. " +
         "For '19:00 (20min)', parse end_time as 19:20. " +
-        "Use instructor_list to restrict to a subset of evaluators.",
+        "Use instructor_list to restrict to a subset of instructors.",
       parameters: {
         type: "object",
         properties: {
