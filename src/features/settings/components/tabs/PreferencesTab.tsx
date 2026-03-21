@@ -4,13 +4,6 @@ import { ArrowUpRight, Coffee, Github, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import {
     AlertDialog,
     AlertDialogAction,
     AlertDialogCancel,
@@ -27,13 +20,11 @@ import { BaseDirectory, exists, remove } from "@tauri-apps/plugin-fs";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
 import { STORAGE_FILES } from "@/lib/constants";
-import { useTranslation } from "react-i18next";
 import { useUpdaterContext } from "@/components/updater-context";
 import { getVersion, getTauriVersion } from "@tauri-apps/api/app";
 import { useState, useEffect } from "react";
 
 export function PreferencesTab() {
-    const { t } = useTranslation();
     const { setTheme } = useTheme();
     const { settings, updateSetting } = useSettings();
     const { checkForUpdates, isChecking, error: updateError } = useUpdaterContext();
@@ -50,8 +41,8 @@ export function PreferencesTab() {
         try {
             const result = await checkForUpdates();
             if (!result) {
-                toast.success(t("settings.system.up_to_date"), {
-                    description: t("settings.system.up_to_date_desc", { version: appVersion }),
+                toast.success("You're up to date!", {
+                    description: `Minerva v${appVersion} is the latest version.`,
                 });
             }
         } catch {
@@ -61,9 +52,9 @@ export function PreferencesTab() {
 
     useEffect(() => {
         if (updateError) {
-            toast.error(t("settings.system.update_error"), { description: updateError });
+            toast.error("Could not check for updates", { description: updateError });
         }
-    }, [updateError, t]);
+    }, [updateError]);
 
     const handleClearCache = async () => {
         try {
@@ -84,7 +75,6 @@ export function PreferencesTab() {
             updateSetting("openAfterExport", true);
             updateSetting("clearScheduleOnLoad", false);
             updateSetting("realtimeNotifications", true);
-            updateSetting("autoSaveInterval", 3000);
             setTheme("system");
             if (filesDeleted > 0) {
                 toast.success("Cache cleared successfully", { description: "Local data and settings have been reset." });
@@ -101,11 +91,11 @@ export function PreferencesTab() {
         <div className="space-y-6 px-1">
             {/* Appearance */}
             <div className="space-y-4">
-                <p className="text-sm font-semibold">{t("settings.appearance.title")}</p>
+                <p className="text-sm font-semibold">Appearance</p>
                 <div className="flex items-center justify-between gap-4">
                     <Label htmlFor="actions-respect-filters" className="flex flex-col gap-0.5 cursor-pointer font-normal items-start">
-                        <span className="text-sm">{t("settings.appearance.respect_filters")}</span>
-                        <span className="text-xs text-muted-foreground">{t("settings.appearance.respect_filters_desc")}</span>
+                        <span className="text-sm">Actions Respect Filters</span>
+                        <span className="text-xs text-muted-foreground">Apply actions (Export, Copy) only to the currently filtered data.</span>
                     </Label>
                     <Switch
                         id="actions-respect-filters"
@@ -119,11 +109,11 @@ export function PreferencesTab() {
 
             {/* Notifications */}
             <div className="space-y-4">
-                <p className="text-sm font-semibold">{t("settings.notifications.title")}</p>
+                <p className="text-sm font-semibold">Notifications</p>
                 <div className="flex items-center justify-between gap-4">
                     <Label htmlFor="realtime-notifications" className="flex flex-col gap-0.5 cursor-pointer font-normal items-start">
-                        <span className="text-sm">{t("settings.notifications.schedule_updates")}</span>
-                        <span className="text-xs text-muted-foreground">{t("settings.notifications.schedule_updates_desc")}</span>
+                        <span className="text-sm">Schedule Updates</span>
+                        <span className="text-xs text-muted-foreground">Show notifications when new schedules are published.</span>
                     </Label>
                     <Switch
                         id="realtime-notifications"
@@ -137,41 +127,22 @@ export function PreferencesTab() {
 
             {/* Automation */}
             <div className="space-y-4">
-                <p className="text-sm font-semibold">{t("settings.automation.title")}</p>
+                <p className="text-sm font-semibold">Automation</p>
                 <div className="flex items-center justify-between gap-4">
                     <Label htmlFor="auto-save" className="flex flex-col gap-0.5 cursor-pointer font-normal items-start">
-                        <span className="text-sm">{t("settings.automation.auto_save")}</span>
-                        <span className="text-xs text-muted-foreground">{t("settings.automation.auto_save_desc")}</span>
+                        <span className="text-sm">Auto Save</span>
+                        <span className="text-xs text-muted-foreground">Automatically save changes to local storage.</span>
                     </Label>
-                    <div className="flex items-center gap-2 shrink-0">
-                        <Select
-                            value={String(settings.autoSaveInterval)}
-                            onValueChange={(value) => updateSetting("autoSaveInterval", Number(value))}
-                            disabled={!settings.autoSave}
-                        >
-                            <SelectTrigger className="min-w-28" size="sm">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="1000">{t("settings.automation.interval_1s")}</SelectItem>
-                                <SelectItem value="3000">{t("settings.automation.interval_3s")}</SelectItem>
-                                <SelectItem value="5000">{t("settings.automation.interval_5s")}</SelectItem>
-                                <SelectItem value="10000">{t("settings.automation.interval_10s")}</SelectItem>
-                                <SelectItem value="30000">{t("settings.automation.interval_30s")}</SelectItem>
-                                <SelectItem value="60000">{t("settings.automation.interval_1m")}</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <Switch
-                            id="auto-save"
-                            checked={settings.autoSave}
-                            onCheckedChange={(checked) => updateSetting("autoSave", checked)}
-                        />
-                    </div>
+                    <Switch
+                        id="auto-save"
+                        checked={settings.autoSave}
+                        onCheckedChange={(checked) => updateSetting("autoSave", checked)}
+                    />
                 </div>
                 <div className="flex items-center justify-between gap-4">
                     <Label htmlFor="clear-schedule-on-load" className="flex flex-col gap-0.5 cursor-pointer font-normal items-start">
-                        <span className="text-sm">{t("settings.automation.clear_schedule_on_load")}</span>
-                        <span className="text-xs text-muted-foreground">{t("settings.automation.clear_schedule_on_load_desc")}</span>
+                        <span className="text-sm">Clear Schedule on Load</span>
+                        <span className="text-xs text-muted-foreground">Replace existing schedules when loading a new file.</span>
                     </Label>
                     <Switch
                         id="clear-schedule-on-load"
@@ -185,11 +156,11 @@ export function PreferencesTab() {
 
             {/* Storage */}
             <div className="space-y-4">
-                <p className="text-sm font-semibold">{t("settings.storage.title")}</p>
+                <p className="text-sm font-semibold">Storage & Export</p>
                 <div className="flex items-center justify-between gap-4">
                     <Label htmlFor="open-after-export" className="flex flex-col gap-0.5 cursor-pointer font-normal items-start">
-                        <span className="text-sm">{t("settings.storage.open_after_export")}</span>
-                        <span className="text-xs text-muted-foreground">{t("settings.storage.open_after_export_desc")}</span>
+                        <span className="text-sm">Open After Export</span>
+                        <span className="text-xs text-muted-foreground">Automatically open the file after exporting.</span>
                     </Label>
                     <Switch
                         id="open-after-export"
@@ -203,27 +174,27 @@ export function PreferencesTab() {
 
             {/* System */}
             <div className="space-y-4">
-                <p className="text-sm font-semibold">{t("settings.system.title")}</p>
+                <p className="text-sm font-semibold">System</p>
                 <div className="flex items-center justify-between gap-4">
                     <Label className="flex flex-col gap-0.5 font-normal items-start">
-                        <span className="text-sm">{t("settings.system.local_storage")}</span>
-                        <span className="text-xs text-muted-foreground">{t("settings.system.local_storage_desc")}</span>
+                        <span className="text-sm">Local Storage</span>
+                        <span className="text-xs text-muted-foreground">Manage local data cache (schedules, settings).</span>
                     </Label>
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="outline" size="sm" className="shrink-0">
-                                {t("settings.system.clear_cache_btn")}
+                                Clear Cache
                             </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent className="sm:max-w-100!">
                             <AlertDialogHeader>
-                                <AlertDialogTitle>{t("settings.system.clear_cache_modal_title")}</AlertDialogTitle>
+                                <AlertDialogTitle>Clear all local data?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    {t("settings.system.clear_cache_modal_desc")}
+                                    This will delete all saved schedules and reset your settings to defaults. This action cannot be undone.
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                                <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 <AlertDialogAction onClick={handleClearCache}>
                                     Continue
                                 </AlertDialogAction>
@@ -240,19 +211,19 @@ export function PreferencesTab() {
                 <p className="text-sm font-semibold">About</p>
                 <div className="flex items-center justify-between gap-4">
                     <Label className="flex flex-col gap-0.5 font-normal items-start">
-                        <span className="text-sm">{t("settings.system.software_update")}</span>
-                        <span className="text-xs text-muted-foreground">{t("settings.system.software_update_desc")}</span>
+                        <span className="text-sm">Software Update</span>
+                        <span className="text-xs text-muted-foreground">Check for the latest version of Minerva.</span>
                     </Label>
                     <Button variant="outline" size="sm" onClick={handleCheckUpdates} disabled={isChecking} className="shrink-0">
-                        {isChecking ? <><Loader2 className="animate-spin" />{t("settings.system.checking_updates")}</> : t("settings.system.check_updates_btn")}
+                        {isChecking ? <><Loader2 className="animate-spin" />Checking...</> : "Check for Updates"}
                     </Button>
                 </div>
                 <div className="grid grid-cols-2 gap-4 pt-2 text-sm">
                     {[
-                        { label: t("settings.system.version"), value: appVersion ? `v${appVersion}` : "—" },
-                        { label: t("settings.system.environment"), value: import.meta.env.DEV ? t("settings.system.environment_dev") : t("settings.system.environment_prod") },
-                        { label: t("settings.system.build"), value: __BUILD_DATE__ },
-                        { label: t("settings.system.tauri"), value: tauriVersion ? `v${tauriVersion}` : "—" },
+                        { label: "Version", value: appVersion ? `v${appVersion}` : "—" },
+                        { label: "Environment", value: import.meta.env.DEV ? "Development" : "Production" },
+                        { label: "Build", value: __BUILD_DATE__ },
+                        { label: "Tauri", value: tauriVersion ? `v${tauriVersion}` : "—" },
                     ].map(({ label, value }) => (
                         <div key={label} className="flex flex-col gap-0.5">
                             <span className="text-xs text-muted-foreground">{label}</span>

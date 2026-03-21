@@ -5,9 +5,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CalendarCheck, Bug, UserPlus, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { formatDistanceToNow, type Locale } from "date-fns";
-import { es, enUS, fr } from "date-fns/locale";
-import { useTranslation } from "react-i18next";
+import { formatDistanceToNow } from "date-fns";
+import { enUS } from "date-fns/locale";
 
 // — Tipos —
 
@@ -20,8 +19,6 @@ interface ActivityItem {
     actor: string;
     timestamp: string;
 }
-
-const DATE_LOCALES: Record<string, Locale> = { es, en: enUS, fr };
 
 const ACTIVITY_ICONS: Record<ActivityType, typeof CalendarCheck> = {
     schedule_published: CalendarCheck,
@@ -61,7 +58,6 @@ async function fetchProfileNames(ids: string[]): Promise<Map<string, string>> {
 // — Componente —
 
 export function ActivityLog() {
-    const { i18n } = useTranslation();
     const [items, setItems] = useState<ActivityItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -161,7 +157,7 @@ export function ActivityLog() {
         fetchActivity();
     }, [fetchActivity]);
 
-    const locale = DATE_LOCALES[i18n.language] ?? enUS;
+    const locale = enUS;
 
     return (
         <Card className="shadow-none">

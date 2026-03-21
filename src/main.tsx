@@ -7,7 +7,6 @@ import { ThemeProvider } from "./components/theme-provider";
 import { SettingsProvider } from "./components/settings-provider";
 import { AuthProvider } from "./components/auth-provider";
 import { BugReportButton } from "./features/docs/components/BugReportForm";
-import "./lib/i18n";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

@@ -192,7 +192,6 @@ export function ScheduleDashboard() {
     }, [poolValidation]);
 
     const hasLoadedAutosave = useRef(false);
-    const autoSaveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
     const { settings } = useSettings();
     const { fetchActiveMeetings, isLoadingData } = useZoomStore();
 
@@ -238,16 +237,12 @@ export function ScheduleDashboard() {
         loadAutosave();
     }, [setBaseSchedules, setActiveDate]);
 
-    // Auto-guardado con debounce para SCHEDULES (Solo Drafts)
+    // Auto-guardado inmediato para SCHEDULES (Solo Drafts)
     useEffect(() => {
         if (!hasLoadedAutosave.current) return;
         if (!settings.autoSave) return;
 
-        if (autoSaveTimeout.current) {
-            clearTimeout(autoSaveTimeout.current);
-        }
-
-        autoSaveTimeout.current = setTimeout(async () => {
+        (async () => {
             try {
                 if (baseSchedules.length > 0) {
                     await writeTextFile(STORAGE_FILES.SCHEDULES_DRAFT, JSON.stringify(baseSchedules, null, 2), {
@@ -262,14 +257,8 @@ export function ScheduleDashboard() {
             } catch (error) {
                 console.error("Auto-save failed:", error);
             }
-        }, settings.autoSaveInterval);
-
-        return () => {
-            if (autoSaveTimeout.current) {
-                clearTimeout(autoSaveTimeout.current);
-            }
-        };
-    }, [baseSchedules, settings.autoSave, settings.autoSaveInterval]);
+        })();
+    }, [baseSchedules, settings.autoSave]);
 
 
     // Lógica del Live Mode

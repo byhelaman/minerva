@@ -1,6 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, Controller } from "react-hook-form";
-import { useTranslation } from "react-i18next";
 import * as z from "zod";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
@@ -14,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
-import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
     Select,
@@ -39,7 +38,6 @@ interface AccountTabProps {
 }
 
 export function AccountTab({ onClose }: AccountTabProps) {
-    const { t, i18n } = useTranslation();
     const { profile, updateDisplayName, signOut } = useAuth();
     const { setTheme } = useTheme();
     const { settings, updateSetting } = useSettings();
@@ -48,7 +46,6 @@ export function AccountTab({ onClose }: AccountTabProps) {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [deleteConfirmText, setDeleteConfirmText] = useState("");
     const [editNameOpen, setEditNameOpen] = useState(false);
-    const [editLanguageOpen, setEditLanguageOpen] = useState(false);
 
     const nameForm = useForm<EditNameValues>({
         resolver: zodResolver(editNameSchema),
@@ -86,14 +83,14 @@ export function AccountTab({ onClose }: AccountTabProps) {
         try {
             const { error } = await supabase.rpc('delete_own_account');
             if (error) {
-                toast.error(t("profile.delete_failed"), { description: error.message });
+                toast.error("Failed to delete account", { description: error.message });
                 return;
             }
-            toast.success(t("profile.delete_success"));
+            toast.success("Account deleted successfully");
             onClose();
             await signOut();
         } catch {
-            toast.error(t("profile.delete_failed"));
+            toast.error("Failed to delete account");
         } finally {
             setIsDeleting(false);
         }
@@ -131,7 +128,7 @@ export function AccountTab({ onClose }: AccountTabProps) {
                                 </Badge>
                             )) || (
                                     <span className="text-sm text-muted-foreground">
-                                        {t("profile.permissions.none")}
+                                        No permissions assigned
                                     </span>
                                 )}
                         </div>
@@ -145,15 +142,6 @@ export function AccountTab({ onClose }: AccountTabProps) {
             <div className="space-y-4">
                 <p className="text-sm font-semibold">Preferences</p>
                 <div className="grid gap-6">
-                    <div className="flex items-center justify-between gap-4">
-                        <div className="space-y-0.5">
-                            <p className="text-sm text-muted-foreground">Language</p>
-                            <p className="text-sm font-medium">{i18n.language === "en" ? "English" : i18n.language === "es" ? "Español" : i18n.language === "fr" ? "Français" : i18n.language}</p>
-                        </div>
-                        <Button variant="outline" size="sm" onClick={() => setEditLanguageOpen(true)} className="shrink-0">
-                            Change language
-                        </Button>
-                    </div>
                     <div className="flex items-center justify-between gap-4">
                         <Label className="flex flex-col gap-0.5 cursor-pointer font-normal items-start">
                             <span className="text-sm text-muted-foreground">Theme</span>
@@ -223,41 +211,6 @@ export function AccountTab({ onClose }: AccountTabProps) {
                 </DialogContent>
             </Dialog>
 
-            {/* Change Language Dialog */}
-            <Dialog open={editLanguageOpen} onOpenChange={setEditLanguageOpen}>
-                <DialogContent className="sm:max-w-sm gap-6">
-                    <DialogHeader>
-                        <DialogTitle>Change language</DialogTitle>
-                    </DialogHeader>
-                    <Field>
-                        <FieldLabel>Language</FieldLabel>
-                        <Select
-                            value={i18n.language}
-                            onValueChange={(value) => {
-                                i18n.changeLanguage(value);
-                                toast.info(t("settings.preferences.language_changed"), {
-                                    description: t("settings.preferences.language_wip"),
-                                });
-                                setEditLanguageOpen(false);
-                            }}
-                        >
-                            <SelectTrigger size="sm" className="w-full">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="en">English</SelectItem>
-                                <SelectItem value="es">Español</SelectItem>
-                                <SelectItem value="fr">Français</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <FieldDescription>
-                            Pick which language to use for Minerva
-                        </FieldDescription>
-                    </Field>
-                    <DialogFooter showCloseButton />
-                </DialogContent>
-            </Dialog>
-
             {/* Delete Account Dialog */}
             <Dialog open={deleteDialogOpen} onOpenChange={(open) => {
                 setDeleteDialogOpen(open);
@@ -265,14 +218,14 @@ export function AccountTab({ onClose }: AccountTabProps) {
             }}>
                 <DialogContent className="sm:max-w-sm gap-6">
                     <DialogHeader>
-                        <DialogTitle>{t("profile.delete_confirm_title")}</DialogTitle>
+                        <DialogTitle>Delete your account?</DialogTitle>
                         <DialogDescription>
                             For security purposes, please re-enter your email below.
                         </DialogDescription>
                     </DialogHeader>
                     <Field>
                         <FieldLabel htmlFor="delete-confirm">
-                            {t("profile.delete_confirm_label")}
+                            Type your email to confirm
                         </FieldLabel>
                         <Input
                             id="delete-confirm"

@@ -6,7 +6,6 @@ import { STORAGE_FILES } from "@/lib/constants";
 interface AppSettings {
     actionsRespectFilters: boolean;
     autoSave: boolean;
-    autoSaveInterval: number;
     theme: "light" | "dark" | "system";
     openAfterExport: boolean;
     clearScheduleOnLoad: boolean;
@@ -27,7 +26,6 @@ interface SettingsContextType {
 const defaultSettings: AppSettings = {
     actionsRespectFilters: false,
     autoSave: true,
-    autoSaveInterval: 3000,
     theme: "system",
     openAfterExport: true,
     clearScheduleOnLoad: false,
@@ -70,15 +68,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                             } else if (typeof p[key] === typeof defaultSettings[key]) {
                                 Object.assign(validated, { [key]: p[key] });
                             }
-                        }
-
-                        // Migrar desde formato aiProviders[] (versión anterior)
-                        const legacyProviders = p["aiProviders"];
-                        if (Array.isArray(legacyProviders) && legacyProviders.length > 0) {
-                            const first = legacyProviders[0] as Record<string, unknown>;
-                            if (typeof first.baseUrl === "string" && first.baseUrl) validated.aiBaseUrl = first.baseUrl;
-                            if (typeof first.model === "string" && first.model) validated.aiModel = first.model;
-                            if (typeof first.apiKey === "string") validated.aiApiKey = first.apiKey;
                         }
 
                         setSettings(validated);

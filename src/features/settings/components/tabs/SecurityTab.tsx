@@ -1,6 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, Controller } from "react-hook-form";
-import { useTranslation } from "react-i18next";
 import * as z from "zod";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -24,7 +23,6 @@ const passwordFormSchema = z.object({
 type PasswordFormValues = z.infer<typeof passwordFormSchema>;
 
 export function SecurityTab() {
-    const { t } = useTranslation();
     const { updatePassword, verifyCurrentPassword } = useAuth();
     const [isPasswordLoading, setIsPasswordLoading] = useState(false);
     const [changePasswordOpen, setChangePasswordOpen] = useState(false);
@@ -62,14 +60,14 @@ export function SecurityTab() {
 
     return (
         <div className="space-y-4">
-            <p className="text-sm font-semibold">{t("profile.security")}</p>
+            <p className="text-sm font-semibold">Security</p>
             <div className="flex items-center justify-between">
                 <div className="flex flex-col gap-0.5">
                     <span className="text-sm">Password</span>
                     <span className="text-xs text-muted-foreground">Change your account password.</span>
                 </div>
                 <Button variant="outline" size="sm" className="shrink-0" onClick={() => setChangePasswordOpen(true)}>
-                    {t("profile.update_password")}
+                    Update Password
                 </Button>
             </div>
 
@@ -88,9 +86,9 @@ export function SecurityTab() {
                                 name="currentPassword"
                                 render={({ field, fieldState }) => (
                                     <Field data-invalid={fieldState.invalid}>
-                                        <FieldLabel>{t("profile.current_password")}</FieldLabel>
+                                        <FieldLabel>Current Password</FieldLabel>
                                         <Input {...field} type="password" aria-invalid={fieldState.invalid} disabled={isPasswordLoading} />
-                                        <FieldDescription>{t("profile.current_password_desc")}</FieldDescription>
+                                        <FieldDescription>Enter your current password to verify your identity.</FieldDescription>
                                         {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                                     </Field>
                                 )}
@@ -100,9 +98,9 @@ export function SecurityTab() {
                                 name="newPassword"
                                 render={({ field, fieldState }) => (
                                     <Field data-invalid={fieldState.invalid}>
-                                        <FieldLabel>{t("profile.new_password")}</FieldLabel>
+                                        <FieldLabel>New Password</FieldLabel>
                                         <Input {...field} type="password" aria-invalid={fieldState.invalid} />
-                                        <FieldDescription>{t("profile.password_desc")}</FieldDescription>
+                                        <FieldDescription>Password must be at least 8 characters.</FieldDescription>
                                         {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                                     </Field>
                                 )}
@@ -112,9 +110,9 @@ export function SecurityTab() {
                                 name="confirmPassword"
                                 render={({ field, fieldState }) => (
                                     <Field data-invalid={fieldState.invalid}>
-                                        <FieldLabel>{t("profile.confirm_password")}</FieldLabel>
+                                        <FieldLabel>Confirm Password</FieldLabel>
                                         <Input {...field} type="password" aria-invalid={fieldState.invalid} />
-                                        <FieldDescription>{t("profile.confirm_password_desc")}</FieldDescription>
+                                        <FieldDescription>Please confirm your new password.</FieldDescription>
                                         {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                                     </Field>
                                 )}
@@ -123,7 +121,7 @@ export function SecurityTab() {
                     </form>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setChangePasswordOpen(false)}>
-                            {t("common.cancel")}
+                            Cancel
                         </Button>
                         <Button type="submit" form="password-form" disabled={isPasswordLoading}>
                             {isPasswordLoading && <Loader2 className="animate-spin" />}
