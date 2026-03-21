@@ -2,6 +2,7 @@ import { Routes, Route, Outlet } from "react-router-dom";
 
 import { MainNav } from "@/components/main-nav";
 import { UserNav } from "@/components/user-nav";
+import { NotificationBell } from "@/components/NotificationBell";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ScheduleDashboard } from "@/features/schedules/components/ScheduleDashboard";
 import { PoolsPage } from "@/features/schedules/components/PoolsPage";
@@ -17,6 +18,7 @@ function Layout() {
       <div className="flex p-3 px-5">
         <MainNav />
         <div className="ml-auto flex items-center space-x-4">
+          <NotificationBell />
           <UserNav />
         </div>
       </div>

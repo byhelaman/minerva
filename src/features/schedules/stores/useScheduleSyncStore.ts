@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { formatDateForDisplay } from '@/lib/date-utils';
 import { jwtDecode } from "jwt-decode";
-import { PublishedSchedule, SchedulesConfig } from '../types';
+import { PublishedSchedule, ScheduleNotification } from '../types';
 import { scheduleEntriesService } from '../services/schedule-entries-service';
 import { useScheduleDataStore } from './useScheduleDataStore';
 import { useScheduleUIStore } from './useScheduleUIStore';
@@ -20,18 +20,12 @@ interface JwtClaims {
 }
 
 interface ScheduleSyncState {
-    // MS Config State
-    msConfig: SchedulesConfig;
-    refreshMsConfig: () => Promise<void>;
-
     // Sync State
     isSyncing: boolean;
-    isPublishing: boolean; // Renamed concept: Publishing = DB, Syncing = Excel? Or shared?
-    // Let's keep isPublishing for DB, add isSyncing for Excel
+    isPublishing: boolean;
 
     // Core Actions
     publishToSupabase: () => Promise<{ success: boolean; error?: string; exists?: boolean }>;
-    syncToExcel: (date?: string, endDate?: string) => Promise<void>;
 
     // Supabase State (Published Schedules Table)
     latestPublished: PublishedSchedule | null;
@@ -39,10 +33,14 @@ interface ScheduleSyncState {
     currentVersionUpdatedAt: string | null;
     dismissedVersions: string[];
 
+    // Notifications
+    notifications: ScheduleNotification[];
+    addNotification: (published: PublishedSchedule) => void;
+    markAllRead: () => void;
+
     checkForUpdates: () => Promise<void>;
     checkIfScheduleExists: (date: string) => Promise<boolean>;
     dismissUpdate: (id: string) => void;
-    // Download legacy logic removed or adapted? Adapted to just load date
     loadPublishedSchedule: (schedule: PublishedSchedule) => Promise<void>;
     resetCurrentVersion: (recheckForUpdates?: boolean) => Promise<void>;
     resetSyncState: () => void;
@@ -61,17 +59,6 @@ const getSavedVersion = () => {
 };
 
 export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
-    msConfig: {
-        isConnected: false,
-        schedulesFolderId: null,
-        incidencesFileId: null,
-        schedulesFolderName: null,
-        incidencesFileName: null,
-        incidencesWorksheetId: null,
-        incidencesWorksheetName: null,
-        incidencesTableId: null,
-        incidencesTableName: null
-    },
     isPublishing: false,
     isSyncing: false,
 
@@ -80,20 +67,35 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
     currentVersionUpdatedAt: getSavedVersion().updated_at || null,
     dismissedVersions: JSON.parse(localStorage.getItem('dismissed_schedule_versions') || '[]'),
 
-    refreshMsConfig: async () => {
-        set({
-            msConfig: {
-                isConnected: false,
-                schedulesFolderId: null,
-                incidencesFileId: null,
-                schedulesFolderName: null,
-                incidencesFileName: null,
-                incidencesWorksheetId: null,
-                incidencesWorksheetName: null,
-                incidencesTableId: null,
-                incidencesTableName: null,
-            }
-        });
+    notifications: (() => {
+        try { return JSON.parse(localStorage.getItem('minerva_schedule_notifications') || '[]'); }
+        catch { return []; }
+    })(),
+
+    addNotification: (published: PublishedSchedule) => {
+        const { notifications } = get();
+        if (notifications.some(n => n.id === published.id)) return;
+        const next: ScheduleNotification[] = [
+            {
+                id: published.id,
+                schedule_date: published.schedule_date,
+                entries_count: published.entries_count,
+                updated_at: published.updated_at,
+                received_at: new Date().toISOString(),
+                read: false,
+            },
+            ...notifications,
+        ].slice(0, 10);
+        localStorage.setItem('minerva_schedule_notifications', JSON.stringify(next));
+        set({ notifications: next });
+    },
+
+    markAllRead: () => {
+        const { notifications } = get();
+        if (notifications.every(n => n.read)) return;
+        const next = notifications.map(n => ({ ...n, read: true }));
+        localStorage.setItem('minerva_schedule_notifications', JSON.stringify(next));
+        set({ notifications: next });
     },
 
     publishToSupabase: async () => {
@@ -166,12 +168,6 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
         } finally {
             set({ isPublishing: false });
         }
-    },
-
-    syncToExcel: async (date?: string, endDateArg?: string) => {
-        date;
-        endDateArg;
-        toast.info("Microsoft sync is deprecated");
     },
 
     loadPublishedSchedule: async (schedule: PublishedSchedule) => {
@@ -290,9 +286,7 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
 
     resetSyncState: () => {
         set({
-            latestPublished: null, // Clear the "New Version" toast trigger
-            // We might keep msConfig? Or clear it too?
-            // For security, clearing sensitive operational state is good.
+            latestPublished: null,
             isPublishing: false,
             isSyncing: false
         });

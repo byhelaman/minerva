@@ -31,6 +31,15 @@ export interface PublishedSchedule {
     updated_at: string;
 }
 
+export interface ScheduleNotification {
+    id: string;
+    schedule_date: string;
+    entries_count: number;
+    updated_at: string;
+    received_at: string;
+    read: boolean;
+}
+
 export interface SchedulesConfig {
     isConnected: boolean;
     schedulesFolderId: string | null;
