@@ -9,6 +9,8 @@ import {
   dbGetStats,
   dbCheckInstructorAvailability,
   dbFindAvailableInstructors,
+  dbGetInstructorProfile,
+  dbFindEvaluators,
 } from "../engine/db-queries";
 import type {
   GetSchedulesForDateInput,
@@ -17,6 +19,8 @@ import type {
   FindAvailableInstructorsInput,
   GetSchedulesRangeInput,
   GetScheduleStatsInput,
+  GetInstructorProfileInput,
+  FindEvaluatorsInput,
 } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -37,7 +41,7 @@ export const SCHEDULE_TOOLS = [
         properties: {
           date:           { type: "string", description: "Date in YYYY-MM-DD format" },
           time_filter:    { type: "string", description: "HH:MM 24h — returns only classes active at that moment" },
-          program_filter: { type: "string", description: "Partial match on program name (case-insensitive)" },
+          program_filter: { type: "string", description: "Partial keyword match on program name (case-insensitive). Use short singular roots: 'evaluacion' not 'evaluaciones', 'kids' not 'clases kids'" },
           branch_filter:  { type: "string", description: "Partial match on branch/sede (case-insensitive)" },
           count_only:     { type: "boolean", description: "Return only the total count, no schedule details" },
         },
@@ -120,7 +124,7 @@ export const SCHEDULE_TOOLS = [
         properties: {
           start_date:     { type: "string", description: "Start date in YYYY-MM-DD format" },
           end_date:       { type: "string", description: "End date in YYYY-MM-DD format" },
-          program_filter: { type: "string", description: "Partial match on program name" },
+          program_filter: { type: "string", description: "Partial keyword match on program name (case-insensitive). Use short singular roots: 'evaluacion' not 'evaluaciones'" },
           branch_filter:  { type: "string", description: "Partial match on branch/sede" },
           count_only:     { type: "boolean", description: "Return only the total count" },
         },
@@ -149,6 +153,54 @@ export const SCHEDULE_TOOLS = [
           },
         },
         required: ["start_date", "end_date"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "get_instructor_profile",
+      description:
+        "Returns an instructor's full profile: nationality, languages, evaluator status, " +
+        "evaluation types and languages they can evaluate in, and weekly availability windows. " +
+        "Use for: 'is María an evaluator', 'what days can Juan teach', " +
+        "'what languages does Ana evaluate', 'show Jorge\\'s availability schedule'.",
+      parameters: {
+        type: "object",
+        properties: {
+          instructor_name: {
+            type: "string",
+            description: "Instructor name (partial/fuzzy match accepted)",
+          },
+        },
+        required: ["instructor_name"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "find_evaluators",
+      description:
+        "Finds qualified evaluators with no schedule conflict for a specific date and time window. " +
+        "An evaluator must: (1) be flagged as evaluator, (2) have a weekly availability window " +
+        "covering the full slot on that day of week, (3) have no conflicting class on that date. " +
+        "Use for: 'who can evaluate at 15:00 on DATE', 'find evaluators for kids at 9am', " +
+        "'available corporate evaluators on Friday'. " +
+        "Always infer end_time — for '19:00 (20min)' use end_time='19:20'. " +
+        "Set eval_type only when the user specifies: 'adultos', 'kids', or 'corporativo'.",
+      parameters: {
+        type: "object",
+        properties: {
+          date:       { type: "string", description: "Date in YYYY-MM-DD format" },
+          start_time: { type: "string", description: "Start time HH:MM (24h)" },
+          end_time:   { type: "string", description: "End time HH:MM (24h)" },
+          eval_type:  {
+            type: "string",
+            description: "Optional filter: 'corporativo', 'consumer_adult', 'demo_adult', 'consumer_kids', 'demo_kids'",
+          },
+        },
+        required: ["date", "start_time", "end_time"],
       },
     },
   },
@@ -209,6 +261,19 @@ async function handleGetScheduleStats(input: GetScheduleStatsInput) {
   });
 }
 
+async function handleGetInstructorProfile(input: GetInstructorProfileInput) {
+  return dbGetInstructorProfile({ name: input.instructor_name, threshold: input.threshold });
+}
+
+async function handleFindEvaluators(input: FindEvaluatorsInput) {
+  return dbFindEvaluators({
+    date:      input.date,
+    startTime: input.start_time,
+    endTime:   input.end_time,
+    evalType:  input.eval_type,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Dispatcher
 // ---------------------------------------------------------------------------
@@ -229,6 +294,10 @@ export async function executeToolCall(
       return handleGetSchedulesRange(toolInput as unknown as GetSchedulesRangeInput);
     case "get_schedule_stats":
       return handleGetScheduleStats(toolInput as unknown as GetScheduleStatsInput);
+    case "get_instructor_profile":
+      return handleGetInstructorProfile(toolInput as unknown as GetInstructorProfileInput);
+    case "find_evaluators":
+      return handleFindEvaluators(toolInput as unknown as FindEvaluatorsInput);
     default:
       return { error: `Herramienta desconocida: ${toolName}` };
   }
@@ -242,4 +311,6 @@ export const TOOL_LABELS: Record<string, string> = {
   find_available_instructors:      "Buscando instructores disponibles...",
   get_schedules_range:             "Consultando base de datos...",
   get_schedule_stats:              "Calculando estadísticas...",
+  get_instructor_profile:          "Consultando perfil del instructor...",
+  find_evaluators:                 "Buscando evaluadores disponibles...",
 };

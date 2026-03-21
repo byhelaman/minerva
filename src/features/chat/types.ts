@@ -94,3 +94,15 @@ export interface GetScheduleStatsInput {
   instructor_name?: string;
   group_by?: "instructor" | "date" | "branch";
 }
+
+export interface GetInstructorProfileInput {
+  instructor_name: string;
+  threshold?: number;
+}
+
+export interface FindEvaluatorsInput {
+  date: string;
+  start_time: string;
+  end_time: string;
+  eval_type?: string; // 'corporativo' | 'consumer_adult' | 'demo_adult' | 'consumer_kids' | 'demo_kids'
+}

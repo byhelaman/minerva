@@ -124,3 +124,37 @@ export async function dbFindAvailableInstructors(params: {
   if (error) return { error: error.message };
   return data;
 }
+
+// ---------------------------------------------------------------------------
+// chat_get_instructor_profile
+// ---------------------------------------------------------------------------
+export async function dbGetInstructorProfile(params: {
+  name: string;
+  threshold?: number;
+}): Promise<unknown> {
+  const { data, error } = await supabase.rpc("chat_get_instructor_profile", {
+    p_name:      params.name,
+    p_threshold: params.threshold ?? 0.15,
+  });
+  if (error) return { error: error.message };
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// chat_find_evaluators
+// ---------------------------------------------------------------------------
+export async function dbFindEvaluators(params: {
+  date: string;
+  startTime: string;
+  endTime: string;
+  evalType?: string;
+}): Promise<unknown> {
+  const { data, error } = await supabase.rpc("chat_find_evaluators", {
+    p_date:       params.date,
+    p_start_time: params.startTime,
+    p_end_time:   params.endTime,
+    p_eval_type:  params.evalType ?? null,
+  });
+  if (error) return { error: error.message };
+  return data;
+}
