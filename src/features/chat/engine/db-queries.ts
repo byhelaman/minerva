@@ -173,6 +173,18 @@ export async function dbGetEvaluatorsList(params: {
 // ---------------------------------------------------------------------------
 // chat_find_instructors
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// chat_get_available_languages
+// ---------------------------------------------------------------------------
+export async function dbGetAvailableLanguages(params?: { canEvaluate?: boolean }): Promise<unknown> {
+  const { data, error } = await supabase.rpc("chat_get_available_languages", {
+    p_can_evaluate: params?.canEvaluate ?? null,
+  });
+  if (error) return { error: error.message };
+  return data;
+}
+
+// ---------------------------------------------------------------------------
 export async function dbFindInstructors(params: {
   language?: string;
   isNative?: boolean;

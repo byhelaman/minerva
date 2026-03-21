@@ -133,7 +133,7 @@ export function ChatWidget() {
     <RequirePermission permission="schedules.read">
       {/* Panel flotante */}
       {state.isOpen && (
-        <Card className="fixed bottom-20 right-6 z-50 w-105 h-140 flex flex-col p-0 gap-0 shadow-xl overflow-hidden">
+        <Card className="fixed bottom-6 right-6 z-50 w-105 h-140 flex flex-col p-0 gap-0 shadow-xl overflow-hidden">
           {/* Header */}
           <div className="px-4 py-3 border-b flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2 min-w-0">
@@ -248,14 +248,16 @@ export function ChatWidget() {
       )}
 
       {/* Botón flotante */}
-      <Button
-        onClick={() => dispatch({ type: "TOGGLE" })}
-        size="icon"
-        className="fixed bottom-6 right-6 z-50 size-12 rounded-full shadow-lg"
-        aria-label="Abrir asistente"
-      >
-        <BotMessageSquare className="size-5" />
-      </Button>
+      {!state.isOpen && (
+        <Button
+          onClick={() => dispatch({ type: "TOGGLE" })}
+          size="icon"
+          className="fixed bottom-6 right-6 z-50 size-12 rounded-full shadow-lg"
+          aria-label="Abrir asistente"
+        >
+          <BotMessageSquare className="size-5" />
+        </Button>
+      )}
     </RequirePermission>
   );
 }

@@ -14,6 +14,7 @@ import {
   dbGetEvaluatorsList,
   dbGetPoolRules,
   dbFindInstructors,
+  dbGetAvailableLanguages,
 } from "../engine/db-queries";
 import type {
   GetSchedulesForDateInput,
@@ -27,6 +28,7 @@ import type {
   GetEvaluatorsListInput,
   FindEvaluatorsInput,
   FindInstructorsInput,
+  GetAvailableLanguagesInput,
 } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -275,6 +277,29 @@ export const SCHEDULE_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "get_available_languages",
+      description:
+        "Returns all distinct languages with instructor count per language. " +
+        "Use for: 'what languages do we have', 'what other languages besides English', " +
+        "'list all available languages', 'how many instructors per language', " +
+        "'how many evaluators per language', 'what languages can evaluators evaluate in'. " +
+        "Pass can_evaluate=true to count only evaluators, false for non-evaluators, omit for all instructors. " +
+        "Always use this tool for language listing — never assume or invent languages.",
+      parameters: {
+        type: "object",
+        properties: {
+          can_evaluate: {
+            type: "boolean",
+            description: "true = count only evaluators per language, false = non-evaluators only, omit = all instructors",
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "find_evaluators",
       description:
         "Finds qualified evaluators with no schedule conflict for a specific date and time window. " +
@@ -376,6 +401,10 @@ async function handleGetEvaluatorsList(input: GetEvaluatorsListInput) {
   });
 }
 
+async function handleGetAvailableLanguages(input: GetAvailableLanguagesInput) {
+  return dbGetAvailableLanguages({ canEvaluate: input.can_evaluate });
+}
+
 async function handleFindInstructors(input: FindInstructorsInput) {
   return dbFindInstructors({
     language:    input.language,
@@ -421,6 +450,8 @@ export async function executeToolCall(
       return handleGetPoolRules(toolInput as unknown as GetPoolRulesInput);
     case "get_evaluators_list":
       return handleGetEvaluatorsList(toolInput as unknown as GetEvaluatorsListInput);
+    case "get_available_languages":
+      return handleGetAvailableLanguages(toolInput as unknown as GetAvailableLanguagesInput);
     case "find_instructors":
       return handleFindInstructors(toolInput as unknown as FindInstructorsInput);
     case "find_evaluators":
@@ -441,6 +472,7 @@ export const TOOL_LABELS: Record<string, string> = {
   get_instructor_profile:          "Consultando perfil del instructor...",
   get_pool_rules:                  "Consultando reglas de pool...",
   get_evaluators_list:             "Consultando evaluadores...",
+  get_available_languages:         "Consultando idiomas disponibles...",
   find_instructors:                "Buscando instructores...",
   find_evaluators:                 "Buscando evaluadores disponibles...",
 };
