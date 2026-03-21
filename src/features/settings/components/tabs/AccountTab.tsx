@@ -100,7 +100,7 @@ export function AccountTab({ onClose }: AccountTabProps) {
     }
 
     return (
-        <div className="space-y-6 pr-1">
+        <div className="space-y-6 px-1">
             {/* Account info */}
             <div className="space-y-4">
                 <p className="text-sm font-semibold">Account info</p>

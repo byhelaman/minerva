@@ -6,11 +6,16 @@ import { STORAGE_FILES } from "@/lib/constants";
 interface AppSettings {
     actionsRespectFilters: boolean;
     autoSave: boolean;
-    autoSaveInterval: number; // in milliseconds
+    autoSaveInterval: number;
     theme: "light" | "dark" | "system";
     openAfterExport: boolean;
     clearScheduleOnLoad: boolean;
     realtimeNotifications: boolean;
+    aiBaseUrl: string;
+    aiApiKey: string;
+    aiModel: string;
+    aiTokenLimit: number; // tokens máximos por sesión (0 = sin límite)
+    aiApiKeys: Record<string, string>; // API keys persistidas por nombre de preset
 }
 
 interface SettingsContextType {
@@ -22,11 +27,16 @@ interface SettingsContextType {
 const defaultSettings: AppSettings = {
     actionsRespectFilters: false,
     autoSave: true,
-    autoSaveInterval: 3000, // 3 seconds default
+    autoSaveInterval: 3000,
     theme: "system",
     openAfterExport: true,
     clearScheduleOnLoad: false,
     realtimeNotifications: true,
+    aiBaseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+    aiApiKey: "",
+    aiModel: "gemini-2.5-flash",
+    aiTokenLimit: 0,
+    aiApiKeys: {},
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -50,12 +60,27 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
                         const p = parsed as Record<string, unknown>;
                         const validated = { ...defaultSettings };
+
                         for (const key of Object.keys(defaultSettings) as (keyof AppSettings)[]) {
-                            if (key in p && typeof p[key] === typeof defaultSettings[key]) {
-                                // Safe: validated[key] and p[key] share the same typeof at runtime
+                            if (!(key in p)) continue;
+                            if (key === "aiApiKeys") {
+                                if (p[key] && typeof p[key] === "object" && !Array.isArray(p[key])) {
+                                    validated.aiApiKeys = p[key] as Record<string, string>;
+                                }
+                            } else if (typeof p[key] === typeof defaultSettings[key]) {
                                 Object.assign(validated, { [key]: p[key] });
                             }
                         }
+
+                        // Migrar desde formato aiProviders[] (versión anterior)
+                        const legacyProviders = p["aiProviders"];
+                        if (Array.isArray(legacyProviders) && legacyProviders.length > 0) {
+                            const first = legacyProviders[0] as Record<string, unknown>;
+                            if (typeof first.baseUrl === "string" && first.baseUrl) validated.aiBaseUrl = first.baseUrl;
+                            if (typeof first.model === "string" && first.model) validated.aiModel = first.model;
+                            if (typeof first.apiKey === "string") validated.aiApiKey = first.apiKey;
+                        }
+
                         setSettings(validated);
                     }
                 }
@@ -71,7 +96,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
     // Save settings to file whenever they change (after initial load)
     useEffect(() => {
-        if (isLoading) return; // Don't save while still loading
+        if (isLoading) return;
 
         const saveSettings = async () => {
             try {

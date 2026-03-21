@@ -51,6 +51,31 @@ async fn save_file(
     }
 }
 
+#[tauri::command]
+async fn http_request(
+    method: String,
+    url: String,
+    bearer: Option<String>,
+    body: Option<String>,
+) -> Result<(u16, String), String> {
+    let client = reqwest::Client::new();
+    let mut req = if method.to_uppercase() == "POST" {
+        client.post(&url)
+    } else {
+        client.get(&url)
+    };
+    if let Some(token) = bearer {
+        req = req.bearer_auth(token);
+    }
+    if let Some(b) = body {
+        req = req.header("Content-Type", "application/json").body(b);
+    }
+    let res = req.send().await.map_err(|e| e.to_string())?;
+    let status = res.status().as_u16();
+    let text = res.text().await.map_err(|e| e.to_string())?;
+    Ok((status, text))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -64,7 +89,7 @@ pub fn run() {
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, save_file])
+        .invoke_handler(tauri::generate_handler![greet, save_file, http_request])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

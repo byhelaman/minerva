@@ -268,57 +268,78 @@ Algoritmo de **bloqueo progresivo con backoff exponencial** almacenado en localS
 
 ## 6. Componentes de Autenticación
 
-### 6.1 LoginPage
+> **Última revisión:** 2026-03-19 — Se reemplazó el sistema basado en diálogos (LoginPage + SignupDialog + ForgotPasswordDialog + OtpStep) por una página única con estado de vista (`SignInPage`). Decisión: mayor control visual, sin dependencia del componente Dialog, flujo más limpio en pantalla completa.
 
-**Archivo:** `src/features/auth/components/LoginPage.tsx`
+### 6.1 SignInPage
 
-- Formulario con email + contraseña
-- **Schema Zod:** `{ email: z.string().email(), password: z.string().min(1) }`
-- **React Hook Form** con `zodResolver`
-- Pre-rellena email desde `localStorage.minerva_auth_last_email`
-- **Integración con rate limiter:**
-  - Verifica bloqueo antes de enviar
-  - Registra intentos fallidos
-  - Muestra intentos restantes debajo de 5
-  - Muestra cuenta regresiva en texto del botón durante bloqueo
-- Detecta error "email no confirmado" → abre `SignupDialog` en modo OTP con `pendingEmailForOtp`
-- Login exitoso: guarda email en localStorage, resetea rate limiter, navega a `from` location
-- Botón "Login con Google" deshabilitado (próximamente)
+**Archivo:** `src/features/auth/components/SignInPage.tsx`
 
-### 6.2 SignupDialog
+Página de autenticación única. Gestiona tres vistas mediante `useState<"signin" | "signup" | "recovery">`. No usa rutas separadas — la transición entre formularios es instantánea sin navegación.
 
-**Archivo:** `src/features/auth/components/SignupDialog.tsx`
+```tsx
+// Layout siempre centrado, bg-muted, max-w-sm
+<div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-muted p-6 md:p-10">
+  {view === "signin" && <SignInForm onSignUp={...} onForgotPassword={...} />}
+  {view === "signup" && <SignupForm onSignIn={...} />}
+  {view === "recovery" && <RecoveryForm onSignIn={...} />}
+</div>
+```
 
-Diálogo de dos pasos: `"form"` → `"otp"`
+### 6.2 SignInForm
 
-**Paso 1 — Formulario:**
-- Schema: `{ name: min(1), email: email(), password: min(8), confirmPassword: min(1) }` con `.refine()` para match de contraseñas
-- Llama `signUp(email, password, name)` → avanza a paso OTP
+**Archivo:** `src/features/auth/components/SignInForm.tsx`
 
-**Paso 2 — OTP:**
-- Schema: `{ otp: min(6) }`
-- Componente `InputOTP` con 6 slots
-- Verificación: `verifyOtp(email, otp, "signup")` → navega a `/`
-- Cuenta regresiva de 30s para reenvío
-- Reenviar dispara otra llamada `signUp()`
+- Schema: `{ email: string().email(), password: string().min(6) }`
+- Llama `signIn(email, password)` del AuthProvider
+- Error de credenciales → `toast.error("Invalid email or password.")` (sin mensaje inline)
+- Éxito: navega a `location.state.from` o `/`
+- Botón "Forgot your password?" dentro del label del campo password (inline)
+- Botón "Sign in with Google" deshabilitado (próximamente)
 
-**Props especiales:** `initialEmail`, `initialStep` — para entrada directa a OTP desde LoginPage
+### 6.3 SignupForm
 
-### 6.3 ForgotPasswordDialog
+**Archivo:** `src/features/auth/components/SignupForm.tsx`
 
-**Archivo:** `src/features/auth/components/ForgotPasswordDialog.tsx`
+Formulario de registro con OTP inline. Sin campos `name` ni `confirmPassword` por diseño — se quitan fricciones innecesarias en el registro.
 
-Diálogo de tres pasos: `"email"` → `"otp"` → `"password"`
+**Schema:** `{ email, password: min(8), code: length(6) }`
+
+**Flujo OTP con Send code inline:**
+1. Usuario completa email + password
+2. Presiona "Send code" (botón inline dentro del input de código) → `supabase.auth.signUp()`
+3. Llega email con código de 6 dígitos
+4. Usuario ingresa código → Submit → `supabase.auth.verifyOtp({ type: "signup" })`
+5. Éxito: navega a `/`
+
+**Cooldown:** 60 segundos tras enviar código. Implementado con `useRef<ReturnType<typeof setInterval>>` + `useState`. El botón muestra `"Resend in Xs"` durante el cooldown.
+
+**Habilitación del botón Send code:** requiere email válido y password ≥ 8 chars antes de permitir el envío.
+
+### 6.4 RecoveryForm
+
+**Archivo:** `src/features/auth/components/RecoveryForm.tsx`
+
+Formulario de dos pasos con `useState<1 | 2>`. Dos instancias de `useForm` independientes (una por paso).
 
 | Paso | Schema | Acción |
 |------|--------|--------|
-| Email | `z.string().email()` | `sendResetPasswordEmail(email)` |
-| OTP | `z.string().min(6)` | `verifyOtp(email, otp, "recovery")` |
-| Contraseña | `{ password: min(8), confirmPassword }` con refine | `updatePassword(password)` → `refreshProfile()` |
+| 1 — Email + Código | `{ email: email(), code: length(6) }` | `resetPasswordForEmail(email)` → `verifyOtp({ type: "recovery" })` |
+| 2 — Nueva contraseña | `{ password: min(8) }` | `supabase.auth.updateUser({ password })` → navega a `/` |
 
-- Toast de advertencia si se cierra el diálogo durante el paso de contraseña sin completar
-- Cuenta regresiva de 30s para reenvío
-- Éxito: navega a `/`
+- Botón "Send code" inline igual que SignupForm (InputGroup), cooldown 60s
+- Paso 2 sin confirmPassword — simplicidad por encima de redundancia
+- Botón "Back" en paso 2 vuelve al paso 1 sin perder el email
+
+### Decisiones de diseño
+
+| Decisión | Alternativa descartada | Razón |
+|----------|----------------------|-------|
+| SignInPage como vista única | Rutas separadas `/signup`, `/recovery` | Al refrescar página en signup/recovery el usuario volvería siempre a signin — comportamiento esperado |
+| OTP inline con InputGroup | InputOTP con 6 slots separados | Más compacto, no requiere copiar dígito a dígito |
+| Sin `name` en registro | Campo name obligatorio | Reduce fricción; display_name se puede actualizar en Settings |
+| Sin `confirmPassword` en recovery paso 2 | Campo de confirmación | Simplicidad — el campo de contraseña es suficiente |
+| Errores via `toast.error()` | Mensajes inline en formulario | Toasts son consistentes con el resto de la app y no desplazan el layout |
+| Cooldown 60s | 30s (valor anterior) | Da margen suficiente para recibir el email sin ser excesivo |
 
 ---
 

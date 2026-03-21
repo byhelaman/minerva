@@ -37,10 +37,6 @@ package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
-# AI agent files
-.agents/
-.claude/
-
 # Archives and temp
 _archive/
 *.key

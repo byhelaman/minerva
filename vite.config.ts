@@ -40,6 +40,7 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  envPrefix: ["VITE_", "GEMINI_", "INTENT_"],
   test: {
     globals: true,
     include: ['tests/**/*.test.ts'],

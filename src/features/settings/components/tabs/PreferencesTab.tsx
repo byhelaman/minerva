@@ -98,7 +98,7 @@ export function PreferencesTab() {
     };
 
     return (
-        <div className="space-y-6 pr-1">
+        <div className="space-y-6 px-1">
             {/* Appearance */}
             <div className="space-y-4">
                 <p className="text-sm font-semibold">{t("settings.appearance.title")}</p>

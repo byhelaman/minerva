@@ -6,9 +6,10 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ScheduleDashboard } from "@/features/schedules/components/ScheduleDashboard";
 import { PoolsPage } from "@/features/schedules/components/PoolsPage";
 import { SystemPage } from "@/features/system/components/SystemPage";
-import { LoginPage } from "@/features/auth/components/LoginPage";
+import { SignInPage } from "@/features/auth/components/SignInPage";
 
 import { ProtectedRoute, AdminRoute } from "@/components/ProtectedRoute";
+import { ChatWidget } from "@/features/chat/components/ChatWidget";
 
 function Layout() {
   return (
@@ -37,7 +38,7 @@ function App() {
         <UpdateDialog />
         <Routes>
           {/* Ruta pública - Login (signup se hace desde el dialog) */}
-          <Route path="/login" element={<LoginPage />} />
+          <Route path="/login" element={<SignInPage />} />
 
           {/* Rutas protegidas */}
           <Route
@@ -45,6 +46,7 @@ function App() {
               <ProtectedRoute>
                 <GlobalSyncManager />
                 <Layout />
+                <ChatWidget />
               </ProtectedRoute>
             }
           >
