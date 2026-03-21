@@ -1,24 +1,20 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { OAIMessage, OAIResponse, AIProvider } from "../types";
-import { SCHEDULE_TOOLS } from "../tools/schedule-tools";
-import { useScheduleDataStore } from "@/features/schedules/stores/useScheduleDataStore";
-import { useScheduleUIStore } from "@/features/schedules/stores/useScheduleUIStore";
-import { executeIntent, serializeResult, type ParsedIntent } from "../engine/local-queries";
+import { SCHEDULE_TOOLS, executeToolCall, TOOL_LABELS } from "../tools/schedule-tools";
 
 const MAX_HISTORY_MESSAGES = 8;
+const MAX_TOOL_ITERATIONS  = 5;
 
-const SYSTEM_PROMPT_CONTEXT_LOCAL = `Eres Minerva Assistant, un asistente especializado en gestión de horarios educativos.
-Solo tienes datos del horario de la fecha activa ({ACTIVE_DATE}).
+const SYSTEM_PROMPT = `Eres Minerva Assistant, asistente de gestión de horarios educativos.
+Fecha actual: {CURRENT_DATE}.
 
-Reglas:
-- Responde siempre en español.
-- Para fechas relativas ("lunes", "mañana", "hoy"), usa la fecha actual: {CURRENT_DATE}.
-- Usa únicamente los datos del contexto. Si preguntan por otra fecha, indícalo.
-- Para disponibilidad: busca si el instructor tiene start_time/end_time que solape con el horario consultado.
-- Sé conciso. Usa listas para múltiples resultados.
-
-Datos de horarios ({ACTIVE_DATE}):
-{SCHEDULE_DATA}`;
+INSTRUCCIONES:
+- Usa las tools para consultar datos reales. Nunca inventes datos.
+- Si una tool retorna vacío o error, dilo claramente al usuario.
+- Para fechas relativas ("ayer", "la semana pasada", "el lunes"), calcula desde {CURRENT_DATE}.
+- "Febrero" sin año = año de {CURRENT_DATE}.
+- Responde siempre en español. Sé conciso. Usa listas para múltiples resultados.
+- Indica siempre la fecha o rango consultado en tu respuesta.`;
 
 type ExtendedError = Error & { rawBody?: string; isAuthError?: boolean; isRetryable?: boolean };
 
@@ -94,7 +90,9 @@ async function callChatCompletions(
       message?: OAIMessage & { tool_calls?: OAIResponse["choices"][0]["message"]["tool_calls"] };
       done_reason?: string;
     };
-    const finishReason = (data.message?.tool_calls?.length ? "tool_calls" : (data.done_reason === "stop" ? "stop" : "stop")) as "stop" | "tool_calls";
+    const finishReason = (data.message?.tool_calls?.length
+      ? "tool_calls"
+      : "stop") as "stop" | "tool_calls";
     return {
       id: "ollama",
       choices: [{
@@ -136,186 +134,84 @@ async function callChatCompletions(
 // ---------------------------------------------------------------------------
 // Chat result type
 // ---------------------------------------------------------------------------
-type ChatResult = { response: string; updatedHistory: OAIMessage[]; estimatedTokens: number; sentMessages: OAIMessage[] };
+type ChatResult = {
+  response: string;
+  updatedHistory: OAIMessage[];
+  estimatedTokens: number;
+  sentMessages: OAIMessage[];
+};
 
 // ---------------------------------------------------------------------------
-// Local context fallback
-// ---------------------------------------------------------------------------
-function buildLocalContextPrompt(today: string, activeDate: string | null, schedules: { date: string; instructor: string; program: string | null; start_time: string; end_time: string | null }[]): string {
-  const scheduleData = schedules.length > 0
-    ? JSON.stringify(
-        schedules.reduce<Record<string, unknown[]>>((acc, s) => {
-          if (!acc[s.date]) acc[s.date] = [];
-          acc[s.date].push({ instructor: s.instructor, program: s.program, start_time: s.start_time, end_time: s.end_time });
-          return acc;
-        }, {}),
-        null, 2
-      )
-    : "No hay horarios cargados.";
-
-  return SYSTEM_PROMPT_CONTEXT_LOCAL
-    .replace("{CURRENT_DATE}", today)
-    .replace(/\{ACTIVE_DATE\}/g, activeDate ?? today)
-    .replace("{SCHEDULE_DATA}", scheduleData);
-}
-
-async function runWithLocalContext(
-  provider: AIProvider,
-  userMessage: string,
-  conversationHistory: OAIMessage[],
-  today: string,
-  activeDate: string | null,
-  baseSchedules: { date: string; instructor: string; program: string | null; start_time: string; end_time: string | null }[],
-  signal?: AbortSignal
-): Promise<ChatResult> {
-  const trimmedHistory = conversationHistory.slice(-MAX_HISTORY_MESSAGES);
-  const messages: OAIMessage[] = [
-    { role: "system", content: buildLocalContextPrompt(today, activeDate, baseSchedules) },
-    ...trimmedHistory,
-    { role: "user", content: userMessage },
-  ];
-  const response = await callChatCompletions(provider, messages, false, signal);
-  const choice = response.choices[0];
-  if (!choice) throw new Error("Respuesta vacía del modelo.");
-  const text = choice.message.content?.trim() ?? "";
-  return {
-    response: text || "No tengo respuesta para esa consulta.",
-    updatedHistory: [...trimmedHistory, { role: "user", content: userMessage }, choice.message],
-    estimatedTokens: estimateTokens(messages, text),
-    sentMessages: messages,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// LLM formatter prompt
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// LLM intent parser
-// ---------------------------------------------------------------------------
-const INTENT_PARSER_PROMPT = `Eres un parser de intents para un sistema de horarios educativos.
-El horario cargado es del día {ACTIVE_DATE}. Nunca preguntes por la fecha — ya la sabes.
-
-Responde ÚNICAMENTE con un objeto JSON válido (sin markdown, sin texto adicional).
-
-Intents disponibles:
-{"type":"instructor_schedule","instructor":"<nombre parcial>"}
-{"type":"instructor_free_slots","instructor":"<nombre parcial>"}
-{"type":"classes_at_time","time":"HH:MM"}           ← clases que INICIAN exactamente a esa hora
-{"type":"classes_in_range","start":"HH:MM","end":"HH:MM"}  ← clases que inician entre esos horarios
-{"type":"count","branch":"<sede opcional>","program":"<prog opcional>"}
-{"type":"available_instructors","start":"HH:MM","end":"HH:MM","instructor_list":["<nombre>"] opcional}
-{"type":"instructor_availability","instructor":"<nombre>","start":"HH:MM","end":"HH:MM"}
-{"type":"who_has_class","query":"<nombre de alumno o código de grupo>"}
-{"type":"filtered_schedules","branch":"<sede?>","program":"<programa?>","shift":"<turno?>"}
-{"type":"all_instructors"}
-{"type":"extreme_instructors","mode":"min" o "max"}
-{"type":"unknown"}
-
-Reglas:
-- "clases a las 16", "clases de las 16" → classes_at_time (inicio exacto)
-- "clases entre 15 y 16", "de 15 a 16" → classes_in_range
-- Horas con duración: "19:00 (20min)" → start:"19:00", end:"19:20"
-- "hoy", "mañana" o sin fecha → ya sabes que es {ACTIVE_DATE}
-- Follow-ups como "sí", "cuáles son", "y en HUB" → interpreta respecto al contexto anterior
-- Tiempos en 12h: "2pm"→"14:00", "9am"→"09:00"
-- "clases de X", "horario de X", "X tiene clases?" donde X es el propio instructor → instructor_schedule
-- "quién tiene la clase de X", "quién atiende a X", "de quién es la clase de X" donde X es un alumno → who_has_class
-- "evaluaciones", "sesiones" son sinónimos de "clases" para fines de búsqueda
-- "cuántas clases/sesiones..." → count (incluye filtros de sede/programa si los menciona)
-- "clases del programa X", "sesiones en SEDE", "turno mañana/tarde" sin preguntar cuántas → filtered_schedules
-- Si no hay match claro → {"type":"unknown"}`;
-
-function extractIntentJSON(text: string): ParsedIntent | null {
-  const attempts = [
-    () => JSON.parse(text.trim()) as ParsedIntent,
-    () => {
-      const m = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-      return m ? JSON.parse(m[1].trim()) as ParsedIntent : null;
-    },
-    () => {
-      const m = text.match(/\{[\s\S]*\}/);
-      return m ? JSON.parse(m[0]) as ParsedIntent : null;
-    },
-  ];
-  for (const attempt of attempts) {
-    try {
-      const result = attempt();
-      if (result && typeof result === "object" && "type" in result) return result;
-    } catch { /* try next */ }
-  }
-  return null;
-}
-
-async function parseIntent(
-  provider: AIProvider,
-  userMessage: string,
-  activeDate: string,
-  lastUserMessage: string,
-  signal?: AbortSignal
-): Promise<ParsedIntent> {
-  const system = INTENT_PARSER_PROMPT.replace(/\{ACTIVE_DATE\}/g, activeDate);
-  const contextMsg = lastUserMessage
-    ? `Contexto — último mensaje del usuario: "${lastUserMessage}"\nMensaje actual: "${userMessage}"`
-    : userMessage;
-  const messages: OAIMessage[] = [
-    { role: "system", content: system },
-    { role: "user", content: contextMsg },
-  ];
-  try {
-    const response = await callChatCompletions(provider, messages, false, signal);
-    const text = response.choices[0]?.message?.content?.trim() ?? "";
-    return extractIntentJSON(text) ?? { type: "unknown" };
-  } catch {
-    return { type: "unknown" };
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Core provider logic
+// Core provider logic — tool call loop
 // ---------------------------------------------------------------------------
 async function tryProvider(
   provider: AIProvider,
   userMessage: string,
   conversationHistory: OAIMessage[],
-  _onToolCall?: (toolLabel: string) => void,
+  onToolCall?: (toolLabel: string) => void,
   signal?: AbortSignal
 ): Promise<ChatResult> {
   const today = new Date().toISOString().split("T")[0];
   const trimmedHistory = conversationHistory.slice(-MAX_HISTORY_MESSAGES);
-  const activeDate = useScheduleUIStore.getState().activeDate;
-  const baseSchedules = useScheduleDataStore.getState().baseSchedules;
 
-  if (!activeDate) {
-    const msg = "No hay una fecha activa seleccionada. Selecciona una fecha en la vista principal.";
-    return { response: msg, updatedHistory: trimmedHistory, estimatedTokens: 0, sentMessages: [] };
-  }
-  if (baseSchedules.length === 0) {
-    const msg = `No hay horarios cargados para ${activeDate}. Carga un archivo de horario primero.`;
-    return { response: msg, updatedHistory: trimmedHistory, estimatedTokens: 0, sentMessages: [] };
-  }
+  const messages: OAIMessage[] = [
+    {
+      role: "system",
+      content: SYSTEM_PROMPT.replace(/\{CURRENT_DATE\}/g, today),
+    },
+    ...trimmedHistory,
+    { role: "user", content: userMessage },
+  ];
 
-  // Step 1: Extract intent via LLM
-  const lastUserMsg = [...trimmedHistory].reverse().find((m) => m.role === "user");
-  const lastUserText = typeof lastUserMsg?.content === "string" ? lastUserMsg.content : "";
-  const intent = await parseIntent(provider, userMessage, activeDate, lastUserText, signal);
+  for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+    const response = await callChatCompletions(provider, messages, true, signal);
+    const choice = response.choices[0];
 
-  // Step 2: Execute locally and return directly — no second LLM call
-  if (intent.type !== "unknown") {
-    const localResult = executeIntent(intent, baseSchedules);
-    if (localResult.kind !== "none") {
-      const response = serializeResult(localResult, activeDate);
+    if (!choice) throw new Error("Respuesta vacía del modelo.");
+
+    // No tool calls — final response
+    if (choice.finish_reason !== "tool_calls" || !choice.message.tool_calls?.length) {
+      const text = choice.message.content?.trim() ?? "";
       return {
-        response,
-        updatedHistory: [...trimmedHistory, { role: "user", content: userMessage }, { role: "assistant", content: response }],
-        estimatedTokens: estimateTokens([{ role: "user", content: userMessage }], response),
-        sentMessages: [],
+        response: text || "No tengo respuesta para esa consulta.",
+        updatedHistory: [
+          ...trimmedHistory,
+          { role: "user", content: userMessage },
+          choice.message,
+        ],
+        estimatedTokens: estimateTokens(messages, text),
+        sentMessages: messages,
       };
+    }
+
+    // Execute tool calls
+    messages.push(choice.message);
+    for (const toolCall of choice.message.tool_calls) {
+      const label = TOOL_LABELS[toolCall.function.name] ?? "Consultando...";
+      onToolCall?.(label);
+
+      let result: unknown;
+      try {
+        const input = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
+        result = await executeToolCall(toolCall.function.name, input);
+      } catch (err) {
+        result = { error: err instanceof Error ? err.message : "Error ejecutando la herramienta" };
+      }
+
+      messages.push({
+        role: "tool",
+        tool_call_id: toolCall.id,
+        content: JSON.stringify(result),
+      });
     }
   }
 
-  // Fallback: unknown intent — single call with full schedule context injected
-  return runWithLocalContext(provider, userMessage, trimmedHistory, today, activeDate, baseSchedules, signal);
+  return {
+    response: "No pude completar la consulta después de varios intentos.",
+    updatedHistory: trimmedHistory,
+    estimatedTokens: 0,
+    sentMessages: messages,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -334,7 +230,6 @@ export async function sendChatMessage(
 
   let lastError: Error | null = null;
 
-  // Intentar con proveedor principal; para extensibilidad futura se mantiene el loop
   for (const p of [provider]) {
     try {
       return await tryProvider(p, userMessage, conversationHistory, onToolCall, signal);

@@ -49,15 +49,21 @@ export interface OAIResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Inputs de herramientas (independientes del proveedor)
+// Inputs de herramientas — formato OpenAI function calling
 // ---------------------------------------------------------------------------
 
 export interface GetSchedulesForDateInput {
   date: string;
-  time_filter?: string;    // HH:MM — devuelve solo clases activas en ese momento
-  program_filter?: string; // texto libre — filtra por nombre de programa (parcial)
-  branch_filter?: string;  // texto libre — filtra por sede (parcial)
-  count_only?: boolean;    // si true, devuelve solo el total sin detalle
+  time_filter?: string;
+  program_filter?: string;
+  branch_filter?: string;
+  count_only?: boolean;
+}
+
+export interface FindInstructorScheduleInput {
+  instructor_name: string;
+  start_date: string;
+  end_date: string;
 }
 
 export interface CheckInstructorAvailabilityInput {
@@ -67,15 +73,24 @@ export interface CheckInstructorAvailabilityInput {
   end_time: string;
 }
 
-export interface FindInstructorScheduleInput {
-  instructor_name: string;
-  date: string;
-  end_date?: string;
-}
-
 export interface FindAvailableInstructorsInput {
   date: string;
   start_time: string;
   end_time: string;
-  instructor_list?: string[]; // Si se especifica, filtra la disponibilidad a solo estos instructores
+  instructor_list?: string[];
+}
+
+export interface GetSchedulesRangeInput {
+  start_date: string;
+  end_date: string;
+  program_filter?: string;
+  branch_filter?: string;
+  count_only?: boolean;
+}
+
+export interface GetScheduleStatsInput {
+  start_date: string;
+  end_date: string;
+  instructor_name?: string;
+  group_by?: "instructor" | "date" | "branch";
 }
