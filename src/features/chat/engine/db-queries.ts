@@ -141,6 +141,36 @@ export async function dbGetInstructorProfile(params: {
 }
 
 // ---------------------------------------------------------------------------
+// chat_get_pool_rules
+// ---------------------------------------------------------------------------
+export async function dbGetPoolRules(params: {
+  branch?: string;
+  program?: string;
+}): Promise<unknown> {
+  const { data, error } = await supabase.rpc("chat_get_pool_rules", {
+    p_branch:  params.branch  ?? null,
+    p_program: params.program ?? null,
+  });
+  if (error) return { error: error.message };
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// chat_get_evaluators_list
+// ---------------------------------------------------------------------------
+export async function dbGetEvaluatorsList(params: {
+  evalType?: string;
+  language?: string;
+}): Promise<unknown> {
+  const { data, error } = await supabase.rpc("chat_get_evaluators_list", {
+    p_eval_type: params.evalType ?? null,
+    p_language:  params.language ?? null,
+  });
+  if (error) return { error: error.message };
+  return data;
+}
+
+// ---------------------------------------------------------------------------
 // chat_find_evaluators
 // ---------------------------------------------------------------------------
 export async function dbFindEvaluators(params: {
@@ -148,12 +178,14 @@ export async function dbFindEvaluators(params: {
   startTime: string;
   endTime: string;
   evalType?: string;
+  language?: string;
 }): Promise<unknown> {
   const { data, error } = await supabase.rpc("chat_find_evaluators", {
     p_date:       params.date,
     p_start_time: params.startTime,
     p_end_time:   params.endTime,
-    p_eval_type:  params.evalType ?? null,
+    p_eval_type:  params.evalType  ?? null,
+    p_language:   params.language  ?? null,
   });
   if (error) return { error: error.message };
   return data;

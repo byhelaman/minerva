@@ -144,10 +144,10 @@ export function ChatWidget() {
               )}
               <div className="min-w-0">
                 <p className="text-sm font-semibold leading-none">
-                  {showConfig ? "Configuración" : "Minerva Assistant"}
+                  {showConfig ? "Configuración" : "Mina"}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {showConfig ? "Proveedor de IA y credenciales" : "Consulta horarios en lenguaje natural"}
+                  {showConfig ? "Proveedor de IA y credenciales" : "Tu asistente en Minerva"}
                 </p>
               </div>
             </div>

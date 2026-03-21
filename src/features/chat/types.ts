@@ -100,9 +100,20 @@ export interface GetInstructorProfileInput {
   threshold?: number;
 }
 
+export interface GetPoolRulesInput {
+  branch?: string;
+  program?: string;
+}
+
+export interface GetEvaluatorsListInput {
+  eval_type?: string;
+  language?: string;
+}
+
 export interface FindEvaluatorsInput {
   date: string;
   start_time: string;
   end_time: string;
   eval_type?: string; // 'corporativo' | 'consumer_adult' | 'demo_adult' | 'consumer_kids' | 'demo_kids'
+  language?: string;  // e.g. 'English', 'Spanish'
 }

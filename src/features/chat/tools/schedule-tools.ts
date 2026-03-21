@@ -11,6 +11,8 @@ import {
   dbFindAvailableInstructors,
   dbGetInstructorProfile,
   dbFindEvaluators,
+  dbGetEvaluatorsList,
+  dbGetPoolRules,
 } from "../engine/db-queries";
 import type {
   GetSchedulesForDateInput,
@@ -20,6 +22,8 @@ import type {
   GetSchedulesRangeInput,
   GetScheduleStatsInput,
   GetInstructorProfileInput,
+  GetPoolRulesInput,
+  GetEvaluatorsListInput,
   FindEvaluatorsInput,
 } from "../types";
 
@@ -180,6 +184,56 @@ export const SCHEDULE_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "get_pool_rules",
+      description:
+        "Returns pool rules (allowed and blocked instructors per program and branch). " +
+        "Use for: 'what are the pool rules for HUB', 'which instructors can teach Kids program', " +
+        "'is there a restriction for program X', 'what programs have pool rules'. " +
+        "Optionally filter by branch and/or program name (partial match).",
+      parameters: {
+        type: "object",
+        properties: {
+          branch: {
+            type: "string",
+            description: "Partial match on branch/sede (case-insensitive, e.g. 'HUB', 'CORPORATE')",
+          },
+          program: {
+            type: "string",
+            description: "Partial match on program name (case-insensitive, e.g. 'Kids', 'Evaluacion')",
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "get_evaluators_list",
+      description:
+        "Returns all registered evaluators, optionally filtered by eval_type or language. " +
+        "Use for: 'how many evaluators do we have', 'list all evaluators', " +
+        "'which evaluators speak English', 'who can do corporate evaluations'. " +
+        "Does NOT check availability — use find_evaluators for a specific date/time.",
+      parameters: {
+        type: "object",
+        properties: {
+          eval_type: {
+            type: "string",
+            description: "Optional filter: 'corporativo', 'consumer_adult', 'demo_adult', 'consumer_kids', 'demo_kids'",
+          },
+          language: {
+            type: "string",
+            description: "Optional language filter (e.g. 'English', 'Spanish')",
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "find_evaluators",
       description:
         "Finds qualified evaluators with no schedule conflict for a specific date and time window. " +
@@ -188,7 +242,8 @@ export const SCHEDULE_TOOLS = [
         "Use for: 'who can evaluate at 15:00 on DATE', 'find evaluators for kids at 9am', " +
         "'available corporate evaluators on Friday'. " +
         "Always infer end_time — for '19:00 (20min)' use end_time='19:20'. " +
-        "Set eval_type only when the user specifies: 'adultos', 'kids', or 'corporativo'.",
+        "Set eval_type only when the user specifies: 'adultos', 'kids', or 'corporativo'. " +
+        "Set language when the user specifies a language (e.g. 'English', 'Spanish').",
       parameters: {
         type: "object",
         properties: {
@@ -198,6 +253,10 @@ export const SCHEDULE_TOOLS = [
           eval_type:  {
             type: "string",
             description: "Optional filter: 'corporativo', 'consumer_adult', 'demo_adult', 'consumer_kids', 'demo_kids'",
+          },
+          language: {
+            type: "string",
+            description: "Optional language filter (e.g. 'English', 'Spanish'). Use when user specifies a language.",
           },
         },
         required: ["date", "start_time", "end_time"],
@@ -265,12 +324,24 @@ async function handleGetInstructorProfile(input: GetInstructorProfileInput) {
   return dbGetInstructorProfile({ name: input.instructor_name, threshold: input.threshold });
 }
 
+async function handleGetPoolRules(input: GetPoolRulesInput) {
+  return dbGetPoolRules({ branch: input.branch, program: input.program });
+}
+
+async function handleGetEvaluatorsList(input: GetEvaluatorsListInput) {
+  return dbGetEvaluatorsList({
+    evalType: input.eval_type,
+    language: input.language,
+  });
+}
+
 async function handleFindEvaluators(input: FindEvaluatorsInput) {
   return dbFindEvaluators({
     date:      input.date,
     startTime: input.start_time,
     endTime:   input.end_time,
     evalType:  input.eval_type,
+    language:  input.language,
   });
 }
 
@@ -296,6 +367,10 @@ export async function executeToolCall(
       return handleGetScheduleStats(toolInput as unknown as GetScheduleStatsInput);
     case "get_instructor_profile":
       return handleGetInstructorProfile(toolInput as unknown as GetInstructorProfileInput);
+    case "get_pool_rules":
+      return handleGetPoolRules(toolInput as unknown as GetPoolRulesInput);
+    case "get_evaluators_list":
+      return handleGetEvaluatorsList(toolInput as unknown as GetEvaluatorsListInput);
     case "find_evaluators":
       return handleFindEvaluators(toolInput as unknown as FindEvaluatorsInput);
     default:
@@ -312,5 +387,7 @@ export const TOOL_LABELS: Record<string, string> = {
   get_schedules_range:             "Consultando base de datos...",
   get_schedule_stats:              "Calculando estadísticas...",
   get_instructor_profile:          "Consultando perfil del instructor...",
+  get_pool_rules:                  "Consultando reglas de pool...",
+  get_evaluators_list:             "Consultando evaluadores...",
   find_evaluators:                 "Buscando evaluadores disponibles...",
 };
