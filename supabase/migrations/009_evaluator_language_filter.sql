@@ -4,6 +4,7 @@
 -- Adds p_language parameter to filter evaluators by language they can evaluate in.
 -- Uses existing instructor_profiles.languages[] column (TEXT[]).
 -- Also includes languages[] in the returned evaluator objects.
+-- Language comparison is case-insensitive (stored values may be lowercase).
 
 CREATE OR REPLACE FUNCTION public.chat_find_evaluators(
   p_date       TEXT,
@@ -52,8 +53,10 @@ BEGIN
        WHERE ip.can_evaluate = true
          -- Optional filter by evaluation type
          AND (p_eval_type IS NULL OR ip.eval_types @> ARRAY[p_eval_type])
-         -- Optional filter by language
-         AND (p_language IS NULL OR ip.languages @> ARRAY[p_language])
+         -- Optional filter by language (case-insensitive — stored values may be lowercase)
+         AND (p_language IS NULL OR EXISTS (
+           SELECT 1 FROM unnest(ip.languages) AS l WHERE lower(l) = lower(p_language)
+         ))
          -- Condition 2: has availability window fully covering the slot on this day
          AND EXISTS (
            SELECT 1
@@ -127,7 +130,10 @@ BEGIN
   FROM public.instructor_profiles ip
   WHERE ip.can_evaluate = true
     AND (p_eval_type IS NULL OR ip.eval_types @> ARRAY[p_eval_type])
-    AND (p_language IS NULL OR ip.languages @> ARRAY[p_language])
+    -- Case-insensitive language filter
+    AND (p_language IS NULL OR EXISTS (
+      SELECT 1 FROM unnest(ip.languages) AS l WHERE lower(l) = lower(p_language)
+    ))
   INTO v_result;
 
   RETURN v_result;
