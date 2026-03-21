@@ -362,8 +362,9 @@ export function ScheduleDataTable<TData, TValue>({
                 return undefined;
             },
         },
-        // Usar ID único por fila para row selection (recomendación oficial de TanStack)
-        getRowId: (row, index) => (row as { id?: string }).id || String(index),
+        // getRowKey (prop) se usa como ID de fila en TanStack para evitar colisiones cuando
+        // tableData cambia tamaño. Cada caller debe proveer getRowKey apropiado para su tipo.
+        getRowId: (row, index) => props.getRowKey?.(row) ?? String(index),
         state: {
             pagination,
             sorting,

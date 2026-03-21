@@ -428,6 +428,7 @@ export function CreateLinkModal({ open, onOpenChange }: CreateLinkModalProps) {
                                 <ScheduleDataTable
                                     columns={columns}
                                     data={validationResults}
+                                    getRowKey={(row: ValidationResult) => row.id}
                                     hideFilters={false}
                                     filterConfig={{
                                         showStatus: true,

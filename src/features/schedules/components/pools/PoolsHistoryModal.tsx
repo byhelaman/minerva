@@ -11,6 +11,7 @@ import { ScheduleDataTable } from "@schedules/components/table/ScheduleDataTable
 import { getHistoryColumns } from "./pools-history-columns";
 import { scheduleEntriesService } from "@/features/schedules/services/schedule-entries-service";
 import type { Schedule } from "@/features/schedules/types";
+import { getScheduleKey } from "@/features/schedules/utils/overlap-utils";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -101,6 +102,7 @@ export function PoolsHistoryModal({ open, onOpenChange, programQuery }: PoolsHis
                         <ScheduleDataTable
                             columns={columns}
                             data={schedules}
+                            getRowKey={(row) => getScheduleKey(row as Schedule)}
                             initialPageSize={50}
                             hideActions
                             hideUpload

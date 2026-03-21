@@ -555,6 +555,7 @@ export function ScheduleDashboard() {
                 canPublish={schedules.length > 0 && activeDate !== null}
                 externalIssueCategories={mergedIssueCategories}
                 issueRowKeys={mergedIssueRowKeys}
+                getRowKey={(row) => getScheduleKey(row as Schedule)}
                 getRowClassName={(row) => {
                     const rowKey = getScheduleKey(row as Schedule);
 

@@ -400,6 +400,7 @@ export function AssignLinkModal({ open, onOpenChange, schedules }: AssignLinkMod
                         <ScheduleDataTable
                             columns={getColumns}
                             data={tableData}
+                            getRowKey={(row: AssignmentRow) => row.id}
                             onRefresh={handleRefresh}
                             controlledSelection={rowSelection}
                             onControlledSelectionChange={setRowSelection}
