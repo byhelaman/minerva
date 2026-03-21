@@ -154,8 +154,8 @@ export const SCHEDULE_TOOLS = [
           instructor_name: { type: "string", description: "Optional instructor name filter (partial/fuzzy)" },
           group_by:        {
             type: "string",
-            enum: ["instructor", "date", "branch"],
-            description: "Group results by instructor (default), date, or branch",
+            enum: ["instructor", "date", "branch", "program"],
+            description: "Group results by instructor (default), date, branch, or program",
           },
         },
         required: ["start_date", "end_date"],
@@ -239,7 +239,7 @@ export const SCHEDULE_TOOLS = [
       name: "find_instructors",
       description:
         "Returns instructors from the profiles database, optionally filtered by language, " +
-        "evaluator status, or evaluation type. Does NOT check schedule availability. " +
+        "native status, evaluator status, or evaluation type. Does NOT check schedule availability. " +
         "Use for: 'which instructors speak Portuguese', 'list all native instructors', " +
         "'who teaches in English', 'instructors that can evaluate corporativo'. " +
         "Do NOT use for availability checks — use find_evaluators for that.",
@@ -249,6 +249,10 @@ export const SCHEDULE_TOOLS = [
           language: {
             type: "string",
             description: "Filter by language the instructor speaks/evaluates in (e.g. 'English', 'Portuguese'). Case-insensitive.",
+          },
+          is_native: {
+            type: "boolean",
+            description: "true = only native speakers, false = only non-native, omit = all",
           },
           can_evaluate: {
             type: "boolean",
@@ -370,6 +374,7 @@ async function handleGetEvaluatorsList(input: GetEvaluatorsListInput) {
 async function handleFindInstructors(input: FindInstructorsInput) {
   return dbFindInstructors({
     language:    input.language,
+    isNative:    input.is_native,
     canEvaluate: input.can_evaluate,
     evalType:    input.eval_type,
   });

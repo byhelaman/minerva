@@ -72,7 +72,7 @@ export async function dbGetSchedulesRange(params: {
 export async function dbGetStats(params: {
   startDate: string;
   endDate: string;
-  groupBy?: "instructor" | "date" | "branch";
+  groupBy?: "instructor" | "date" | "branch" | "program";
   nameFilter?: string;
   threshold?: number;
 }): Promise<unknown> {
@@ -175,11 +175,13 @@ export async function dbGetEvaluatorsList(params: {
 // ---------------------------------------------------------------------------
 export async function dbFindInstructors(params: {
   language?: string;
+  isNative?: boolean;
   canEvaluate?: boolean;
   evalType?: string;
 }): Promise<unknown> {
   const { data, error } = await supabase.rpc("chat_find_instructors", {
     p_language:     params.language     ?? null,
+    p_is_native:    params.isNative     ?? null,
     p_can_evaluate: params.canEvaluate  ?? null,
     p_eval_type:    params.evalType     ?? null,
   });

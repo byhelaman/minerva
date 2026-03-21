@@ -92,7 +92,7 @@ export interface GetScheduleStatsInput {
   start_date: string;
   end_date: string;
   instructor_name?: string;
-  group_by?: "instructor" | "date" | "branch";
+  group_by?: "instructor" | "date" | "branch" | "program";
 }
 
 export interface GetInstructorProfileInput {
@@ -112,6 +112,7 @@ export interface GetEvaluatorsListInput {
 
 export interface FindInstructorsInput {
   language?: string;
+  is_native?: boolean;
   can_evaluate?: boolean;
   eval_type?: string;
 }
