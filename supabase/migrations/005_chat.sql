@@ -6,6 +6,9 @@
 -- pg_trgm for fuzzy instructor name matching.
 -- NOTE: end_time can be '' (empty string, not NULL) — all overlap
 --       checks must guard with AND end_time <> '' before comparing.
+-- NOTE: instructor names in schedule_entries contain metadata suffixes
+--       (e.g. "(USA-ARG)(ONLINE) [ENG]"). Use word_similarity() instead of
+--       similarity() so the query matches against a substring of the field.
 -- Consolidates: 022_chat_rag_functions
 -- Depends on: 001_foundation.sql, 003_schedules.sql
 
@@ -99,7 +102,8 @@ GRANT EXECUTE ON FUNCTION public.chat_get_schedules TO authenticated;
 -- 3. RPC: chat_find_instructor
 -- =============================================
 -- Finds an instructor's classes across a date range using fuzzy matching.
--- p_threshold: pg_trgm similarity threshold (0.0–1.0, default 0.15).
+-- Uses word_similarity() to handle names with metadata suffixes.
+-- p_threshold: pg_trgm threshold (0.0–1.0, default 0.15).
 -- Max range: 90 days. Max results: 200.
 
 CREATE OR REPLACE FUNCTION public.chat_find_instructor(
@@ -134,7 +138,7 @@ BEGIN
     SELECT ARRAY_AGG(DISTINCT instructor) INTO v_matched
     FROM public.schedule_entries
     WHERE date BETWEEN p_start_date AND p_end_date
-      AND public.similarity(LOWER(instructor), LOWER(p_name)) >= p_threshold;
+      AND public.word_similarity(LOWER(p_name), LOWER(instructor)) >= p_threshold;
 
     IF v_matched IS NULL OR array_length(v_matched, 1) = 0 THEN
         RETURN json_build_object(
@@ -257,13 +261,13 @@ GRANT EXECUTE ON FUNCTION public.chat_get_schedules_range TO authenticated;
 -- =============================================
 -- 5. RPC: chat_get_stats
 -- =============================================
--- Aggregate class counts grouped by instructor, date, or branch.
--- p_name_filter: optional fuzzy filter (pg_trgm) for instructor name.
+-- Aggregate class counts grouped by instructor, date, branch, or program.
+-- p_name_filter: optional word_similarity filter for instructor name.
 
 CREATE OR REPLACE FUNCTION public.chat_get_stats(
     p_start_date  TEXT,
     p_end_date    TEXT,
-    p_group_by    TEXT  DEFAULT 'instructor',
+    p_group_by    TEXT  DEFAULT 'instructor',  -- 'instructor' | 'date' | 'branch' | 'program'
     p_name_filter TEXT  DEFAULT NULL,
     p_threshold   FLOAT DEFAULT 0.15
 )
@@ -288,8 +292,8 @@ BEGIN
         RETURN json_build_object('error', 'Formato de fecha inválido (usa YYYY-MM-DD)');
     END;
 
-    IF p_group_by NOT IN ('instructor', 'date', 'branch') THEN
-        RETURN json_build_object('error', 'group_by debe ser instructor, date o branch');
+    IF p_group_by NOT IN ('instructor', 'date', 'branch', 'program') THEN
+        RETURN json_build_object('error', 'group_by debe ser instructor, date, branch o program');
     END IF;
 
     SELECT json_build_object(
@@ -303,12 +307,13 @@ BEGIN
                          WHEN 'instructor' THEN instructor
                          WHEN 'date'       THEN date
                          WHEN 'branch'     THEN branch
+                         WHEN 'program'    THEN program
                      END AS grp_key,
                      COUNT(*) AS cnt
                  FROM public.schedule_entries
                  WHERE date BETWEEN p_start_date AND p_end_date
                    AND (p_name_filter IS NULL
-                        OR public.similarity(LOWER(instructor), LOWER(p_name_filter)) >= p_threshold)
+                        OR public.word_similarity(LOWER(p_name_filter), LOWER(instructor)) >= p_threshold)
                  GROUP BY grp_key
                  ORDER BY cnt DESC
                  LIMIT 50
@@ -326,7 +331,10 @@ GRANT EXECUTE ON FUNCTION public.chat_get_stats(TEXT, TEXT, TEXT, TEXT, FLOAT) T
 -- =============================================
 -- 6. RPC: chat_check_instructor_availability
 -- =============================================
--- Checks if a fuzzy-matched instructor has conflicts in a time range.
+-- Checks if a specific named instructor has conflicts in a time range.
+-- Name resolution is global (not restricted to p_date) using word_similarity,
+-- so an instructor with no classes on that date still resolves correctly
+-- and returns is_available: true (no classes ≠ not found).
 
 CREATE OR REPLACE FUNCTION public.chat_check_instructor_availability(
     p_name       TEXT,
@@ -349,10 +357,10 @@ BEGIN
         RETURN json_build_object('error', 'Sin permiso para ver horarios');
     END IF;
 
+    -- Global name resolution: word_similarity handles metadata suffixes in instructor names
     SELECT ARRAY_AGG(DISTINCT instructor) INTO v_matched
     FROM public.schedule_entries
-    WHERE date = p_date
-      AND public.similarity(LOWER(instructor), LOWER(p_name)) >= p_threshold;
+    WHERE public.word_similarity(LOWER(p_name), LOWER(instructor)) >= p_threshold;
 
     IF v_matched IS NULL OR array_length(v_matched, 1) = 0 THEN
         RETURN json_build_object(
@@ -361,7 +369,7 @@ BEGIN
             'date',                p_date,
             'time_range',          p_start_time || '–' || p_end_time,
             'is_available',        NULL,
-            'note',                'Instructor no encontrado en esa fecha'
+            'note',                'Instructor no encontrado en el sistema'
         );
     END IF;
 

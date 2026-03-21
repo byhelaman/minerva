@@ -223,10 +223,11 @@ GRANT EXECUTE ON FUNCTION public.chat_get_instructor_profile(TEXT, FLOAT) TO aut
 -- =============================================
 -- Returns evaluators available for a specific date + time window.
 -- Three conditions:
---   1. can_evaluate = true (+ optional eval_type filter via array containment)
+--   1. can_evaluate = true (+ optional eval_type and language filters)
 --   2. Weekly availability window covers the full slot on that day of week
 --   3. No conflicting entry in schedule_entries on that date (join by code — exact)
 --
+-- Language filter is case-insensitive (stored values may be lowercase).
 -- NOTE: end_time >= p_end_time means the window fully contains the slot.
 -- Conflict check uses se.code = ip.code (exact), not fuzzy name match.
 
@@ -234,7 +235,8 @@ CREATE OR REPLACE FUNCTION public.chat_find_evaluators(
   p_date       TEXT,
   p_start_time TEXT,
   p_end_time   TEXT,
-  p_eval_type  TEXT DEFAULT NULL  -- optional: 'corporativo' | 'consumer_adult' | 'demo_adult' | 'consumer_kids' | 'demo_kids'
+  p_eval_type  TEXT DEFAULT NULL,  -- 'corporativo' | 'consumer_adult' | 'demo_adult' | 'consumer_kids' | 'demo_kids'
+  p_language   TEXT DEFAULT NULL   -- e.g. 'English', 'Spanish' (case-insensitive)
 )
 RETURNS JSON
 LANGUAGE plpgsql
@@ -261,19 +263,25 @@ BEGIN
     'time_range',  p_start_time || '–' || p_end_time,
     'day_of_week', v_dow,
     'eval_type',   p_eval_type,
+    'language',    p_language,
     'evaluators', COALESCE(
       (SELECT json_agg(
          json_build_object(
            'name',       ip.name,
            'code',       ip.code,
            'eval_types', ip.eval_types,
+           'languages',  ip.languages,
            'notes',      ip.notes
          ) ORDER BY ip.name
        )
        FROM public.instructor_profiles ip
        WHERE ip.can_evaluate = true
-         -- Optional filter by evaluation type (array containment)
+         -- Optional filter by evaluation type
          AND (p_eval_type IS NULL OR ip.eval_types @> ARRAY[p_eval_type])
+         -- Optional filter by language (case-insensitive)
+         AND (p_language IS NULL OR EXISTS (
+           SELECT 1 FROM unnest(ip.languages) AS l WHERE lower(l) = lower(p_language)
+         ))
          -- Condition 2: has availability window fully covering the slot on this day
          AND EXISTS (
            SELECT 1
@@ -301,4 +309,60 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.chat_find_evaluators(TEXT, TEXT, TEXT, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.chat_find_evaluators(TEXT, TEXT, TEXT, TEXT, TEXT) TO authenticated;
+
+
+-- =============================================
+-- 5. RPC: chat_get_evaluators_list
+-- =============================================
+-- Returns all evaluators (can_evaluate = true), optionally filtered by
+-- eval_type and/or language. No date/time required.
+-- Language filter is case-insensitive.
+
+CREATE OR REPLACE FUNCTION public.chat_get_evaluators_list(
+  p_eval_type TEXT DEFAULT NULL,
+  p_language  TEXT DEFAULT NULL
+)
+RETURNS JSON
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_result JSON;
+BEGIN
+  IF NOT public.has_permission('instructors.view') THEN
+    RETURN json_build_object('error', 'Sin permiso para ver perfiles de instructores');
+  END IF;
+
+  SELECT json_build_object(
+    'eval_type',  p_eval_type,
+    'language',   p_language,
+    'total',      COUNT(*),
+    'evaluators', COALESCE(
+      json_agg(
+        json_build_object(
+          'name',       ip.name,
+          'code',       ip.code,
+          'eval_types', ip.eval_types,
+          'languages',  ip.languages,
+          'notes',      ip.notes
+        ) ORDER BY ip.name
+      ),
+      '[]'::JSON
+    )
+  )
+  FROM public.instructor_profiles ip
+  WHERE ip.can_evaluate = true
+    AND (p_eval_type IS NULL OR ip.eval_types @> ARRAY[p_eval_type])
+    AND (p_language IS NULL OR EXISTS (
+      SELECT 1 FROM unnest(ip.languages) AS l WHERE lower(l) = lower(p_language)
+    ))
+  INTO v_result;
+
+  RETURN v_result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.chat_get_evaluators_list(TEXT, TEXT) TO authenticated;
