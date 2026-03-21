@@ -120,13 +120,24 @@ export function ConfigPanel() {
     const p = PRESETS[value];
     if (!p) return;
     const currentPreset = detectPreset(settings.aiBaseUrl);
-    const updatedKeys = { ...settings.aiApiKeys, [currentPreset]: settings.aiApiKey };
+
+    // Guardar key y modelo del preset actual antes de cambiar
+    const updatedKeys   = { ...settings.aiApiKeys, [currentPreset]: settings.aiApiKey };
+    const updatedModels = { ...settings.aiModels,  [currentPreset]: settings.aiModel  };
     updateSetting("aiApiKeys", updatedKeys);
-    const savedKey = updatedKeys[value] ?? "";
-    updateSetting("aiApiKey", savedKey);
-    if (value !== "custom") {
+    updateSetting("aiModels",  updatedModels);
+
+    // Restaurar key del nuevo preset
+    updateSetting("aiApiKey", updatedKeys[value] ?? "");
+
+    if (value === "custom") {
+      // Limpiar URL y modelo para que el usuario configure manualmente
+      updateSetting("aiBaseUrl", "");
+      updateSetting("aiModel", "");
+    } else {
       updateSetting("aiBaseUrl", p.baseUrl);
-      updateSetting("aiModel", p.model);
+      // Restaurar modelo guardado o usar el default del preset
+      updateSetting("aiModel", updatedModels[value] ?? p.model);
     }
     setAvailableModels([]);
   }

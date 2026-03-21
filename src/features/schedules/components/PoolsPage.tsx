@@ -47,7 +47,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { CircleCheck, CircleSlash, CloudUpload, Loader2, MoreHorizontal, Plus, Search, X } from "lucide-react";
+import { CircleCheck, CircleSlash, History, Loader2, MoreHorizontal, Plus, X } from "lucide-react";
 import { poolsService } from "@/features/schedules/services/pools-service";
 import type { PoolRule, PoolRuleInput } from "@/features/schedules/types";
 import { ScheduleDataTable } from "@schedules/components/table/ScheduleDataTable";
@@ -771,8 +771,8 @@ export function PoolsPage() {
                 </div>
                 <div className="flex gap-2">
                     <Button size="sm" variant="outline" onClick={() => { setHistoryProgramQuery(""); setHistoryModalOpen(true); }}>
-                        <Search />
-                        Search History
+                        <History />
+                        Historial
                     </Button>
                     <Button size="sm" onClick={openCreateDialog}>
                         <Plus />
@@ -786,7 +786,7 @@ export function PoolsPage() {
                     data={tableData}
                     initialPageSize={100}
                     statusOptions={POOL_STATUS_OPTIONS}
-                    hideUpload
+                    onUploadClick={() => setIsUploadModalOpen(true)}
                     hideDefaultActions
                     hideOverlaps
                     hideBulkCopy
@@ -795,12 +795,6 @@ export function PoolsPage() {
                     disableRefresh={isLoading}
                     getRowKey={(row) => (row as PoolRule).id}
                     customExportFn={(data) => handleExportRules(data as PoolRule[])}
-                    customActionItems={
-                        <DropdownMenuItem onClick={() => setIsUploadModalOpen(true)}>
-                            <CloudUpload />
-                            Import Data
-                        </DropdownMenuItem>
-                    }
                     initialColumnVisibility={{
                         branch: false,
                     }}

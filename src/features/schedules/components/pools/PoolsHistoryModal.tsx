@@ -5,7 +5,6 @@ import {
     DialogDescription,
     DialogHeader,
     DialogTitle,
-    DialogFooter
 } from "@/components/ui/dialog";
 import { ScheduleDataTable } from "@schedules/components/table/ScheduleDataTable";
 import { getHistoryColumns } from "./pools-history-columns";
@@ -116,11 +115,6 @@ export function PoolsHistoryModal({ open, onOpenChange, programQuery }: PoolsHis
                     </div>
                 </div>
 
-                <DialogFooter className="mt-auto flex-col sm:flex-row gap-4">
-                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
-                        Close
-                    </Button>
-                </DialogFooter>
             </DialogContent>
         </Dialog>
     );

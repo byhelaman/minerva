@@ -15,6 +15,7 @@ interface AppSettings {
     aiModel: string;
     aiTokenLimit: number; // tokens máximos por sesión (0 = sin límite)
     aiApiKeys: Record<string, string>; // API keys persistidas por nombre de preset
+    aiModels: Record<string, string>;  // modelos persistidos por nombre de preset
 }
 
 interface SettingsContextType {
@@ -35,6 +36,7 @@ const defaultSettings: AppSettings = {
     aiModel: "gemini-2.5-flash",
     aiTokenLimit: 0,
     aiApiKeys: {},
+    aiModels: {},
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -61,9 +63,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
                         for (const key of Object.keys(defaultSettings) as (keyof AppSettings)[]) {
                             if (!(key in p)) continue;
-                            if (key === "aiApiKeys") {
+                            if (key === "aiApiKeys" || key === "aiModels") {
                                 if (p[key] && typeof p[key] === "object" && !Array.isArray(p[key])) {
-                                    validated.aiApiKeys = p[key] as Record<string, string>;
+                                    validated[key] = p[key] as Record<string, string>;
                                 }
                             } else if (typeof p[key] === typeof defaultSettings[key]) {
                                 Object.assign(validated, { [key]: p[key] });

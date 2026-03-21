@@ -13,7 +13,7 @@ import { useSettings } from "@/components/settings-provider";
 import { RequirePermission } from "@/components/RequirePermission";
 import { STORAGE_FILES } from "@/lib/constants";
 import { formatDateToISO, formatDateForDisplay } from "@/lib/date-utils";
-import { Bot, CalendarPlus, CalendarSearch, ShieldAlert } from "lucide-react";
+import { CalendarCheck, CalendarPlus, CalendarSearch, ShieldAlert } from "lucide-react";
 import { SearchLinkModal } from "./modals/search/SearchLinkModal";
 import { CreateLinkModal } from "./modals/creation/CreateLinkModal";
 import { AssignLinkModal } from "./modals/assignment/AssignLinkModal";
@@ -527,7 +527,7 @@ export function ScheduleDashboard() {
                             onClick={() => setIsAssignModalOpen(true)}
                             disabled={schedules.length === 0}
                         >
-                            <Bot />
+                            <CalendarCheck />
                             Assign
                         </Button>
                     </RequirePermission>
