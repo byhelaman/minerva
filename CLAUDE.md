@@ -132,7 +132,19 @@ Three-tier search (exact normalized → Fuse.js fuzzy → token set fallback) wi
 
 ### Database Migrations (`supabase/migrations/`)
 
-8 migration files (001–008). Run via Supabase SQL Editor in order. 001–006 are consolidated; 007 (`delete_account`) and 008 (`schedules_optimization`) are standalone.
+9 migration files in repo. Run via Supabase SQL Editor in order. Numbers 007–009 and 012–016 were applied directly to the DB (not in repo). Files present:
+
+| File | Content |
+|------|---------|
+| `001_foundation.sql` | RBAC, profiles, auth hook, triggers |
+| `002_zoom_webhooks.sql` | Zoom OAuth, meetings, webhooks |
+| `003_schedules.sql` | schedule_entries, published_schedules |
+| `004_pools.sql` | pool_rules, pool_rule_day_overrides |
+| `005_chat.sql` | pg_trgm, 6 chat RAG RPCs |
+| `006_instructor_profiles.sql` | instructor_profiles, instructor_availability, evaluator RPCs |
+| `010_chat_pool_rules.sql` | `chat_get_pool_rules` RPC |
+| `011_chat_find_instructors.sql` | `chat_find_instructors` RPC |
+| `017_extensions_to_schema.sql` | Moves pg_trgm/unaccent to `extensions` schema |
 
 Key tables: `profiles`, `roles`, `permissions`, `schedule_entries`, `published_schedules`, `zoom_users`, `zoom_meetings`, `zoom_account`, `microsoft_account`, `webhook_events`, `bug_reports`.
 

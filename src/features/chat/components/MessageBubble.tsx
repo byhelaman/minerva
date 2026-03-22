@@ -95,7 +95,7 @@ export function MessageBubble({
             className="h-6 px-2 text-xs text-muted-foreground"
             onClick={onEditCancel}
           >
-            Cancelar
+            Cancel
           </Button>
           <Button
             size="sm"
@@ -103,7 +103,7 @@ export function MessageBubble({
             onClick={() => { if (editText.trim()) onEditSave(message.id, editText.trim()); }}
             disabled={!editText.trim()}
           >
-            Enviar
+            Send
           </Button>
         </div>
       </div>
@@ -121,7 +121,7 @@ export function MessageBubble({
             className="flex items-center gap-1 text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
           >
             <ChevronLeft className={cn("size-2.5 transition-transform", thinkOpen ? "-rotate-90" : "rotate-180")} />
-            Razonamiento
+            Reasoning
           </button>
           {thinkOpen && (
             <pre className="mt-1 text-[10px] font-mono text-muted-foreground/60 border-l border-muted-foreground/20 pl-3 whitespace-pre-wrap wrap-break-word leading-relaxed max-h-40 overflow-auto">

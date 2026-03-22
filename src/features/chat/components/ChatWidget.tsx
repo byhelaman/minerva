@@ -98,7 +98,7 @@ export function ChatWidget() {
         dispatch({ type: "REMOVE_MESSAGE", id: assistantMsgId });
         return;
       }
-      const errorMsg = err instanceof Error ? err.message : "Error desconocido";
+      const errorMsg = err instanceof Error ? err.message : "Unknown error";
       dispatch({ type: "UPDATE_MESSAGE", id: assistantMsgId, patch: { content: errorMsg, isLoading: false, isError: true, retryText: text } });
     } finally {
       abortRef.current = null;
@@ -137,10 +137,10 @@ export function ChatWidget() {
   const handleShare = useCallback(() => {
     const lines = state.messages
       .filter((m) => m.role !== "tool_status" && !m.isLoading && m.content)
-      .map((m) => `${m.role === "user" ? "Usuario" : "Mina"}: ${m.content}`)
+      .map((m) => `${m.role === "user" ? "User" : "Mina"}: ${m.content}`)
       .join("\n\n");
-    const date = new Date().toLocaleDateString("es-MX", { dateStyle: "long" });
-    const text = `Chat con Mina — ${date}\n${"─".repeat(40)}\n\n${lines}`;
+    const date = new Date().toLocaleDateString("en-US", { dateStyle: "long" });
+    const text = `Chat with Mina — ${date}\n${"─".repeat(40)}\n\n${lines}`;
     void navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -169,10 +169,10 @@ export function ChatWidget() {
               )}
               <div className="min-w-0">
                 <p className="text-sm font-semibold leading-none">
-                  {showConfig ? "Configuración" : "Mina"}
+                  {showConfig ? "Settings" : "Mina"}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {showConfig ? "Proveedor de IA y credenciales" : "Tu asistente en Minerva"}
+                  {showConfig ? "AI provider & credentials" : "Your Minerva assistant"}
                 </p>
               </div>
             </div>
@@ -180,17 +180,17 @@ export function ChatWidget() {
               {!showConfig && state.messages.length > 0 && (
                 <>
                   <Button variant="ghost" size="icon" className="size-7 text-muted-foreground"
-                    onClick={handleShare} title="Compartir conversación">
+                    onClick={handleShare} title="Copy conversation">
                     {copied ? <Check className="size-4 text-green-500" /> : <ClipboardCopy className="size-4" />}
                   </Button>
                   <Button variant="ghost" size="icon" className="size-7 text-muted-foreground"
-                    onClick={() => dispatch({ type: "CLEAR" })} disabled={isLoading} title="Limpiar conversación">
+                    onClick={() => dispatch({ type: "CLEAR" })} disabled={isLoading} title="Clear conversation">
                     <Trash2 className="size-4" />
                   </Button>
                 </>
               )}
               <Button variant="ghost" size="icon" className={cn("size-7", showConfig && "text-primary")}
-                onClick={() => setShowConfig((v) => !v)} aria-label="Configuración">
+                onClick={() => setShowConfig((v) => !v)} aria-label="Settings">
                 <Settings className="size-4" />
               </Button>
               <Button variant="ghost" size="icon" className="size-7"
@@ -211,9 +211,9 @@ export function ChatWidget() {
                     <div className="flex flex-col items-center justify-center text-center text-muted-foreground gap-3 py-8">
                       <BotMessageSquare className="size-10 opacity-30" />
                       <div className="space-y-1">
-                        <p className="text-sm font-medium">¿En qué puedo ayudarte?</p>
+                        <p className="text-sm font-medium">How can I help you?</p>
                         <p className="text-xs max-w-72">
-                          Pregunta sobre disponibilidad de instructores, horarios del día, o clases programadas.
+                          Ask about instructor availability, daily schedules, or scheduled classes.
                         </p>
                       </div>
                     </div>
@@ -241,7 +241,7 @@ export function ChatWidget() {
                 <div className="flex gap-2 items-end">
                   <Textarea
                     ref={textareaRef}
-                    placeholder="Escribe tu pregunta..."
+                    placeholder="Type your question..."
                     value={state.input}
                     onChange={(e) => dispatch({ type: "SET_INPUT", payload: e.target.value })}
                     onKeyDown={handleKeyDown}
@@ -249,7 +249,7 @@ export function ChatWidget() {
                     className="min-h-0 max-h-30 resize-none field-sizing-content"
                   />
                   {isLoading ? (
-                    <Button size="icon" variant="outline" onClick={handleStop} className="shrink-0 size-9" title="Detener">
+                    <Button size="icon" variant="outline" onClick={handleStop} className="shrink-0 size-9" title="Stop">
                       <Square className="size-4" />
                     </Button>
                   ) : (
@@ -267,7 +267,7 @@ export function ChatWidget() {
                       : settings.aiTokenLimit > 0 && state.sessionTokens >= settings.aiTokenLimit * 0.8 ? "text-amber-500"
                         : "text-muted-foreground"
                   )}>
-                    ~{formatTokens(state.sessionTokens)} tokens esta sesión
+                    ~{formatTokens(state.sessionTokens)} tokens this session
                     {settings.aiTokenLimit > 0 && ` / ${formatTokens(settings.aiTokenLimit)}`}
                   </p>
                 )}
@@ -283,7 +283,7 @@ export function ChatWidget() {
           onClick={() => dispatch({ type: "TOGGLE" })}
           size="icon"
           className="fixed bottom-6 right-6 z-50 size-12 rounded-full shadow-lg"
-          aria-label="Abrir asistente"
+          aria-label="Open assistant"
         >
           <BotMessageSquare className="size-5" />
         </Button>

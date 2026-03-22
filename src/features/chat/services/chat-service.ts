@@ -92,7 +92,7 @@ async function callChatCompletions(
   const baseUrl = provider.baseUrl.replace(/\/$/, "");
 
   if (!baseUrl) {
-    throw new Error("URL del proveedor no configurada.");
+    throw new Error("Provider URL not configured.");
   }
 
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -127,7 +127,7 @@ async function callChatCompletions(
     }
 
     if (httpStatus < 200 || httpStatus >= 300) {
-      const err: ExtendedError = new Error(`Error de API (${httpStatus}): ${responseText}`);
+      const err: ExtendedError = new Error(`API error (${httpStatus}): ${responseText}`);
       err.rawBody = responseText;
       err.isAuthError = httpStatus === 401 || httpStatus === 403;
       err.isRetryable = err.isAuthError || httpStatus === 429;
@@ -208,7 +208,7 @@ async function callChatCompletionsStream(
   }
 
   const reader = res.body?.getReader();
-  if (!reader) throw new Error("No se pudo leer el stream de respuesta.");
+  if (!reader) throw new Error("Could not read response stream.");
 
   const decoder = new TextDecoder();
   let buffer = "";
@@ -332,13 +332,13 @@ async function tryProvider(
       : await callChatCompletions(provider, messages, true, signal);
 
     const choice = response.choices[0];
-    if (!choice) throw new Error("Respuesta vacía del modelo.");
+    if (!choice) throw new Error("Empty response from model.");
 
     // No tool calls — final response
     if (choice.finish_reason !== "tool_calls" || !choice.message.tool_calls?.length) {
       const text = choice.message.content?.trim() ?? "";
       return {
-        response: text || "No tengo respuesta para esa consulta.",
+        response: text || "No response available.",
         updatedHistory: [
           ...trimmedHistory,
           { role: "user", content: userMessage },
@@ -349,25 +349,32 @@ async function tryProvider(
       };
     }
 
-    // Execute tool calls
+    // Execute tool calls in parallel — results preserve order via Promise.all
     messages.push(choice.message);
     for (const toolCall of choice.message.tool_calls) {
-      const label = TOOL_LABELS[toolCall.function.name] ?? "Consultando...";
-      onToolCall?.(label);
-
-      let result: unknown;
-      try {
-        const input = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
-        result = await executeToolCall(toolCall.function.name, input);
-      } catch (err) {
-        result = { error: err instanceof Error ? err.message : "Error ejecutando la herramienta" };
-      }
-      messages.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(result) });
+      onToolCall?.(TOOL_LABELS[toolCall.function.name] ?? "Consultando...");
+    }
+    const toolResults = await Promise.all(
+      choice.message.tool_calls.map(async (toolCall) => {
+        try {
+          const input = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
+          const result = await executeToolCall(toolCall.function.name, input);
+          return { tool_call_id: toolCall.id, content: JSON.stringify(result) };
+        } catch (err) {
+          return {
+            tool_call_id: toolCall.id,
+            content: JSON.stringify({ error: err instanceof Error ? err.message : "Tool execution error" }),
+          };
+        }
+      })
+    );
+    for (const r of toolResults) {
+      messages.push({ role: "tool", ...r });
     }
   }
 
   return {
-    response: "No pude completar la consulta después de varios intentos.",
+    response: "Could not complete the query after several attempts.",
     updatedHistory: trimmedHistory,
     estimatedTokens: 0,
     sentMessages: messages,
@@ -386,7 +393,7 @@ export async function sendChatMessage(
   onChunk?: (text: string) => void
 ): Promise<ChatResult> {
   if (!provider.baseUrl) {
-    throw new Error("Proveedor no configurado. Abre ⚙ y configura la URL y API key.");
+    throw new Error("Provider not configured. Open ⚙ to set the URL and API key.");
   }
 
   return tryProvider(provider, userMessage, conversationHistory, onToolCall, signal, onChunk);

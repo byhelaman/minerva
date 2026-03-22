@@ -33,6 +33,10 @@ export function verifyInternalKey(req: Request): boolean {
 
 // =============================================
 // Verificación combinada: usuario + clave interna
+// Los dos flujos son mutuamente excluyentes:
+// - Authorization header presente → verificar JWT + permiso (sin fallback a internal key)
+// - Sin Authorization header → verificar internal key
+// Esto evita que un JWT con permisos insuficientes pase por la internal key.
 // =============================================
 export async function verifyAccess(
     req: Request,
@@ -45,7 +49,7 @@ export async function verifyAccess(
             await verifyPermission(req, supabase, requiredPermission)
             return true
         } catch {
-            // Continuar con la verificación de clave interna
+            return false
         }
     }
 

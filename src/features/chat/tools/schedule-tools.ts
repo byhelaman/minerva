@@ -502,23 +502,23 @@ export async function executeToolCall(
     case "find_evaluators":
       return handleFindEvaluators(toolInput as unknown as FindEvaluatorsInput);
     default:
-      return { error: `Herramienta desconocida: ${toolName}` };
+      return { error: `Unknown tool: ${toolName}` };
   }
 }
 
 // Labels legibles para la UI (ChatWidget onToolCall callback)
 export const TOOL_LABELS: Record<string, string> = {
-  get_schedules_for_date:          "Consultando horarios...",
-  find_instructor_schedule:        "Buscando horario del instructor...",
-  check_instructor_availability:   "Verificando disponibilidad...",
-  find_available_instructors:      "Buscando instructores disponibles...",
-  get_schedules_range:             "Consultando base de datos...",
-  get_schedule_stats:              "Calculando estadísticas...",
-  get_instructor_profile:          "Consultando perfil del instructor...",
-  get_pool_rules:                  "Consultando reglas de pool...",
-  get_evaluators_list:             "Consultando evaluadores...",
-  get_available_languages:         "Consultando idiomas disponibles...",
-  find_instructors:                "Buscando instructores...",
-  find_evaluator_slots:            "Buscando horarios disponibles...",
-  find_evaluators:                 "Buscando evaluadores disponibles...",
+  get_schedules_for_date:          "Querying schedules...",
+  find_instructor_schedule:        "Looking up instructor schedule...",
+  check_instructor_availability:   "Checking availability...",
+  find_available_instructors:      "Finding available instructors...",
+  get_schedules_range:             "Querying database...",
+  get_schedule_stats:              "Calculating statistics...",
+  get_instructor_profile:          "Looking up instructor profile...",
+  get_pool_rules:                  "Fetching pool rules...",
+  get_evaluators_list:             "Fetching evaluators...",
+  get_available_languages:         "Fetching available languages...",
+  find_instructors:                "Finding instructors...",
+  find_evaluator_slots:            "Searching available slots...",
+  find_evaluators:                 "Finding available evaluators...",
 };

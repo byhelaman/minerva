@@ -33,10 +33,10 @@ export function ConfigPanel() {
     if (!p) return;
     const currentPreset = detectPreset(settings.aiBaseUrl);
 
-    const updatedKeys   = { ...settings.aiApiKeys, [currentPreset]: settings.aiApiKey };
-    const updatedModels = { ...settings.aiModels,  [currentPreset]: settings.aiModel  };
+    const updatedKeys = { ...settings.aiApiKeys, [currentPreset]: settings.aiApiKey };
+    const updatedModels = { ...settings.aiModels, [currentPreset]: settings.aiModel };
     updateSetting("aiApiKeys", updatedKeys);
-    updateSetting("aiModels",  updatedModels);
+    updateSetting("aiModels", updatedModels);
 
     updateSetting("aiApiKey", updatedKeys[value] ?? "");
 
@@ -85,7 +85,7 @@ export function ConfigPanel() {
 
         {/* Plataforma */}
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Plataforma</Label>
+          <Label className="text-xs text-muted-foreground">Platform</Label>
           <Select value={preset} onValueChange={handlePresetChange}>
             <SelectTrigger className="h-8! w-full py-1">
               <SelectValue />
@@ -100,7 +100,7 @@ export function ConfigPanel() {
 
         {/* URL base */}
         <div className="space-y-1.5">
-          <Label htmlFor="cfg-url" className="text-xs text-muted-foreground">URL base</Label>
+          <Label htmlFor="cfg-url" className="text-xs text-muted-foreground">Base URL</Label>
           <Input
             id="cfg-url"
             value={settings.aiBaseUrl}
@@ -127,22 +127,22 @@ export function ConfigPanel() {
         {/* Modelo */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <Label className="text-xs text-muted-foreground">Modelo</Label>
+            <Label className="text-xs text-muted-foreground">Model</Label>
             <button
               type="button"
               onClick={() => void handleFetchModels()}
               disabled={fetchingModels || !settings.aiBaseUrl || (!settings.aiApiKey && !settings.aiBaseUrl.includes("localhost"))}
               className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
-              title={!settings.aiApiKey && !settings.aiBaseUrl.includes("localhost") ? "Ingresa una API key primero" : "Obtener modelos disponibles"}
+              title={!settings.aiApiKey && !settings.aiBaseUrl.includes("localhost") ? "Enter an API key first" : "Fetch available models"}
             >
               <RefreshCw className={cn("size-3", fetchingModels && "animate-spin")} />
-              {availableModels.length > 0 ? `${availableModels.length} modelos` : "Obtener"}
+              {availableModels.length > 0 ? `${availableModels.length} models` : "Fetch"}
             </button>
           </div>
           {availableModels.length > 0 ? (
             <Select value={settings.aiModel} onValueChange={(v) => updateSetting("aiModel", v)}>
               <SelectTrigger className="h-8! w-full py-1 font-mono">
-                <SelectValue placeholder="Selecciona modelo" />
+                <SelectValue placeholder="Select model" />
               </SelectTrigger>
               <SelectContent>
                 {availableModels.map((m) => (
@@ -176,9 +176,9 @@ export function ConfigPanel() {
                   connStatus === "auth_error" || connStatus === "error" ? "text-destructive" :
                     "text-muted-foreground"
               )}>
-                {connStatus === "idle" ? "Sin verificar" :
-                  connStatus === "testing" ? "Probando conexión..." :
-                    connStatus === "ok" ? "Conectado" : "Error de conexión"}
+                {connStatus === "idle" ? "Not verified" :
+                  connStatus === "testing" ? "Testing..." :
+                    connStatus === "ok" ? "Connected" : "Connection error"}
               </span>
             </div>
             <Button
@@ -187,7 +187,7 @@ export function ConfigPanel() {
               disabled={connStatus === "testing" || !settings.aiBaseUrl}
               className="h-7 text-xs shrink-0"
             >
-              Probar
+              Test
             </Button>
           </div>
           {connMsg && (connStatus === "error" || connStatus === "auth_error") && (
