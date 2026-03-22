@@ -34,11 +34,6 @@ export const PRESETS: Record<string, { label: string; baseUrl: string; model: st
     baseUrl: "https://ollama.com/api",
     model: "gpt-oss:120b",
   },
-  custom: {
-    label: "Personalizado",
-    baseUrl: "",
-    model: "",
-  },
 };
 
 export function detectPreset(baseUrl: string): string {

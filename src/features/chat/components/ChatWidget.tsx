@@ -13,7 +13,8 @@ import { useSettings } from "@/components/settings-provider";
 import { cn } from "@/lib/utils";
 
 import { sendChatMessage } from "../services/chat-service";
-import type { OAIMessage } from "../types";
+import type { ChatMessage, OAIMessage } from "../types";
+import { STORAGE_KEYS, CHAT_SESSION_TTL_MS } from "@/lib/constants";
 
 import { chatReducer, initialState, formatTokens } from "./chat-reducer";
 import { MessageBubble } from "./MessageBubble";
@@ -33,6 +34,34 @@ export function ChatWidget() {
   const { settings } = useSettings();
 
   const isLoading = state.messages.some((m) => m.isLoading);
+
+  // Restore session from localStorage on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.CHAT_SESSION);
+      if (!raw) return;
+      const session = JSON.parse(raw) as { history: OAIMessage[]; messages: ChatMessage[]; compressedSummary: string | null; savedAt: number };
+      if (Date.now() - session.savedAt > CHAT_SESSION_TTL_MS) {
+        localStorage.removeItem(STORAGE_KEYS.CHAT_SESSION);
+        return;
+      }
+      dispatch({ type: "RESTORE_SESSION", messages: session.messages, history: session.history, summary: session.compressedSummary });
+    } catch { /* ignore corrupt storage */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Persist session to localStorage whenever history changes
+  useEffect(() => {
+    if (state.history.length === 0) return;
+    try {
+      const session = {
+        history: state.history,
+        messages: state.messages.filter((m) => m.role !== "tool_status" && !m.isLoading),
+        compressedSummary: state.compressedSummary,
+        savedAt: Date.now(),
+      };
+      localStorage.setItem(STORAGE_KEYS.CHAT_SESSION, JSON.stringify(session));
+    } catch { /* ignore quota errors */ }
+  }, [state.history, state.messages, state.compressedSummary]);
 
   // Auto-scroll
   useEffect(() => {
@@ -71,15 +100,16 @@ export function ChatWidget() {
     let firstChunk = true;
 
     try {
-      const { response, updatedHistory, estimatedTokens } = await sendChatMessage(
+      const { response, updatedHistory, updatedSummary, promptTokens, completionTokens } = await sendChatMessage(
         text,
         historyOverride ?? state.history,
         provider,
-        (toolLabel) => {
+        historyOverride !== undefined ? null : state.compressedSummary,
+        (toolLabel: string) => {
           dispatch({ type: "ADD_MESSAGE", payload: { id: crypto.randomUUID(), role: "tool_status", content: toolLabel, timestamp: Date.now() } });
         },
         ctrl.signal,
-        (chunk) => {
+        (chunk: string) => {
           streamedText += chunk;
           const patch = firstChunk
             ? { content: streamedText, isLoading: false, isStreaming: true }
@@ -91,7 +121,8 @@ export function ChatWidget() {
       dispatch({ type: "REMOVE_TOOL_STATUS" });
       dispatch({ type: "UPDATE_MESSAGE", id: assistantMsgId, patch: { content: response, isLoading: false, isStreaming: false } });
       dispatch({ type: "SET_HISTORY", payload: updatedHistory });
-      dispatch({ type: "ADD_TOKENS", amount: estimatedTokens });
+      dispatch({ type: "SET_SUMMARY", payload: updatedSummary });
+      dispatch({ type: "ADD_TOKENS", prompt: promptTokens, completion: completionTokens });
     } catch (err) {
       dispatch({ type: "REMOVE_TOOL_STATUS" });
       if (err instanceof Error && err.name === "AbortError") {
@@ -184,7 +215,7 @@ export function ChatWidget() {
                     {copied ? <Check className="size-4 text-green-500" /> : <ClipboardCopy className="size-4" />}
                   </Button>
                   <Button variant="ghost" size="icon" className="size-7 text-muted-foreground"
-                    onClick={() => dispatch({ type: "CLEAR" })} disabled={isLoading} title="Clear conversation">
+                    onClick={() => { dispatch({ type: "CLEAR" }); localStorage.removeItem(STORAGE_KEYS.CHAT_SESSION); }} disabled={isLoading} title="Clear conversation">
                     <Trash2 className="size-4" />
                   </Button>
                 </>
@@ -267,7 +298,7 @@ export function ChatWidget() {
                       : settings.aiTokenLimit > 0 && state.sessionTokens >= settings.aiTokenLimit * 0.8 ? "text-amber-500"
                         : "text-muted-foreground"
                   )}>
-                    ~{formatTokens(state.sessionTokens)} tokens this session
+                    {formatTokens(state.sessionPromptTokens)}↑ {formatTokens(state.sessionCompletionTokens)}↓
                     {settings.aiTokenLimit > 0 && ` / ${formatTokens(settings.aiTokenLimit)}`}
                   </p>
                 )}

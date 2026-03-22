@@ -16,6 +16,18 @@
     "fs:allow-applocaldata-meta",
     "updater:default",
     "process:allow-restart",
-    "http:default"
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://generativelanguage.googleapis.com/**" },
+        { "url": "https://api.openai.com/**" },
+        { "url": "https://openrouter.ai/**" },
+        { "url": "https://ai-gateway.vercel.sh/**" },
+        { "url": "https://api.groq.com/**" },
+        { "url": "https://ollama.com/**" },
+        { "url": "http://localhost:11434/**" },
+        { "url": "http://127.0.0.1:11434/**" }
+      ]
+    }
   ]
 }

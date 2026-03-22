@@ -44,9 +44,16 @@ export interface OAIChoice {
   finish_reason: "stop" | "tool_calls" | "length" | "content_filter" | null;
 }
 
+export interface OAIUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+}
+
 export interface OAIResponse {
   id: string;
   choices: OAIChoice[];
+  usage?: OAIUsage;
 }
 
 // ---------------------------------------------------------------------------
@@ -135,4 +142,9 @@ export interface FindEvaluatorsInput {
   end_time: string;
   eval_type?: string; // 'corporate' | 'consumer_adult' | 'demo_adult' | 'consumer_kids' | 'demo_kids'
   language?: string;  // e.g. 'English', 'Spanish'
+}
+
+export interface GetInstructorFreeWindowsInput {
+  instructor_name: string;
+  date: string;
 }

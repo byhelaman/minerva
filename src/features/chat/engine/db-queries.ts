@@ -6,6 +6,20 @@
 import { supabase } from "@/lib/supabase";
 
 // ---------------------------------------------------------------------------
+// Result size guard — keeps tool responses within ~1,000 tokens
+// ---------------------------------------------------------------------------
+const MAX_TOOL_RESULT_CHARS = 4000;
+
+function truncateToolResult(data: unknown): unknown {
+  if (!Array.isArray(data)) return data;
+  const json = JSON.stringify(data);
+  if (json.length <= MAX_TOOL_RESULT_CHARS) return data;
+  let n = data.length;
+  while (n > 1 && JSON.stringify(data.slice(0, n)).length > MAX_TOOL_RESULT_CHARS) n = Math.floor(n * 0.8);
+  return { results: data.slice(0, n), truncated: true, total: data.length, shown: n };
+}
+
+// ---------------------------------------------------------------------------
 // chat_get_schedules
 // ---------------------------------------------------------------------------
 export async function dbGetSchedules(params: {
@@ -23,7 +37,7 @@ export async function dbGetSchedules(params: {
     p_count_only: params.countOnly  ?? false,
   });
   if (error) return { error: error.message };
-  return data;
+  return truncateToolResult(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -40,7 +54,7 @@ export async function dbFindInstructor(
     p_end_date:   endDate,
   });
   if (error) return { error: error.message };
-  return data;
+  return truncateToolResult(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -63,7 +77,7 @@ export async function dbGetSchedulesRange(params: {
     p_limit:      params.limit     ?? 100,
   });
   if (error) return { error: error.message };
-  return data;
+  return truncateToolResult(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -84,7 +98,7 @@ export async function dbGetStats(params: {
     p_threshold:   params.threshold  ?? 0.15,
   });
   if (error) return { error: error.message };
-  return data;
+  return truncateToolResult(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -103,7 +117,7 @@ export async function dbCheckInstructorAvailability(params: {
     p_end_time:   params.endTime,
   });
   if (error) return { error: error.message };
-  return data;
+  return truncateToolResult(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -122,7 +136,7 @@ export async function dbFindAvailableInstructors(params: {
     p_instructor_list:  params.instructorList ?? null,
   });
   if (error) return { error: error.message };
-  return data;
+  return truncateToolResult(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -137,7 +151,7 @@ export async function dbGetInstructorProfile(params: {
     p_threshold: params.threshold ?? 0.15,
   });
   if (error) return { error: error.message };
-  return data;
+  return truncateToolResult(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -152,7 +166,7 @@ export async function dbGetPoolRules(params: {
     p_program: params.program ?? null,
   });
   if (error) return { error: error.message };
-  return data;
+  return truncateToolResult(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -167,7 +181,7 @@ export async function dbGetEvaluatorsList(params: {
     p_language:  params.language ?? null,
   });
   if (error) return { error: error.message };
-  return data;
+  return truncateToolResult(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -181,7 +195,7 @@ export async function dbGetAvailableLanguages(params?: { canEvaluate?: boolean }
     p_can_evaluate: params?.canEvaluate ?? null,
   });
   if (error) return { error: error.message };
-  return data;
+  return truncateToolResult(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -198,7 +212,7 @@ export async function dbFindInstructors(params: {
     p_eval_type:    params.evalType     ?? null,
   });
   if (error) return { error: error.message };
-  return data;
+  return truncateToolResult(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -217,7 +231,22 @@ export async function dbFindEvaluatorSlots(params: {
     p_language:   params.language  ?? null,
   });
   if (error) return { error: error.message };
-  return data;
+  return truncateToolResult(data);
+}
+
+// ---------------------------------------------------------------------------
+// chat_get_instructor_free_windows
+// ---------------------------------------------------------------------------
+export async function dbGetInstructorFreeWindows(params: {
+  name: string;
+  date: string;
+}): Promise<unknown> {
+  const { data, error } = await supabase.rpc("chat_get_instructor_free_windows", {
+    p_name: params.name,
+    p_date: params.date,
+  });
+  if (error) return { error: error.message };
+  return truncateToolResult(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -238,5 +267,5 @@ export async function dbFindEvaluators(params: {
     p_language:   params.language  ?? null,
   });
   if (error) return { error: error.message };
-  return data;
+  return truncateToolResult(data);
 }

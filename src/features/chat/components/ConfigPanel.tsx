@@ -39,14 +39,8 @@ export function ConfigPanel() {
     updateSetting("aiModels", updatedModels);
 
     updateSetting("aiApiKey", updatedKeys[value] ?? "");
-
-    if (value === "custom") {
-      updateSetting("aiBaseUrl", "");
-      updateSetting("aiModel", "");
-    } else {
-      updateSetting("aiBaseUrl", p.baseUrl);
-      updateSetting("aiModel", updatedModels[value] ?? p.model);
-    }
+    updateSetting("aiBaseUrl", p.baseUrl);
+    updateSetting("aiModel", updatedModels[value] ?? p.model);
     setAvailableModels([]);
   }
 
@@ -166,7 +160,7 @@ export function ConfigPanel() {
         {/* Estado de conexión */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               {connStatus === "testing" && <Loader2 className="size-3 animate-spin text-muted-foreground shrink-0" />}
               {connStatus === "ok" && <Wifi className="size-3 text-green-500 shrink-0" />}
               {connStatus !== "testing" && connStatus !== "ok" && connStatus !== "idle" && <WifiOff className="size-3 text-destructive shrink-0" />}
@@ -178,7 +172,8 @@ export function ConfigPanel() {
               )}>
                 {connStatus === "idle" ? "Not verified" :
                   connStatus === "testing" ? "Testing..." :
-                    connStatus === "ok" ? "Connected" : "Connection error"}
+                    connStatus === "ok" ? "Connected" :
+                      connStatus === "auth_error" ? "Invalid API key" : "Connection error"}
               </span>
             </div>
             <Button

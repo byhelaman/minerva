@@ -8,7 +8,10 @@ export interface ChatState {
   input: string;
   isOpen: boolean;
   history: OAIMessage[];
-  sessionTokens: number;
+  compressedSummary: string | null;
+  sessionTokens: number;       // total = prompt + completion
+  sessionPromptTokens: number;
+  sessionCompletionTokens: number;
 }
 
 export type ChatAction =
@@ -20,7 +23,9 @@ export type ChatAction =
   | { type: "TRUNCATE_FROM"; index: number }
   | { type: "REMOVE_TOOL_STATUS" }
   | { type: "SET_HISTORY"; payload: OAIMessage[] }
-  | { type: "ADD_TOKENS"; amount: number }
+  | { type: "SET_SUMMARY"; payload: string | null }
+  | { type: "RESTORE_SESSION"; messages: ChatMessage[]; history: OAIMessage[]; summary: string | null }
+  | { type: "ADD_TOKENS"; prompt: number; completion: number }
   | { type: "CLEAR" };
 
 export const initialState: ChatState = {
@@ -28,7 +33,10 @@ export const initialState: ChatState = {
   input: "",
   isOpen: false,
   history: [],
+  compressedSummary: null,
   sessionTokens: 0,
+  sessionPromptTokens: 0,
+  sessionCompletionTokens: 0,
 };
 
 export function formatTokens(n: number): string {
@@ -64,10 +72,19 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       };
     case "SET_HISTORY":
       return { ...state, history: action.payload };
+    case "SET_SUMMARY":
+      return { ...state, compressedSummary: action.payload };
+    case "RESTORE_SESSION":
+      return { ...state, messages: action.messages, history: action.history, compressedSummary: action.summary };
     case "ADD_TOKENS":
-      return { ...state, sessionTokens: state.sessionTokens + action.amount };
+      return {
+        ...state,
+        sessionTokens:           state.sessionTokens           + action.prompt + action.completion,
+        sessionPromptTokens:     state.sessionPromptTokens     + action.prompt,
+        sessionCompletionTokens: state.sessionCompletionTokens + action.completion,
+      };
     case "CLEAR":
-      return { ...state, messages: [], history: [], sessionTokens: 0 };
+      return { ...state, messages: [], history: [], compressedSummary: null, sessionTokens: 0, sessionPromptTokens: 0, sessionCompletionTokens: 0 };
     default:
       return state;
   }

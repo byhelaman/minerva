@@ -16,6 +16,7 @@ import {
   dbGetPoolRules,
   dbFindInstructors,
   dbGetAvailableLanguages,
+  dbGetInstructorFreeWindows,
 } from "../engine/db-queries";
 import type {
   GetSchedulesForDateInput,
@@ -31,6 +32,7 @@ import type {
   FindEvaluatorSlotsInput,
   FindInstructorsInput,
   GetAvailableLanguagesInput,
+  GetInstructorFreeWindowsInput,
 } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -363,6 +365,27 @@ export const SCHEDULE_TOOLS = [
       },
     },
   },
+  {
+    type: "function" as const,
+    function: {
+      name: "get_instructor_free_windows",
+      description:
+        "Returns an instructor's free time windows on a specific date by subtracting their " +
+        "scheduled classes from their registered weekly availability. " +
+        "Use ALWAYS when the user asks 'when is X free', 'what time slots does X have available', " +
+        "'show X's free time on DATE', 'what is X's availability on DATE'. " +
+        "Returns: availability_windows (registered), classes (scheduled), and free_windows (computed gaps). " +
+        "If has_availability=false, the instructor has no registered availability for that day of week.",
+      parameters: {
+        type: "object",
+        properties: {
+          instructor_name: { type: "string", description: "Instructor name (partial/fuzzy match accepted)" },
+          date:            { type: "string", description: "Date in YYYY-MM-DD format" },
+        },
+        required: ["instructor_name", "date"],
+      },
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -467,6 +490,10 @@ async function handleFindEvaluators(input: FindEvaluatorsInput) {
   });
 }
 
+async function handleGetInstructorFreeWindows(input: GetInstructorFreeWindowsInput) {
+  return dbGetInstructorFreeWindows({ name: input.instructor_name, date: input.date });
+}
+
 // ---------------------------------------------------------------------------
 // Dispatcher
 // ---------------------------------------------------------------------------
@@ -501,6 +528,8 @@ export async function executeToolCall(
       return handleFindEvaluatorSlots(toolInput as unknown as FindEvaluatorSlotsInput);
     case "find_evaluators":
       return handleFindEvaluators(toolInput as unknown as FindEvaluatorsInput);
+    case "get_instructor_free_windows":
+      return handleGetInstructorFreeWindows(toolInput as unknown as GetInstructorFreeWindowsInput);
     default:
       return { error: `Unknown tool: ${toolName}` };
   }
@@ -521,4 +550,5 @@ export const TOOL_LABELS: Record<string, string> = {
   find_instructors:                "Finding instructors...",
   find_evaluator_slots:            "Searching available slots...",
   find_evaluators:                 "Finding available evaluators...",
+  get_instructor_free_windows:     "Computing free time windows...",
 };

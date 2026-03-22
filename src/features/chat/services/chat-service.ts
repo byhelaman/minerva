@@ -1,10 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { fetch } from "@tauri-apps/plugin-http";
-import type { OAIMessage, OAIResponse, AIProvider } from "../types";
+import type { OAIMessage, OAIResponse, OAIUsage, AIProvider } from "../types";
 import { SCHEDULE_TOOLS, executeToolCall, TOOL_LABELS } from "../tools/schedule-tools";
 
-const MAX_HISTORY_MESSAGES = 8;
 const MAX_TOOL_ITERATIONS = 5;
+const TOKEN_HISTORY_BUDGET = 6000; // chars/4 estimate; leaves room for system + tools + new message
 
 const SYSTEM_PROMPT = `Eres Mina, asistente virtual dentro de Minerva.
 Fecha actual: {CURRENT_DATE}.
@@ -24,47 +24,100 @@ CAPACIDADES:
 
 INSTRUCCIONES TÉCNICAS:
 - Usa las tools para consultar datos reales. Nunca inventes ni asumas datos.
+- Nunca pidas permiso para llamar una tool. Si tienes los parámetros necesarios, ejecútala directamente.
 - Si una tool retorna vacío: indícalo claramente y sugiere una alternativa (fecha cercana, otro instructor, reformular).
 - Si una tool retorna error: indícalo claramente y no intentes continuar con esa consulta.
-- Para fechas relativas ("ayer", "la semana pasada", "el lunes"), calcula desde {CURRENT_DATE}.
-- "Febrero" sin año = año de {CURRENT_DATE}.
 - Indica siempre la fecha o rango consultado en tu respuesta.
 - Usa listas para múltiples resultados.
 
 DATOS FALTANTES:
-- Si el usuario pide disponibilidad o evaluadores pero no indica la fecha, PREGUNTA la fecha
-  antes de llamar cualquier tool. No intentes inferirla ni uses una fecha por defecto.
-- Si el usuario da múltiples franjas horarias sin fecha, pide la fecha una sola vez.
+- Si falta un parámetro crítico, haz UNA sola pregunta con todos los datos faltantes a la vez.
+  Nunca hagas múltiples rondas de aclaración para la misma consulta.
+- Si el usuario pide disponibilidad o evaluadores pero no indica la fecha, PREGUNTA solo la fecha
+  (no más datos) antes de llamar cualquier tool.
+
+FECHAS RELATIVAS:
+- Para fechas relativas ("ayer", "la semana pasada", "el lunes"), calcula desde {CURRENT_DATE}.
+- "Febrero" sin año = año de {CURRENT_DATE}.
+- "El lunes", "el martes", etc. SIN fecha explícita → resuelve al día de la semana ya mencionado
+  en la conversación activa, NO al próximo. Solo calcula desde {CURRENT_DATE} si no hay fecha previa.
+
+DESAMBIGUACIÓN HORARIA:
+- "12am" es ambiguo (puede ser 00:00 o confusión con mediodía). Si el contexto es laboral,
+  pregunta: "¿12:00 (mediodía) o 00:00 (medianoche)?" antes de ejecutar.
+- "12pm" = 12:00 siempre. No preguntes.
+- "12" sin sufijo en contexto de horario laboral = 12:00 (mediodía). No preguntes.
+
+IDIOMA COMO FILTRO:
+- Cuando el usuario mencione un idioma ("inglés", "portugués", "francés", etc.) en contexto de
+  evaluadores o instructores, es SIEMPRE el filtro de idioma (parámetro language).
+  Nunca lo interpretes como nombre de programa o clase.
+
+INFERENCIA DE TIPO DE EVALUACIÓN:
+- "demo" + "adulto/adult" → eval_type="demo_adult" sin confirmar.
+- "consumer" + "adulto/adult" → eval_type="consumer_adult" sin confirmar.
+- "corporativo" o "corporate" → eval_type="corporate" sin confirmar.
+- "kids" + "consumer" → eval_type="consumer_kids" sin confirmar.
+- Solo pide confirmación si hay ambigüedad real entre dos tipos.
 
 INSTRUCTORES vs EVALUADORES:
-- "Evaluadores" = instructores con can_evaluate=true. "Instructores" = todos los perfiles, incluidos no evaluadores.
+- "Evaluadores" = instructores con can_evaluate=true. "Instructores" = todos los perfiles.
 - Cuando el usuario pregunte por "instructores de [idioma]" o "quién enseña [idioma]", SIEMPRE llama
-  chat_find_instructors con p_language=[idioma]. Aunque ya hayas buscado evaluadores del mismo idioma,
-  los resultados de evaluadores NO responden la pregunta de instructores — son subconjuntos distintos.
+  find_instructors con language=[idioma]. Los resultados de evaluadores NO responden esta pregunta.
 - Nunca deduzcas que no hay instructores de un idioma basándote en resultados de evaluadores.
+- Si el usuario pide disponibilidad de instructores NO evaluadores para horarios de evaluación,
+  busca quién tiene el horario libre igualmente (con find_available_instructors o
+  get_instructor_free_windows) y aclara la distinción de competencia UNA sola vez.
 
 ALUMNOS vs INSTRUCTORES:
-- "¿Quién tiene programado a X?", "¿Quién da clases a X?", "¿Quién tiene a X?" → X es un ALUMNO.
-  Busca usando program_filter con el nombre de X en get_schedules_for_date o get_schedules_range.
-  NO busques X como instructor_name.
+- "¿Quién tiene programado a X?", "¿Quién da clases a X?" → X es un ALUMNO.
+  Busca con program_filter en get_schedules_for_date. NO busques X como instructor_name.
 
-MATCHES APROXIMADOS EN PERFILES:
-- Si get_instructor_profile retorna un nombre distinto al consultado, NO afirmes que la persona
-  "está registrada como" o "es conocida como" el nombre buscado — esa relación no existe en la DB.
-- En su lugar responde: "No encontré exactamente '[nombre buscado]'. El resultado más cercano es
-  '[nombre retornado]'. ¿Es este el que buscas?"
+DISPONIBILIDAD — DOS TIPOS (CRÍTICO):
+Existen dos tipos de consulta de disponibilidad. Debes distinguirlos siempre:
 
-EVAL_TYPE POR CONSULTA:
-- Nunca uses el eval_type de una consulta anterior. Cada pregunta se interpreta de forma independiente.
-- Si el usuario no menciona un tipo de evaluación, omite el filtro eval_type en la tool call.
+TIPO A — Disponibilidad teórica (horario registrado, sin considerar clases):
+  Señales: "¿en qué turnos trabaja?", "¿qué días puede?", "¿cuál es su horario?", sin fecha específica.
+  Tool: get_instructor_profile → presentar el campo availability_windows del perfil.
+  Describe: "Su horario registrado es lunes 08:00–14:00, miércoles 10:00–18:00..."
+
+TIPO B — Disponibilidad real (espacios libres en una fecha concreta, descontando clases):
+  Señales: pregunta incluye una fecha o día ("el lunes", "hoy", "el 24"), o el usuario quiere saber
+  cuándo puede asignarse algo. Esta es la interpretación POR DEFECTO cuando hay fecha.
+  Tool: get_instructor_free_windows → presentar free_windows.
+  Describe: "Tiene libre de 07:00 a 09:00 y de 15:00 a 22:00 (tiene clase de 09:00 a 15:00)."
+
+REGLAS DE INFERENCIA:
+- Si la pregunta incluye una fecha o día → TIPO B. Llama get_instructor_free_windows directamente.
+- Si la pregunta NO incluye fecha y el contexto tampoco tiene una → TIPO A o preguntar: "¿Quieres
+  su horario semanal registrado, o los espacios libres en un día concreto?"
+- Si el contexto de la conversación ya tiene una fecha activa y el usuario vuelve a preguntar
+  por el mismo instructor sin nueva fecha → reutiliza la fecha del contexto (TIPO B).
+- Si free_windows está vacío pero hay availability_windows → "No tiene espacios libres ese día;
+  sus clases ocupan todo su horario registrado."
+- Si has_availability=false → "No tiene disponibilidad registrada para ese día de la semana."
+
+DISPONIBILIDAD — EXPLICACIÓN EN RESPUESTA:
+- Siempre indica qué clases ocupan el tiempo: "Tiene clase de 09:00 a 15:00, así que queda libre..."
+- Si una tool retorna reason="no_availability_window": indica "no tiene disponibilidad registrada para ese horario."
+- Si retorna reason="class_conflict": indica la clase que genera el conflicto.
+- Si retorna reason="all_have_conflicts": hay evaluadores con ventana pero todos tienen clase.
+- Si retorna reason="no_evaluators_for_filter": no hay evaluadores del idioma/tipo pedido.
 
 DISPONIBILIDAD VACÍA:
-- Si find_evaluators retorna vacío para un horario específico, llama find_evaluator_slots con start_date=hoy
-  para sugerir cuándo sí hay evaluadores disponibles. No respondas solo "no hay evaluadores" sin antes
-  ofrecer alternativas concretas.
+- Si find_evaluators retorna vacío, usa el campo diagnostics.reason para explicar por qué.
+  Luego llama find_evaluator_slots para sugerir cuándo sí hay disponibilidad.
+
+MATCHES APROXIMADOS EN PERFILES:
+- Si get_instructor_profile retorna un nombre distinto al consultado, responde:
+  "No encontré exactamente '[nombre buscado]'. El resultado más cercano es '[nombre retornado]'. ¿Es este?"
+
+EVAL_TYPE POR CONSULTA:
+- Nunca uses el eval_type de una consulta anterior. Cada pregunta es independiente.
+- Si el usuario no menciona tipo de evaluación, omite el filtro eval_type.
 
 FUERA DE CONTEXTO:
-- Si el usuario pregunta algo ajeno a horarios, instructores o programas, redirige amablemente:
+- Si el usuario pregunta algo ajeno a horarios, instructores o programas, redirige:
   "Eso está fuera de lo que manejo. Puedo ayudarte con horarios, instructores, conflictos o estadísticas."
 `;
 
@@ -78,6 +131,64 @@ function estimateTokens(messages: OAIMessage[], extra = ""): number {
     (acc, m) => acc + (typeof m.content === "string" ? m.content.length : 0), 0
   ) + extra.length;
   return Math.ceil(chars / 4);
+}
+
+// ---------------------------------------------------------------------------
+// History trimmer + compressor (ConversationSummaryBuffer pattern)
+// ---------------------------------------------------------------------------
+
+/** Splits history into [keep, drop] — keeps the most recent messages within budget. */
+function splitHistoryByBudget(history: OAIMessage[]): { keep: OAIMessage[]; drop: OAIMessage[] } {
+  let total = 0;
+  const keep: OAIMessage[] = [];
+  for (let i = history.length - 1; i >= 0; i--) {
+    const content = history[i].content;
+    const chars = typeof content === "string" ? content.length : 100;
+    const tokens = Math.ceil(chars / 4);
+    if (total + tokens > TOKEN_HISTORY_BUDGET && keep.length >= 2) {
+      return { keep, drop: history.slice(0, i + 1) };
+    }
+    keep.unshift(history[i]);
+    total += tokens;
+  }
+  return { keep, drop: [] };
+}
+
+/** Calls the LLM to produce a short summary of dropped messages. */
+async function compressHistory(
+  dropped: OAIMessage[],
+  provider: AIProvider,
+  existingSummary: string | null
+): Promise<string> {
+  const prefix = existingSummary
+    ? `Previous summary:\n${existingSummary}\n\nAdditional messages to include:\n`
+    : "";
+  const transcript = dropped
+    .filter((m) => m.role !== "tool" && typeof m.content === "string" && m.content)
+    .map((m) => `${m.role}: ${m.content as string}`)
+    .join("\n");
+  const response = await callChatCompletions(provider, [
+    {
+      role: "system",
+      content:
+        "Summarize the following conversation in 3 bullet points, max 120 words. " +
+        "Be factual. Focus on: people mentioned, dates/times discussed, decisions or findings.",
+    },
+    { role: "user", content: prefix + transcript },
+  ], false);
+  return response.choices[0]?.message.content?.trim() ?? "";
+}
+
+/** Returns the messages to include in the next request + an updated summary. */
+async function trimOrCompress(
+  history: OAIMessage[],
+  provider: AIProvider,
+  existingSummary: string | null
+): Promise<{ trimmed: OAIMessage[]; summary: string | null }> {
+  const { keep, drop } = splitHistoryByBudget(history);
+  if (drop.length === 0) return { trimmed: keep, summary: existingSummary };
+  const summary = await compressHistory(drop, provider, existingSummary);
+  return { trimmed: keep, summary };
 }
 
 // ---------------------------------------------------------------------------
@@ -215,6 +326,7 @@ async function callChatCompletionsStream(
   let accText = "";
   let finishReason: "stop" | "tool_calls" = "stop";
   const toolCallsMap: Record<number, { id: string; name: string; arguments: string }> = {};
+  let usageCapture: OAIUsage | undefined;
 
   try {
     outer: while (true) {
@@ -243,6 +355,13 @@ async function callChatCompletionsStream(
               };
               finish_reason?: string | null;
             }>;
+            usage?: { prompt_tokens: number; completion_tokens: number };
+          };
+
+          if (parsed.usage) usageCapture = {
+            prompt_tokens:     parsed.usage.prompt_tokens,
+            completion_tokens: parsed.usage.completion_tokens,
+            total_tokens:      parsed.usage.prompt_tokens + parsed.usage.completion_tokens,
           };
 
           const choice = parsed.choices?.[0];
@@ -292,6 +411,7 @@ async function callChatCompletionsStream(
       message,
       finish_reason: toolCalls.length > 0 ? "tool_calls" : finishReason,
     }],
+    usage: usageCapture,
   };
 }
 
@@ -301,7 +421,9 @@ async function callChatCompletionsStream(
 type ChatResult = {
   response: string;
   updatedHistory: OAIMessage[];
-  estimatedTokens: number;
+  updatedSummary: string | null;
+  promptTokens: number;
+  completionTokens: number;
   sentMessages: OAIMessage[];
 };
 
@@ -312,16 +434,18 @@ async function tryProvider(
   provider: AIProvider,
   userMessage: string,
   conversationHistory: OAIMessage[],
+  existingSummary: string | null,
   onToolCall?: (toolLabel: string) => void,
   signal?: AbortSignal,
   onChunk?: (text: string) => void
 ): Promise<ChatResult> {
   const today = new Date().toISOString().split("T")[0];
-  const trimmedHistory = conversationHistory.slice(-MAX_HISTORY_MESSAGES);
+  const { trimmed, summary } = await trimOrCompress(conversationHistory, provider, existingSummary);
 
   const messages: OAIMessage[] = [
     { role: "system", content: SYSTEM_PROMPT.replace(/\{CURRENT_DATE\}/g, today) },
-    ...trimmedHistory,
+    ...(summary ? [{ role: "system" as const, content: `Context from earlier in this conversation:\n${summary}` }] : []),
+    ...trimmed,
     { role: "user", content: userMessage },
   ];
 
@@ -337,14 +461,17 @@ async function tryProvider(
     // No tool calls — final response
     if (choice.finish_reason !== "tool_calls" || !choice.message.tool_calls?.length) {
       const text = choice.message.content?.trim() ?? "";
+      const usage = response.usage;
       return {
         response: text || "No response available.",
         updatedHistory: [
-          ...trimmedHistory,
+          ...trimmed,
           { role: "user", content: userMessage },
           choice.message,
         ],
-        estimatedTokens: estimateTokens(messages, text),
+        updatedSummary: summary,
+        promptTokens:     usage?.prompt_tokens     ?? estimateTokens(messages),
+        completionTokens: usage?.completion_tokens ?? Math.ceil(text.length / 4),
         sentMessages: messages,
       };
     }
@@ -352,7 +479,7 @@ async function tryProvider(
     // Execute tool calls in parallel — results preserve order via Promise.all
     messages.push(choice.message);
     for (const toolCall of choice.message.tool_calls) {
-      onToolCall?.(TOOL_LABELS[toolCall.function.name] ?? "Consultando...");
+      onToolCall?.(TOOL_LABELS[toolCall.function.name] ?? "Querying...");
     }
     const toolResults = await Promise.all(
       choice.message.tool_calls.map(async (toolCall) => {
@@ -375,8 +502,10 @@ async function tryProvider(
 
   return {
     response: "Could not complete the query after several attempts.",
-    updatedHistory: trimmedHistory,
-    estimatedTokens: 0,
+    updatedHistory: trimmed,
+    updatedSummary: summary,
+    promptTokens: 0,
+    completionTokens: 0,
     sentMessages: messages,
   };
 }
@@ -388,6 +517,7 @@ export async function sendChatMessage(
   userMessage: string,
   conversationHistory: OAIMessage[],
   provider: AIProvider,
+  existingSummary: string | null,
   onToolCall?: (toolLabel: string) => void,
   signal?: AbortSignal,
   onChunk?: (text: string) => void
@@ -396,5 +526,5 @@ export async function sendChatMessage(
     throw new Error("Provider not configured. Open ⚙ to set the URL and API key.");
   }
 
-  return tryProvider(provider, userMessage, conversationHistory, onToolCall, signal, onChunk);
+  return tryProvider(provider, userMessage, conversationHistory, existingSummary, onToolCall, signal, onChunk);
 }

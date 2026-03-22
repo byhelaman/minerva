@@ -20,7 +20,7 @@ export async function testProvider(
   apiKey: string,
 ): Promise<{ status: ConnStatus; msg: string }> {
   const url = baseUrl.replace(/\/$/, "");
-  if (!url) return { status: "error", msg: "URL no configurada" };
+  if (!url) return { status: "error", msg: "URL not configured" };
   const isOllamaCloud = url.includes("ollama.com");
   try {
     const [endpoint, body] = isOllamaCloud
@@ -33,10 +33,11 @@ export async function testProvider(
     });
     const text = await res.text();
     if (res.status >= 200 && res.status < 300) return { status: "ok", msg: "" };
-    if (res.status === 401 || res.status === 403) return { status: "auth_error", msg: "Clave inválida o sin permisos" };
+    if (res.status === 401 || res.status === 403) return { status: "auth_error", msg: "Invalid or missing API key" };
     return { status: "error", msg: parseApiErrorMessage(text, res.status) };
-  } catch {
-    return { status: "error", msg: "No se pudo conectar al servidor" };
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    return { status: "error", msg: `Could not reach server: ${detail}` };
   }
 }
 

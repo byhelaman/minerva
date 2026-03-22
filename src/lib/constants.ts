@@ -16,4 +16,9 @@ export const STORAGE_KEYS = {
 
     // Preferencias
     THEME: "vite-ui-theme",
+
+    // Chat
+    CHAT_SESSION: "minerva_chat_session",
 };
+
+export const CHAT_SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
