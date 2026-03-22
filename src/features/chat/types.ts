@@ -13,6 +13,7 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   isLoading?: boolean;
+  isStreaming?: boolean; // true mientras llegan chunks SSE; copia/editar ocultos hasta que termine
   isError?: boolean;
   retryText?: string; // query original para reintentar en caso de error
 }
@@ -125,6 +126,6 @@ export interface FindEvaluatorsInput {
   date: string;
   start_time: string;
   end_time: string;
-  eval_type?: string; // 'corporativo' | 'consumer_adult' | 'demo_adult' | 'consumer_kids' | 'demo_kids'
+  eval_type?: string; // 'corporate' | 'consumer_adult' | 'demo_adult' | 'consumer_kids' | 'demo_kids'
   language?: string;  // e.g. 'English', 'Spanish'
 }

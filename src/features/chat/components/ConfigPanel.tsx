@@ -35,6 +35,11 @@ export const PRESETS: Record<string, { label: string; baseUrl: string; model: st
     baseUrl: "https://openrouter.ai/api/v1",
     model: "openrouter/free",
   },
+  vercel: {
+    label: "Vercel AI Gateway",
+    baseUrl: "https://ai-gateway.vercel.sh/v1",
+    model: "google/gemini-2.5-flash",
+  },
   groq: {
     label: "Groq",
     baseUrl: "https://api.groq.com/openai/v1",

@@ -229,7 +229,7 @@ export const SCHEDULE_TOOLS = [
         properties: {
           eval_type: {
             type: "string",
-            description: "Optional filter: 'corporativo', 'consumer_adult', 'demo_adult', 'consumer_kids', 'demo_kids'",
+            description: "Optional filter: 'corporate', 'consumer_adult', 'demo_adult', 'consumer_kids', 'demo_kids'",
           },
           language: {
             type: "string",
@@ -248,7 +248,7 @@ export const SCHEDULE_TOOLS = [
         "Returns instructors from the profiles database, optionally filtered by language, " +
         "native status, evaluator status, or evaluation type. Does NOT check schedule availability. " +
         "Use for: 'which instructors speak Portuguese', 'list all native instructors', " +
-        "'who teaches in English', 'instructors that can evaluate corporativo'. " +
+        "'who teaches in English', 'instructors that can evaluate corporate'. " +
         "Do NOT use for availability checks — use find_evaluators for that.",
       parameters: {
         type: "object",
@@ -267,7 +267,7 @@ export const SCHEDULE_TOOLS = [
           },
           eval_type: {
             type: "string",
-            description: "Filter by evaluation type: 'corporativo', 'consumer_adult', 'demo_adult', 'consumer_kids', 'demo_kids'",
+            description: "Filter by evaluation type: 'corporate', 'consumer_adult', 'demo_adult', 'consumer_kids', 'demo_kids'",
           },
         },
         required: [],
@@ -308,7 +308,7 @@ export const SCHEDULE_TOOLS = [
         "Use for: 'who can evaluate at 15:00 on DATE', 'find evaluators for kids at 9am', " +
         "'available corporate evaluators on Friday'. " +
         "Always infer end_time — for '19:00 (20min)' use end_time='19:20'. " +
-        "Set eval_type only when the user specifies: 'adultos', 'kids', or 'corporativo'. " +
+        "Set eval_type only when the user specifies: 'adultos' → 'consumer_adult', 'kids' → 'consumer_kids', 'corporativo'/'corporate' → 'corporate'. " +
         "Set language when the user specifies a language (e.g. 'English', 'Spanish').",
       parameters: {
         type: "object",
@@ -318,7 +318,7 @@ export const SCHEDULE_TOOLS = [
           end_time:   { type: "string", description: "End time HH:MM (24h)" },
           eval_type:  {
             type: "string",
-            description: "Optional filter: 'corporativo', 'consumer_adult', 'demo_adult', 'consumer_kids', 'demo_kids'",
+            description: "Optional filter: 'corporate', 'consumer_adult', 'demo_adult', 'consumer_kids', 'demo_kids'",
           },
           language: {
             type: "string",

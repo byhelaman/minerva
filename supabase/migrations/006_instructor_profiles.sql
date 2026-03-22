@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS public.instructor_profiles (
   email        TEXT,
   can_evaluate BOOLEAN NOT NULL DEFAULT false,
   eval_types   TEXT[]  NOT NULL DEFAULT '{}',
-  -- Valid eval_types values: 'corporativo', 'consumer_adult', 'demo_adult',
+  -- Valid eval_types values: 'corporate', 'consumer_adult', 'demo_adult',
   -- 'consumer_kids', 'demo_kids'. Extensible — no CHECK constraint on array contents.
   notes        TEXT,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),

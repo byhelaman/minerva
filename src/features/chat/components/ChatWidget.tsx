@@ -1,7 +1,7 @@
 import { useReducer, useRef, useEffect, useCallback, useState } from "react";
 import {
   BotMessageSquare, Send, Settings,
-  ChevronLeft, X, Square, Share2, Check,
+  ChevronLeft, X, Square, Share2, Check, Trash2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -68,6 +68,7 @@ export function ChatWidget() {
     const provider = { id: "main", baseUrl: settings.aiBaseUrl, model: settings.aiModel, apiKey: settings.aiApiKey };
 
     let streamedText = "";
+    let firstChunk = true;
 
     try {
       const { response, updatedHistory, estimatedTokens } = await sendChatMessage(
@@ -80,11 +81,15 @@ export function ChatWidget() {
         ctrl.signal,
         (chunk) => {
           streamedText += chunk;
-          dispatch({ type: "UPDATE_MESSAGE", id: assistantMsgId, patch: { content: streamedText, isLoading: false } });
+          const patch = firstChunk
+            ? { content: streamedText, isLoading: false, isStreaming: true }
+            : { content: streamedText };
+          firstChunk = false;
+          dispatch({ type: "UPDATE_MESSAGE", id: assistantMsgId, patch });
         }
       );
       dispatch({ type: "REMOVE_TOOL_STATUS" });
-      dispatch({ type: "UPDATE_MESSAGE", id: assistantMsgId, patch: { content: response, isLoading: false } });
+      dispatch({ type: "UPDATE_MESSAGE", id: assistantMsgId, patch: { content: response, isLoading: false, isStreaming: false } });
       dispatch({ type: "SET_HISTORY", payload: updatedHistory });
       dispatch({ type: "ADD_TOKENS", amount: estimatedTokens });
     } catch (err) {
@@ -175,12 +180,12 @@ export function ChatWidget() {
               {!showConfig && state.messages.length > 0 && (
                 <>
                   <Button variant="ghost" size="icon" className="size-7 text-muted-foreground"
-                    onClick={handleShare} title="Copiar conversación">
+                    onClick={handleShare} title="Compartir conversación">
                     {copied ? <Check className="size-4 text-green-500" /> : <Share2 className="size-4" />}
                   </Button>
-                  <Button variant="ghost" size="sm" className="text-xs h-7 px-2 text-muted-foreground"
-                    onClick={() => dispatch({ type: "CLEAR" })} disabled={isLoading}>
-                    Limpiar
+                  <Button variant="ghost" size="icon" className="size-7 text-muted-foreground"
+                    onClick={() => dispatch({ type: "CLEAR" })} disabled={isLoading} title="Limpiar conversación">
+                    <Trash2 className="size-4" />
                   </Button>
                 </>
               )}
