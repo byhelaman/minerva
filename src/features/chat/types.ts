@@ -122,6 +122,13 @@ export interface GetAvailableLanguagesInput {
   can_evaluate?: boolean;
 }
 
+export interface FindEvaluatorSlotsInput {
+  start_date: string;
+  days_ahead?: number;
+  eval_type?: string;
+  language?: string;
+}
+
 export interface FindEvaluatorsInput {
   date: string;
   start_time: string;

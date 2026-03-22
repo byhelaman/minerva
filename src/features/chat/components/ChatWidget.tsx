@@ -1,7 +1,7 @@
 import { useReducer, useRef, useEffect, useCallback, useState } from "react";
 import {
   BotMessageSquare, Send, Settings,
-  ChevronLeft, X, Square, Share2, Check, Trash2,
+  ChevronLeft, X, Square, ClipboardCopy, Check, Trash2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -181,7 +181,7 @@ export function ChatWidget() {
                 <>
                   <Button variant="ghost" size="icon" className="size-7 text-muted-foreground"
                     onClick={handleShare} title="Compartir conversación">
-                    {copied ? <Check className="size-4 text-green-500" /> : <Share2 className="size-4" />}
+                    {copied ? <Check className="size-4 text-green-500" /> : <ClipboardCopy className="size-4" />}
                   </Button>
                   <Button variant="ghost" size="icon" className="size-7 text-muted-foreground"
                     onClick={() => dispatch({ type: "CLEAR" })} disabled={isLoading} title="Limpiar conversación">

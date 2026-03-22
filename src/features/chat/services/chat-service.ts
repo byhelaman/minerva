@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { fetch } from "@tauri-apps/plugin-http";
 import type { OAIMessage, OAIResponse, AIProvider } from "../types";
 import { SCHEDULE_TOOLS, executeToolCall, TOOL_LABELS } from "../tools/schedule-tools";
 
@@ -52,6 +53,15 @@ MATCHES APROXIMADOS EN PERFILES:
   "está registrada como" o "es conocida como" el nombre buscado — esa relación no existe en la DB.
 - En su lugar responde: "No encontré exactamente '[nombre buscado]'. El resultado más cercano es
   '[nombre retornado]'. ¿Es este el que buscas?"
+
+EVAL_TYPE POR CONSULTA:
+- Nunca uses el eval_type de una consulta anterior. Cada pregunta se interpreta de forma independiente.
+- Si el usuario no menciona un tipo de evaluación, omite el filtro eval_type en la tool call.
+
+DISPONIBILIDAD VACÍA:
+- Si find_evaluators retorna vacío para un horario específico, llama find_evaluator_slots con start_date=hoy
+  para sugerir cuándo sí hay evaluadores disponibles. No respondas solo "no hay evaluadores" sin antes
+  ofrecer alternativas concretas.
 
 FUERA DE CONTEXTO:
 - Si el usuario pregunta algo ajeno a horarios, instructores o programas, redirige amablemente:
@@ -151,7 +161,7 @@ async function callChatCompletions(
     throw err;
   }
 
-  return res.json() as Promise<OAIResponse>;
+  return res.json() as unknown as OAIResponse;
 }
 
 // ---------------------------------------------------------------------------
@@ -316,19 +326,10 @@ async function tryProvider(
   ];
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
-    // Use streaming for the potential final response, non-streaming for intermediate tool-call rounds
-    const isFirstCall = i === 0;
-    let response: OAIResponse;
-
-    if (onChunk && isFirstCall) {
-      // Stream the first call — if it returns tool_calls, chunks will be empty (no text)
-      response = await callChatCompletionsStream(provider, messages, true, onChunk, signal);
-    } else if (onChunk) {
-      // After tool rounds: non-streaming for tool execution, streaming for final text
-      response = await callChatCompletions(provider, messages, true, signal);
-    } else {
-      response = await callChatCompletions(provider, messages, true, signal);
-    }
+    // Always stream when streaming is requested — tool-call rounds emit no text, final round emits text
+    const response = onChunk
+      ? await callChatCompletionsStream(provider, messages, true, onChunk, signal)
+      : await callChatCompletions(provider, messages, true, signal);
 
     const choice = response.choices[0];
     if (!choice) throw new Error("Respuesta vacía del modelo.");
@@ -336,24 +337,6 @@ async function tryProvider(
     // No tool calls — final response
     if (choice.finish_reason !== "tool_calls" || !choice.message.tool_calls?.length) {
       const text = choice.message.content?.trim() ?? "";
-
-      // If this is a non-first iteration (after tools), stream the final response
-      if (onChunk && i > 0) {
-        const finalResponse = await callChatCompletionsStream(provider, messages, true, onChunk, signal);
-        const finalChoice = finalResponse.choices[0];
-        const finalText = finalChoice?.message?.content?.trim() ?? "";
-        return {
-          response: finalText || "No tengo respuesta para esa consulta.",
-          updatedHistory: [
-            ...trimmedHistory,
-            { role: "user", content: userMessage },
-            finalChoice.message,
-          ],
-          estimatedTokens: estimateTokens(messages, finalText),
-          sentMessages: messages,
-        };
-      }
-
       return {
         response: text || "No tengo respuesta para esa consulta.",
         updatedHistory: [
@@ -379,45 +362,7 @@ async function tryProvider(
       } catch (err) {
         result = { error: err instanceof Error ? err.message : "Error ejecutando la herramienta" };
       }
-
       messages.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(result) });
-    }
-
-    // Stream the next iteration if tools were called
-    if (onChunk) {
-      const streamedResponse = await callChatCompletionsStream(provider, messages, true, onChunk, signal);
-      const streamedChoice = streamedResponse.choices[0];
-      if (!streamedChoice) throw new Error("Respuesta vacía del modelo.");
-
-      if (streamedChoice.finish_reason !== "tool_calls" || !streamedChoice.message.tool_calls?.length) {
-        const text = streamedChoice.message.content?.trim() ?? "";
-        return {
-          response: text || "No tengo respuesta para esa consulta.",
-          updatedHistory: [
-            ...trimmedHistory,
-            { role: "user", content: userMessage },
-            streamedChoice.message,
-          ],
-          estimatedTokens: estimateTokens(messages, text),
-          sentMessages: messages,
-        };
-      }
-
-      // Still has tool calls — push and continue loop
-      messages.push(streamedChoice.message);
-      for (const toolCall of streamedChoice.message.tool_calls) {
-        const label = TOOL_LABELS[toolCall.function.name] ?? "Consultando...";
-        onToolCall?.(label);
-
-        let result: unknown;
-        try {
-          const input = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
-          result = await executeToolCall(toolCall.function.name, input);
-        } catch (err) {
-          result = { error: err instanceof Error ? err.message : "Error ejecutando la herramienta" };
-        }
-        messages.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(result) });
-      }
     }
   }
 
@@ -444,17 +389,5 @@ export async function sendChatMessage(
     throw new Error("Proveedor no configurado. Abre ⚙ y configura la URL y API key.");
   }
 
-  let lastError: Error | null = null;
-
-  for (const p of [provider]) {
-    try {
-      return await tryProvider(p, userMessage, conversationHistory, onToolCall, signal, onChunk);
-    } catch (err) {
-      const e = err as ExtendedError;
-      if (e.isRetryable) { lastError = e; continue; }
-      throw err;
-    }
-  }
-
-  throw lastError ?? new Error("Todos los proveedores fallaron.");
+  return tryProvider(provider, userMessage, conversationHistory, onToolCall, signal, onChunk);
 }

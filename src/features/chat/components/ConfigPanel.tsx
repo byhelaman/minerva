@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { Loader2, Wifi, WifiOff, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -16,105 +15,8 @@ import {
 import { useSettings } from "@/components/settings-provider";
 import { cn } from "@/lib/utils";
 
-// ---------------------------------------------------------------------------
-// Presets de proveedor
-// ---------------------------------------------------------------------------
-export const PRESETS: Record<string, { label: string; baseUrl: string; model: string }> = {
-  gemini: {
-    label: "Google Gemini",
-    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
-    model: "gemini-2.5-flash",
-  },
-  openai: {
-    label: "OpenAI",
-    baseUrl: "https://api.openai.com/v1",
-    model: "gpt-4o-mini",
-  },
-  openrouter: {
-    label: "OpenRouter",
-    baseUrl: "https://openrouter.ai/api/v1",
-    model: "openrouter/free",
-  },
-  vercel: {
-    label: "Vercel AI Gateway",
-    baseUrl: "https://ai-gateway.vercel.sh/v1",
-    model: "google/gemini-2.5-flash",
-  },
-  groq: {
-    label: "Groq",
-    baseUrl: "https://api.groq.com/openai/v1",
-    model: "llama-3.3-70b-versatile",
-  },
-  ollama: {
-    label: "Ollama (local)",
-    baseUrl: "http://localhost:11434/v1",
-    model: "llama3.2:3b",
-  },
-  ollama_cloud: {
-    label: "Ollama (cloud)",
-    baseUrl: "https://ollama.com/api",
-    model: "gpt-oss:120b",
-  },
-  custom: {
-    label: "Personalizado",
-    baseUrl: "",
-    model: "",
-  },
-};
-
-export function detectPreset(baseUrl: string): string {
-  for (const [key, p] of Object.entries(PRESETS)) {
-    if (key !== "custom" && p.baseUrl === baseUrl) return key;
-  }
-  return "custom";
-}
-
-// ---------------------------------------------------------------------------
-// Panel de configuración inline — proveedor único
-// ---------------------------------------------------------------------------
-export type ConnStatus = "idle" | "testing" | "ok" | "auth_error" | "error";
-
-export function parseApiErrorMessage(text: string, status: number): string {
-  try {
-    const json = JSON.parse(text);
-    const msg = json?.error?.message ?? json?.[0]?.error?.message ?? json?.message ?? json?.detail;
-    if (typeof msg === "string" && msg) return msg;
-  } catch { /* not JSON */ }
-  return `Error ${status}: ${text}`;
-}
-
-export async function testProvider(baseUrl: string, model: string, apiKey: string): Promise<{ status: ConnStatus; msg: string }> {
-  const url = baseUrl.replace(/\/$/, "");
-  if (!url) return { status: "error", msg: "URL no configurada" };
-  const isOllamaCloud = url.includes("ollama.com");
-  try {
-    let httpStatus: number;
-    let text: string;
-    if (isOllamaCloud) {
-      const result = await invoke<[number, string]>("http_request", {
-        method: "POST",
-        url: `${url}/chat`,
-        bearer: apiKey || null,
-        body: JSON.stringify({ model: model || "gpt-oss:120b", messages: [{ role: "user", content: "hi" }], stream: false }),
-      });
-      [httpStatus, text] = result;
-    } else {
-      const reqBody = JSON.stringify({ model: model || "gpt-4o-mini", messages: [{ role: "user", content: "hi" }], max_tokens: 1 });
-      const res = await fetch(`${url}/chat/completions`, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${apiKey || "none"}`, "Content-Type": "application/json" },
-        body: reqBody,
-      });
-      httpStatus = res.status;
-      text = await res.text();
-    }
-    if (httpStatus >= 200 && httpStatus < 300) return { status: "ok", msg: "" };
-    if (httpStatus === 401 || httpStatus === 403) return { status: "auth_error", msg: "Clave inválida o sin permisos" };
-    return { status: "error", msg: parseApiErrorMessage(text, httpStatus) };
-  } catch {
-    return { status: "error", msg: "No se pudo conectar al servidor" };
-  }
-}
+import { PRESETS, detectPreset } from "../services/provider-presets";
+import { type ConnStatus, testProvider, fetchProviderModels } from "../services/provider-service";
 
 export function ConfigPanel() {
   const { settings, updateSetting } = useSettings();
@@ -131,22 +33,18 @@ export function ConfigPanel() {
     if (!p) return;
     const currentPreset = detectPreset(settings.aiBaseUrl);
 
-    // Guardar key y modelo del preset actual antes de cambiar
     const updatedKeys   = { ...settings.aiApiKeys, [currentPreset]: settings.aiApiKey };
     const updatedModels = { ...settings.aiModels,  [currentPreset]: settings.aiModel  };
     updateSetting("aiApiKeys", updatedKeys);
     updateSetting("aiModels",  updatedModels);
 
-    // Restaurar key del nuevo preset
     updateSetting("aiApiKey", updatedKeys[value] ?? "");
 
     if (value === "custom") {
-      // Limpiar URL y modelo para que el usuario configure manualmente
       updateSetting("aiBaseUrl", "");
       updateSetting("aiModel", "");
     } else {
       updateSetting("aiBaseUrl", p.baseUrl);
-      // Restaurar modelo guardado o usar el default del preset
       updateSetting("aiModel", updatedModels[value] ?? p.model);
     }
     setAvailableModels([]);
@@ -158,46 +56,11 @@ export function ConfigPanel() {
     updateSetting("aiApiKeys", { ...settings.aiApiKeys, [currentPreset]: value });
   }
 
-  async function fetchModels() {
-    const url = settings.aiBaseUrl.replace(/\/$/, "");
-    if (!url) return;
+  async function handleFetchModels() {
     setFetchingModels(true);
-    try {
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (settings.aiApiKey) headers["Authorization"] = `Bearer ${settings.aiApiKey}`;
-
-      let ids: string[] = [];
-      const isOllamaUrl = url.includes("ollama") || url.includes("localhost");
-
-      if (isOllamaUrl) {
-        // Ollama usa /api/tags — invoke desde Rust para evitar CORS
-        const base = new URL(url).origin;
-        const result = await invoke<[number, string]>("http_request", {
-          method: "GET",
-          url: `${base}/api/tags`,
-          bearer: settings.aiApiKey || null,
-          body: null,
-        }).catch(() => null);
-        if (result?.[0] === 200) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const data = JSON.parse(result[1]) as any;
-          if (Array.isArray(data?.models)) ids = (data.models as { name?: string }[]).map((m) => m.name ?? "").filter(Boolean);
-        }
-      } else {
-        // OpenAI-compat /models (OpenAI, Groq, Gemini, etc.)
-        const res = await fetch(`${url}/models`, { headers }).catch(() => null);
-        if (res?.ok) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const data = await res.json() as any;
-          if (Array.isArray(data?.data)) ids = (data.data as { id?: string }[]).map((m) => m.id ?? "").filter(Boolean);
-          else if (Array.isArray(data?.models)) ids = (data.models as { name?: string }[]).map((m) => m.name ?? "").filter(Boolean);
-        }
-      }
-
-      const normalized = ids.map((id) => id.replace(/^models\//, ""));
-      if (normalized.length > 0) setAvailableModels(normalized.sort());
-    } catch { /* silencioso */ }
-    finally { setFetchingModels(false); }
+    const models = await fetchProviderModels(settings.aiBaseUrl, settings.aiApiKey);
+    if (models.length > 0) setAvailableModels(models);
+    setFetchingModels(false);
   }
 
   function runTest() {
@@ -207,7 +70,6 @@ export function ConfigPanel() {
       .then((s) => { setConnStatus(s.status); setConnMsg(s.msg); });
   }
 
-  // Auto-test con debounce al cambiar credenciales (Ollama local no necesita apiKey)
   useEffect(() => {
     if (!settings.aiBaseUrl) { setConnStatus("idle"); return; }
     setConnStatus("testing");
@@ -216,7 +78,6 @@ export function ConfigPanel() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.aiBaseUrl, settings.aiModel, settings.aiApiKey]);
-
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-4">
@@ -269,7 +130,7 @@ export function ConfigPanel() {
             <Label className="text-xs text-muted-foreground">Modelo</Label>
             <button
               type="button"
-              onClick={() => void fetchModels()}
+              onClick={() => void handleFetchModels()}
               disabled={fetchingModels || !settings.aiBaseUrl || (!settings.aiApiKey && !settings.aiBaseUrl.includes("localhost"))}
               className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
               title={!settings.aiApiKey && !settings.aiBaseUrl.includes("localhost") ? "Ingresa una API key primero" : "Obtener modelos disponibles"}
@@ -335,7 +196,6 @@ export function ConfigPanel() {
             </div>
           )}
         </div>
-
 
       </div>
     </div>

@@ -202,6 +202,25 @@ export async function dbFindInstructors(params: {
 }
 
 // ---------------------------------------------------------------------------
+// chat_find_evaluator_slots
+// ---------------------------------------------------------------------------
+export async function dbFindEvaluatorSlots(params: {
+  startDate: string;
+  daysAhead?: number;
+  evalType?: string;
+  language?: string;
+}): Promise<unknown> {
+  const { data, error } = await supabase.rpc("chat_find_evaluator_slots", {
+    p_start_date: params.startDate,
+    p_days_ahead: params.daysAhead ?? 5,
+    p_eval_type:  params.evalType  ?? null,
+    p_language:   params.language  ?? null,
+  });
+  if (error) return { error: error.message };
+  return data;
+}
+
+// ---------------------------------------------------------------------------
 // chat_find_evaluators
 // ---------------------------------------------------------------------------
 export async function dbFindEvaluators(params: {

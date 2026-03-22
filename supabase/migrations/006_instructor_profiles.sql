@@ -421,3 +421,105 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.chat_get_available_languages(BOOLEAN) TO authenticated;
+
+
+-- =============================================
+-- 7. RPC: chat_find_evaluator_slots
+-- =============================================
+-- For each day in [p_start_date, p_start_date + p_days_ahead - 1], returns
+-- evaluators who have a registered weekly availability window on that day_of_week,
+-- along with any schedule conflicts on the specific date.
+-- The model uses this data to compute free windows and suggest available slots.
+
+CREATE OR REPLACE FUNCTION public.chat_find_evaluator_slots(
+  p_start_date TEXT,
+  p_days_ahead INT     DEFAULT 5,
+  p_eval_type  TEXT    DEFAULT NULL,
+  p_language   TEXT    DEFAULT NULL
+)
+RETURNS JSON
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_result JSON;
+BEGIN
+  IF NOT public.has_permission('instructors.view') THEN
+    RETURN json_build_object('error', 'Sin permiso para ver perfiles de instructores');
+  END IF;
+
+  BEGIN
+    PERFORM p_start_date::DATE;
+  EXCEPTION WHEN OTHERS THEN
+    RETURN json_build_object('error', 'Formato de fecha inválido (usa YYYY-MM-DD)');
+  END;
+
+  SELECT json_build_object(
+    'start_date', p_start_date,
+    'days_ahead', p_days_ahead,
+    'eval_type',  p_eval_type,
+    'language',   p_language,
+    'days', COALESCE(
+      (SELECT json_agg(day_data ORDER BY day_date)
+       FROM (
+         SELECT
+           d::TEXT AS day_date,
+           EXTRACT(ISODOW FROM d)::SMALLINT AS day_of_week,
+           (SELECT json_agg(
+               json_build_object(
+                 'evaluator',    ip.name,
+                 'code',         ip.code,
+                 'availability', (
+                   SELECT json_agg(
+                     json_build_object('start', ia.start_time, 'end', ia.end_time)
+                     ORDER BY ia.start_time
+                   )
+                   FROM public.instructor_availability ia
+                   WHERE ia.profile_id = ip.id
+                     AND ia.day_of_week = EXTRACT(ISODOW FROM d)::SMALLINT
+                 ),
+                 'conflicts', COALESCE(
+                   (SELECT json_agg(
+                     json_build_object('start', se.start_time, 'end', se.end_time)
+                     ORDER BY se.start_time
+                   )
+                   FROM public.schedule_entries se
+                   WHERE se.date      = d::TEXT
+                     AND se.code      = ip.code
+                     AND se.end_time <> ''
+                   ),
+                   '[]'::JSON
+                 )
+               ) ORDER BY ip.name
+             )
+           FROM public.instructor_profiles ip
+           WHERE ip.can_evaluate = true
+             AND (p_eval_type IS NULL OR ip.eval_types @> ARRAY[p_eval_type])
+             AND (p_language IS NULL OR EXISTS (
+               SELECT 1 FROM unnest(ip.languages) AS l WHERE lower(l) = lower(p_language)
+             ))
+             AND EXISTS (
+               SELECT 1 FROM public.instructor_availability ia2
+               WHERE ia2.profile_id  = ip.id
+                 AND ia2.day_of_week = EXTRACT(ISODOW FROM d)::SMALLINT
+             )
+           ) AS evaluators
+         FROM generate_series(
+           p_start_date::DATE,
+           p_start_date::DATE + (p_days_ahead - 1),
+           '1 day'::INTERVAL
+         ) AS d
+       ) day_data
+       WHERE evaluators IS NOT NULL
+      ),
+      '[]'::JSON
+    )
+  ) INTO v_result;
+
+  RETURN v_result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.chat_find_evaluator_slots(TEXT, INT, TEXT, TEXT) TO authenticated;

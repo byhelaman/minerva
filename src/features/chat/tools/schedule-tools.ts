@@ -11,6 +11,7 @@ import {
   dbFindAvailableInstructors,
   dbGetInstructorProfile,
   dbFindEvaluators,
+  dbFindEvaluatorSlots,
   dbGetEvaluatorsList,
   dbGetPoolRules,
   dbFindInstructors,
@@ -27,6 +28,7 @@ import type {
   GetPoolRulesInput,
   GetEvaluatorsListInput,
   FindEvaluatorsInput,
+  FindEvaluatorSlotsInput,
   FindInstructorsInput,
   GetAvailableLanguagesInput,
 } from "../types";
@@ -300,6 +302,38 @@ export const SCHEDULE_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "find_evaluator_slots",
+      description:
+        "Searches the next N days for evaluators who have registered weekly availability, " +
+        "returning their availability windows and schedule conflicts per day. " +
+        "Use when the user asks: 'when can we schedule an evaluation', 'find the next available slot', " +
+        "'what days are evaluators free', 'suggest alternative times for an evaluation'. " +
+        "IMPORTANT: The response contains 'availability' (weekly windows) and 'conflicts' (classes that day). " +
+        "You MUST subtract conflicts from availability windows to compute the actual free time before presenting results. " +
+        "For example: availability 07:00–09:00 with conflict 07:30–08:30 → free windows are 07:00–07:30 and 08:30–09:00. " +
+        "Use today's date as start_date when the user says 'this week', 'next days', or gives no date. " +
+        "Set eval_type and/or language to filter evaluators. days_ahead defaults to 5.",
+      parameters: {
+        type: "object",
+        properties: {
+          start_date: { type: "string", description: "Start date in YYYY-MM-DD format. Use today if the user gives no specific date." },
+          days_ahead: { type: "number", description: "Number of days to search ahead (default 5, max 14)" },
+          eval_type: {
+            type: "string",
+            description: "Optional filter: 'corporate', 'consumer_adult', 'demo_adult', 'consumer_kids', 'demo_kids'",
+          },
+          language: {
+            type: "string",
+            description: "Language filter (exact English name, e.g. 'Portuguese', 'Spanish'). Call get_available_languages if unsure.",
+          },
+        },
+        required: ["start_date"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "find_evaluators",
       description:
         "Finds qualified evaluators with no schedule conflict for a specific date and time window. " +
@@ -414,6 +448,15 @@ async function handleFindInstructors(input: FindInstructorsInput) {
   });
 }
 
+async function handleFindEvaluatorSlots(input: FindEvaluatorSlotsInput) {
+  return dbFindEvaluatorSlots({
+    startDate: input.start_date,
+    daysAhead: input.days_ahead,
+    evalType:  input.eval_type,
+    language:  input.language,
+  });
+}
+
 async function handleFindEvaluators(input: FindEvaluatorsInput) {
   return dbFindEvaluators({
     date:      input.date,
@@ -454,6 +497,8 @@ export async function executeToolCall(
       return handleGetAvailableLanguages(toolInput as unknown as GetAvailableLanguagesInput);
     case "find_instructors":
       return handleFindInstructors(toolInput as unknown as FindInstructorsInput);
+    case "find_evaluator_slots":
+      return handleFindEvaluatorSlots(toolInput as unknown as FindEvaluatorSlotsInput);
     case "find_evaluators":
       return handleFindEvaluators(toolInput as unknown as FindEvaluatorsInput);
     default:
@@ -474,5 +519,6 @@ export const TOOL_LABELS: Record<string, string> = {
   get_evaluators_list:             "Consultando evaluadores...",
   get_available_languages:         "Consultando idiomas disponibles...",
   find_instructors:                "Buscando instructores...",
+  find_evaluator_slots:            "Buscando horarios disponibles...",
   find_evaluators:                 "Buscando evaluadores disponibles...",
 };
