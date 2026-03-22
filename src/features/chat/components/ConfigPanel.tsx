@@ -30,6 +30,11 @@ export const PRESETS: Record<string, { label: string; baseUrl: string; model: st
     baseUrl: "https://api.openai.com/v1",
     model: "gpt-4o-mini",
   },
+  openrouter: {
+    label: "OpenRouter",
+    baseUrl: "https://openrouter.ai/api/v1",
+    model: "openrouter/free",
+  },
   groq: {
     label: "Groq",
     baseUrl: "https://api.groq.com/openai/v1",

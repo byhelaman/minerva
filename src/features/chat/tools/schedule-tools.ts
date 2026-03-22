@@ -233,7 +233,7 @@ export const SCHEDULE_TOOLS = [
           },
           language: {
             type: "string",
-            description: "Optional language filter (e.g. 'English', 'Spanish')",
+            description: "Language filter. Must be the exact English name as stored in the DB (e.g. 'Portuguese', 'German', 'Italian'). If unsure of the exact value, call get_available_languages first and use the name from that result.",
           },
         },
         required: [],
@@ -255,7 +255,7 @@ export const SCHEDULE_TOOLS = [
         properties: {
           language: {
             type: "string",
-            description: "Filter by language the instructor speaks/evaluates in (e.g. 'English', 'Portuguese'). Case-insensitive.",
+            description: "Language filter. Must be the exact English name as stored in the DB (e.g. 'Portuguese', 'German', 'Italian'). If unsure of the exact value, call get_available_languages first and use the name from that result.",
           },
           is_native: {
             type: "boolean",
@@ -322,7 +322,7 @@ export const SCHEDULE_TOOLS = [
           },
           language: {
             type: "string",
-            description: "Optional language filter (e.g. 'English', 'Spanish'). Use when user specifies a language.",
+            description: "Language filter. Must be the exact English name as stored in the DB (e.g. 'Portuguese', 'German', 'Italian'). If unsure of the exact value, call get_available_languages first and use the name from that result.",
           },
         },
         required: ["date", "start_time", "end_time"],

@@ -1,7 +1,7 @@
 import { useReducer, useRef, useEffect, useCallback, useState } from "react";
 import {
   BotMessageSquare, Send, Settings,
-  ChevronLeft, X, Square,
+  ChevronLeft, X, Square, Share2, Check,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ export function ChatWidget() {
   const [showConfig, setShowConfig] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { settings } = useSettings();
@@ -122,6 +123,19 @@ export function ChatWidget() {
 
   const handleEditCancel = useCallback(() => setEditingId(null), []);
 
+  const handleShare = useCallback(() => {
+    const lines = state.messages
+      .filter((m) => m.role !== "tool_status" && !m.isLoading && m.content)
+      .map((m) => `${m.role === "user" ? "Usuario" : "Mina"}: ${m.content}`)
+      .join("\n\n");
+    const date = new Date().toLocaleDateString("es-MX", { dateStyle: "long" });
+    const text = `Chat con Mina — ${date}\n${"─".repeat(40)}\n\n${lines}`;
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [state.messages]);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
@@ -153,10 +167,16 @@ export function ChatWidget() {
             </div>
             <div className="flex items-center gap-1 shrink-0">
               {!showConfig && state.messages.length > 0 && (
-                <Button variant="ghost" size="sm" className="text-xs h-7 px-2 text-muted-foreground"
-                  onClick={() => dispatch({ type: "CLEAR" })} disabled={isLoading}>
-                  Limpiar
-                </Button>
+                <>
+                  <Button variant="ghost" size="icon" className="size-7 text-muted-foreground"
+                    onClick={handleShare} title="Copiar conversación">
+                    {copied ? <Check className="size-4 text-green-500" /> : <Share2 className="size-4" />}
+                  </Button>
+                  <Button variant="ghost" size="sm" className="text-xs h-7 px-2 text-muted-foreground"
+                    onClick={() => dispatch({ type: "CLEAR" })} disabled={isLoading}>
+                    Limpiar
+                  </Button>
+                </>
               )}
               <Button variant="ghost" size="icon" className={cn("size-7", showConfig && "text-primary")}
                 onClick={() => setShowConfig((v) => !v)} aria-label="Configuración">
