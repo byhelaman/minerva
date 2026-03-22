@@ -14,6 +14,7 @@ import {
   dbFindEvaluatorSlots,
   dbGetEvaluatorsList,
   dbGetPoolRules,
+  dbGetPoolCandidates,
   dbFindInstructors,
   dbGetAvailableLanguages,
   dbGetInstructorFreeWindows,
@@ -27,6 +28,7 @@ import type {
   GetScheduleStatsInput,
   GetInstructorProfileInput,
   GetPoolRulesInput,
+  GetPoolCandidatesInput,
   GetEvaluatorsListInput,
   FindEvaluatorsInput,
   FindEvaluatorSlotsInput,
@@ -199,23 +201,75 @@ export const SCHEDULE_TOOLS = [
     function: {
       name: "get_pool_rules",
       description:
-        "Returns pool rules (allowed and blocked instructors per program and branch). " +
-        "Use for: 'what are the pool rules for HUB', 'which instructors can teach Kids program', " +
-        "'is there a restriction for program X', 'what programs have pool rules'. " +
-        "Optionally filter by branch and/or program name (partial match).",
+        "Returns active pool rules (allowed/blocked instructors per program and branch). " +
+        "Use for: 'what pools exist', 'rules for HUB', 'which programs have pools', " +
+        "'can X teach program Y' (use instructor filter), 'what pools does X belong to', " +
+        "'which pools are strict/hard_lock', 'how many pools are active' (use count_only=true). " +
+        "When filtering by instructor, the response includes instructor_status: 'allowed'|'blocked'|'not_in_pool' per rule. " +
+        "For checking if a specific instructor can teach a specific program, prefer get_pool_candidates.",
       parameters: {
         type: "object",
         properties: {
           branch: {
             type: "string",
-            description: "Partial match on branch/sede (case-insensitive, e.g. 'HUB', 'CORPORATE')",
+            description: "Partial match on branch/sede (case-insensitive)",
           },
           program: {
             type: "string",
-            description: "Partial match on program name (case-insensitive, e.g. 'Kids', 'Evaluacion')",
+            description: "Partial match on program name (case-insensitive)",
+          },
+          instructor: {
+            type: "string",
+            description: "Filter rules where this instructor appears (allowed or blocked). Partial/fuzzy name match.",
+          },
+          hard_lock: {
+            type: "boolean",
+            description: "true = only strict pools (hard_lock=true), false = only non-strict, omit = all",
+          },
+          count_only: {
+            type: "boolean",
+            description: "true = return only counts (total, strict, with_rotation_limit) without full rule detail",
           },
         },
         required: [],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "get_pool_candidates",
+      description:
+        "Returns the allowed instructors for a program's pool, with optional availability check. " +
+        "Use for: 'who can teach Kids?', 'candidates for program X', " +
+        "'can Pia teach Kids? if not, who can?', 'who in the pool is free at 10am on DATE for program X'. " +
+        "If date + start_time + end_time are provided, each candidate includes available: true/false. " +
+        "Always use this (not get_pool_rules) when the user wants to know who can cover a specific class.",
+      parameters: {
+        type: "object",
+        properties: {
+          program: {
+            type: "string",
+            description: "Program name to look up the pool for (partial match)",
+          },
+          branch: {
+            type: "string",
+            description: "Optional branch filter (partial match)",
+          },
+          date: {
+            type: "string",
+            description: "Date in YYYY-MM-DD format. Required if checking availability.",
+          },
+          start_time: {
+            type: "string",
+            description: "Start time HH:MM (24h). Required with date to check availability.",
+          },
+          end_time: {
+            type: "string",
+            description: "End time HH:MM (24h). Required with date to check availability.",
+          },
+        },
+        required: ["program"],
       },
     },
   },
@@ -448,7 +502,23 @@ async function handleGetInstructorProfile(input: GetInstructorProfileInput) {
 }
 
 async function handleGetPoolRules(input: GetPoolRulesInput) {
-  return dbGetPoolRules({ branch: input.branch, program: input.program });
+  return dbGetPoolRules({
+    branch:     input.branch,
+    program:    input.program,
+    instructor: input.instructor,
+    hardLock:   input.hard_lock,
+    countOnly:  input.count_only,
+  });
+}
+
+async function handleGetPoolCandidates(input: GetPoolCandidatesInput) {
+  return dbGetPoolCandidates({
+    program:   input.program,
+    branch:    input.branch,
+    date:      input.date,
+    startTime: input.start_time,
+    endTime:   input.end_time,
+  });
 }
 
 async function handleGetEvaluatorsList(input: GetEvaluatorsListInput) {
@@ -518,6 +588,8 @@ export async function executeToolCall(
       return handleGetInstructorProfile(toolInput as unknown as GetInstructorProfileInput);
     case "get_pool_rules":
       return handleGetPoolRules(toolInput as unknown as GetPoolRulesInput);
+    case "get_pool_candidates":
+      return handleGetPoolCandidates(toolInput as unknown as GetPoolCandidatesInput);
     case "get_evaluators_list":
       return handleGetEvaluatorsList(toolInput as unknown as GetEvaluatorsListInput);
     case "get_available_languages":
@@ -545,6 +617,7 @@ export const TOOL_LABELS: Record<string, string> = {
   get_schedule_stats:              "Calculating statistics...",
   get_instructor_profile:          "Looking up instructor profile...",
   get_pool_rules:                  "Fetching pool rules...",
+  get_pool_candidates:             "Looking up pool candidates...",
   get_evaluators_list:             "Fetching evaluators...",
   get_available_languages:         "Fetching available languages...",
   find_instructors:                "Finding instructors...",

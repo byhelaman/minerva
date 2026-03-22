@@ -160,10 +160,37 @@ export async function dbGetInstructorProfile(params: {
 export async function dbGetPoolRules(params: {
   branch?: string;
   program?: string;
+  instructor?: string;
+  hardLock?: boolean;
+  countOnly?: boolean;
 }): Promise<unknown> {
   const { data, error } = await supabase.rpc("chat_get_pool_rules", {
-    p_branch:  params.branch  ?? null,
-    p_program: params.program ?? null,
+    p_branch:      params.branch      ?? null,
+    p_program:     params.program     ?? null,
+    p_instructor:  params.instructor  ?? null,
+    p_hard_lock:   params.hardLock    ?? null,
+    p_count_only:  params.countOnly   ?? false,
+  });
+  if (error) return { error: error.message };
+  return truncateToolResult(data);
+}
+
+// ---------------------------------------------------------------------------
+// chat_get_pool_candidates
+// ---------------------------------------------------------------------------
+export async function dbGetPoolCandidates(params: {
+  program: string;
+  branch?: string;
+  date?: string;
+  startTime?: string;
+  endTime?: string;
+}): Promise<unknown> {
+  const { data, error } = await supabase.rpc("chat_get_pool_candidates", {
+    p_program:    params.program,
+    p_branch:     params.branch    ?? null,
+    p_date:       params.date      ?? null,
+    p_start_time: params.startTime ?? null,
+    p_end_time:   params.endTime   ?? null,
   });
   if (error) return { error: error.message };
   return truncateToolResult(data);

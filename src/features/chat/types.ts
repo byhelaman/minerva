@@ -111,6 +111,17 @@ export interface GetInstructorProfileInput {
 export interface GetPoolRulesInput {
   branch?: string;
   program?: string;
+  instructor?: string;
+  hard_lock?: boolean;
+  count_only?: boolean;
+}
+
+export interface GetPoolCandidatesInput {
+  program: string;
+  branch?: string;
+  date?: string;
+  start_time?: string;
+  end_time?: string;
 }
 
 export interface GetEvaluatorsListInput {
