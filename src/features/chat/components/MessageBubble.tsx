@@ -55,7 +55,7 @@ export function MessageBubble({
 
   if (message.role === "tool_status") {
     return (
-      <div className="flex items-center gap-2 text-muted-foreground text-xs py-1 px-1">
+      <div className="flex items-center gap-1.5 text-muted-foreground text-xs py-1 px-1">
         <Loader2 className="size-3 animate-spin shrink-0" />
         <span>{message.content}</span>
       </div>
@@ -111,7 +111,7 @@ export function MessageBubble({
   }
 
   return (
-    <div className={cn("group flex flex-col mb-3", isUser ? "items-end" : "items-start")}>
+    <div className={cn("group flex flex-col mb-1", isUser ? "items-end" : "items-start")}>
       {/* Bloque thinking (solo asistente, solo si hay) */}
       {!isUser && !message.isLoading && thinking && (
         <div className="w-full mb-1">
@@ -142,10 +142,10 @@ export function MessageBubble({
       {!isUser && (
         <div className={cn("w-full text-sm p-1 text-foreground", message.isError && "text-destructive")}>
           {message.isLoading ? (
-            <span className="flex gap-1.5 items-center">
-              <span className="size-1.5 rounded-full bg-current animate-bounce [animation-delay:0ms]" />
-              <span className="size-1.5 rounded-full bg-current animate-bounce [animation-delay:150ms]" />
-              <span className="size-1.5 rounded-full bg-current animate-bounce [animation-delay:300ms]" />
+            <span className="flex gap-1 items-center">
+              <span className="size-1 rounded-full bg-current animate-bounce [animation-delay:0ms]" />
+              <span className="size-1 rounded-full bg-current animate-bounce [animation-delay:150ms]" />
+              <span className="size-1 rounded-full bg-current animate-bounce [animation-delay:300ms]" />
               {elapsedSeconds > 0 && (
                 <span className="ml-1 text-xs opacity-50 tabular-nums">{elapsedSeconds}s</span>
               )}

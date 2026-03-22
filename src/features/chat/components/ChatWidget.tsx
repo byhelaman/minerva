@@ -67,6 +67,8 @@ export function ChatWidget() {
 
     const provider = { id: "main", baseUrl: settings.aiBaseUrl, model: settings.aiModel, apiKey: settings.aiApiKey };
 
+    let streamedText = "";
+
     try {
       const { response, updatedHistory, estimatedTokens } = await sendChatMessage(
         text,
@@ -75,7 +77,11 @@ export function ChatWidget() {
         (toolLabel) => {
           dispatch({ type: "ADD_MESSAGE", payload: { id: crypto.randomUUID(), role: "tool_status", content: toolLabel, timestamp: Date.now() } });
         },
-        ctrl.signal
+        ctrl.signal,
+        (chunk) => {
+          streamedText += chunk;
+          dispatch({ type: "UPDATE_MESSAGE", id: assistantMsgId, patch: { content: streamedText, isLoading: false } });
+        }
       );
       dispatch({ type: "REMOVE_TOOL_STATUS" });
       dispatch({ type: "UPDATE_MESSAGE", id: assistantMsgId, patch: { content: response, isLoading: false } });
@@ -234,7 +240,6 @@ export function ChatWidget() {
                     value={state.input}
                     onChange={(e) => dispatch({ type: "SET_INPUT", payload: e.target.value })}
                     onKeyDown={handleKeyDown}
-                    disabled={isLoading}
                     rows={1}
                     className="min-h-0 max-h-30 resize-none field-sizing-content"
                   />

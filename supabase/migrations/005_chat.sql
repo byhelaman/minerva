@@ -138,7 +138,7 @@ BEGIN
     SELECT ARRAY_AGG(DISTINCT instructor) INTO v_matched
     FROM public.schedule_entries
     WHERE date BETWEEN p_start_date AND p_end_date
-      AND public.word_similarity(LOWER(p_name), LOWER(instructor)) >= p_threshold;
+      AND extensions.word_similarity(LOWER(p_name), LOWER(instructor)) >= p_threshold;
 
     IF v_matched IS NULL OR array_length(v_matched, 1) = 0 THEN
         RETURN json_build_object(
@@ -313,7 +313,7 @@ BEGIN
                  FROM public.schedule_entries
                  WHERE date BETWEEN p_start_date AND p_end_date
                    AND (p_name_filter IS NULL
-                        OR public.word_similarity(LOWER(p_name_filter), LOWER(instructor)) >= p_threshold)
+                        OR extensions.word_similarity(LOWER(p_name_filter), LOWER(instructor)) >= p_threshold)
                  GROUP BY grp_key
                  ORDER BY cnt DESC
                  LIMIT 50
@@ -360,7 +360,7 @@ BEGIN
     -- Global name resolution: word_similarity handles metadata suffixes in instructor names
     SELECT ARRAY_AGG(DISTINCT instructor) INTO v_matched
     FROM public.schedule_entries
-    WHERE public.word_similarity(LOWER(p_name), LOWER(instructor)) >= p_threshold;
+    WHERE extensions.word_similarity(LOWER(p_name), LOWER(instructor)) >= p_threshold;
 
     IF v_matched IS NULL OR array_length(v_matched, 1) = 0 THEN
         RETURN json_build_object(
