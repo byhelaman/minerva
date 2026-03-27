@@ -137,7 +137,11 @@ export const getScheduleColumns = (
                                 </PopoverContent>
                             </Popover>
                         )}
-                        <span title={row.getValue("program")}>{row.getValue("program")}</span>
+                        <Input
+                            className="h-8 w-full border-transparent bg-transparent px-2 text-left shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background"
+                            defaultValue={String(row.getValue("program") || "")}
+                            aria-label={`Program for ${row.original.instructor}`}
+                        />
                     </div>
                 );
             },

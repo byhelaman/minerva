@@ -6,7 +6,7 @@ import { getScheduleColumns } from "@schedules/components/table/columns";
 import { Schedule } from "@schedules/types";
 import { getUniqueScheduleKey, getScheduleKey } from "@schedules/utils/overlap-utils";
 import { ROW_STYLE_POOL } from "@/features/schedules/utils/issue-styles";
-import { BaseDirectory, exists, readTextFile, remove, writeTextFile } from "@tauri-apps/plugin-fs";
+import { BaseDirectory, mkdir, readTextFile, remove, writeTextFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useSettings } from "@/components/settings-provider";
@@ -215,22 +215,17 @@ export function ScheduleDashboard() {
 
         const loadAutosave = async () => {
             try {
-                // Cargar Base Schedules (Drafts)
-                const schedExists = await exists(STORAGE_FILES.SCHEDULES_DRAFT, { baseDir: BaseDirectory.AppLocalData });
-                if (schedExists) {
-                    const content = await readTextFile(STORAGE_FILES.SCHEDULES_DRAFT, { baseDir: BaseDirectory.AppLocalData });
-                    const parsedData = JSON.parse(content);
-                    if (Array.isArray(parsedData) && parsedData.length > 0) {
-                        setBaseSchedules(parsedData);
-                        if (parsedData.length > 0 && parsedData[0].date) {
-                            setActiveDate(parsedData[0].date);
-                        }
-                        toast.success("Draft schedule restored");
+                const content = await readTextFile(STORAGE_FILES.SCHEDULES_DRAFT, { baseDir: BaseDirectory.AppLocalData });
+                const parsedData = JSON.parse(content);
+                if (Array.isArray(parsedData) && parsedData.length > 0) {
+                    setBaseSchedules(parsedData);
+                    if (parsedData[0].date) {
+                        setActiveDate(parsedData[0].date);
                     }
+                    toast.success("Draft schedule restored");
                 }
-
-            } catch (error) {
-                console.error("Failed to load autosave:", error);
+            } catch {
+                // File doesn't exist yet — no draft to restore
             }
         };
 
@@ -245,14 +240,12 @@ export function ScheduleDashboard() {
         (async () => {
             try {
                 if (baseSchedules.length > 0) {
+                    await mkdir("", { baseDir: BaseDirectory.AppLocalData, recursive: true }).catch(() => undefined);
                     await writeTextFile(STORAGE_FILES.SCHEDULES_DRAFT, JSON.stringify(baseSchedules, null, 2), {
                         baseDir: BaseDirectory.AppLocalData,
                     });
                 } else {
-                    const fileExists = await exists(STORAGE_FILES.SCHEDULES_DRAFT, { baseDir: BaseDirectory.AppLocalData });
-                    if (fileExists) {
-                        await remove(STORAGE_FILES.SCHEDULES_DRAFT, { baseDir: BaseDirectory.AppLocalData });
-                    }
+                    await remove(STORAGE_FILES.SCHEDULES_DRAFT, { baseDir: BaseDirectory.AppLocalData }).catch(() => undefined);
                 }
             } catch (error) {
                 console.error("Auto-save failed:", error);
@@ -468,10 +461,7 @@ export function ScheduleDashboard() {
             setBaseSchedules([]);
             setActiveDate(null); // Reset active date
             useZoomStore.setState({ matchResults: [] });
-            const fileExists = await exists(STORAGE_FILES.SCHEDULES_DRAFT, { baseDir: BaseDirectory.AppLocalData });
-            if (fileExists) {
-                await remove(STORAGE_FILES.SCHEDULES_DRAFT, { baseDir: BaseDirectory.AppLocalData });
-            }
+            await remove(STORAGE_FILES.SCHEDULES_DRAFT, { baseDir: BaseDirectory.AppLocalData }).catch(() => undefined);
 
             // Reset version tracking without re-checking cloud to avoid re-triggering notification toast
             await useScheduleSyncStore.getState().resetCurrentVersion(false);
