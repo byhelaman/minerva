@@ -1,4 +1,4 @@
-import { Bell } from "lucide-react";
+import { Bell, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { enUS } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { useScheduleSyncStore } from "@/features/schedules/stores/useScheduleSyn
 import { useSettings } from "@/components/settings-provider";
 
 export function NotificationBell() {
-    const { notifications, markAllRead } = useScheduleSyncStore();
+    const { notifications, markAllRead, dismissNotification } = useScheduleSyncStore();
     const { settings } = useSettings();
 
     if (!settings.realtimeNotifications) return null;
@@ -54,9 +54,18 @@ export function NotificationBell() {
                                     {formatDistanceToNow(new Date(n.received_at), { addSuffix: true, locale: enUS })}
                                 </p>
                             </div>
-                            {!n.read && (
-                                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />
-                            )}
+                            <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+                                {!n.read && (
+                                    <span className="h-2 w-2 rounded-full bg-primary" />
+                                )}
+                                <button
+                                    className="text-muted-foreground hover:text-foreground transition-colors"
+                                    aria-label="Dismiss notification"
+                                    onClick={(e) => { e.stopPropagation(); dismissNotification(n.id); }}
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </button>
+                            </div>
                         </DropdownMenuItem>
                     ))
                 )}

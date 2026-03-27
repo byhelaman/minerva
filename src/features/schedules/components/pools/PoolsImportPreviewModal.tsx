@@ -122,7 +122,9 @@ export function PoolsImportPreviewModal({
                 <div className="max-w-60">
                     <PoolCellPositive
                         allowedInstructors={row.original.allowed_instructors}
-                        allowedInstructorsByDay={{}}
+                        allowedInstructorsByDay={(row.original.day_overrides ?? []).reduce<Partial<Record<number, string[]>>>(
+                            (acc, o) => { acc[o.day_of_week] = o.allowed_instructors; return acc; }, {}
+                        )}
                         maxVisibleTags={MAX_VISIBLE_POOL_TAGS}
                     />
                 </div>

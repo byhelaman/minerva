@@ -42,6 +42,16 @@ export const getHistoryColumns = (): ColumnDef<Schedule>[] => [
         cell: ({ row }) => <div className="text-center">{formatDateForDisplay(row.getValue("date"))}</div>,
     },
     {
+        id: "time",
+        size: 120,
+        header: ({ column }) => (
+            <DataTableColumnHeader column={column} title="Time" className="justify-center text-center" />
+        ),
+        cell: ({ row }) => (
+            <div className="text-center">{row.original.start_time} – {row.original.end_time}</div>
+        ),
+    },
+    {
         accessorKey: "branch",
         size: 120,
         header: ({ column }) => (

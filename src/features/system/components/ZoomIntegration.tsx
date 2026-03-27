@@ -113,8 +113,10 @@ export function ZoomIntegration() {
 
     const handleSync = async () => {
         try {
-            await triggerSync();
-            toast.success("Zoom data synced successfully");
+            const { users_synced, meetings_synced } = await triggerSync();
+            toast.success("Zoom data synced successfully", {
+                description: `${users_synced} user${users_synced !== 1 ? "s" : ""} · ${meetings_synced} meeting${meetings_synced !== 1 ? "s" : ""}`,
+            });
         } catch (error: unknown) {
             console.error("Sync failed", error);
             toast.error(getErrorMessage(error) || "Failed to sync Zoom data");

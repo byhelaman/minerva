@@ -103,6 +103,7 @@ export function PoolsHistoryModal({ open, onOpenChange, programQuery }: PoolsHis
                             data={schedules}
                             getRowKey={(row) => getScheduleKey(row as Schedule)}
                             initialPageSize={50}
+                            initialColumnVisibility={{ branch: false }}
                             hideActions
                             hideUpload
                             hideDefaultActions

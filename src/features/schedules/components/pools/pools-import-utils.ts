@@ -7,6 +7,7 @@ import {
     parseInstructorCell,
     sanitizeInstructorList,
 } from "@/features/schedules/utils/pool-utils";
+import { parseDayInstructorPoolsCell } from "@/features/schedules/utils/weekdays";
 
 export interface PoolImportRow {
     branch?: unknown;
@@ -14,6 +15,7 @@ export interface PoolImportRow {
     program?: unknown;
     allowed_instructors?: unknown;
     positive_pool?: unknown;
+    positive_pool_by_day?: unknown;
     blocked_instructors?: unknown;
     negative_pool?: unknown;
     hard_lock?: unknown;
@@ -254,10 +256,18 @@ export async function parsePoolImportFiles(files: File[]): Promise<{ payloads: P
                 if (!programValue) return null;
                 const branchValue = String(row.branch ?? "").trim();
 
+                const dayPools = parseDayInstructorPoolsCell(row.positive_pool_by_day);
+                const day_overrides = Object.entries(dayPools).map(([day, instructors]) => ({
+                    day_of_week: Number(day),
+                    start_time: "00:00",
+                    end_time: "23:59",
+                    allowed_instructors: instructors,
+                }));
+
                 return {
                     branch: branchValue,
                     program_name: programValue,
-                    day_overrides: [],
+                    day_overrides,
                     allowed_instructors: parseInstructorCell(row.allowed_instructors ?? row.positive_pool),
                     blocked_instructors: parseInstructorCell(row.blocked_instructors ?? row.negative_pool),
                     hard_lock: parseBooleanCell(row.hard_lock ?? row.strict, false),

@@ -37,6 +37,7 @@ interface ScheduleSyncState {
     notifications: ScheduleNotification[];
     addNotification: (published: PublishedSchedule) => void;
     markAllRead: () => void;
+    dismissNotification: (id: string) => void;
 
     checkForUpdates: () => Promise<void>;
     checkIfScheduleExists: (date: string) => Promise<boolean>;
@@ -94,6 +95,13 @@ export const useScheduleSyncStore = create<ScheduleSyncState>((set, get) => ({
         const { notifications } = get();
         if (notifications.every(n => n.read)) return;
         const next = notifications.map(n => ({ ...n, read: true }));
+        localStorage.setItem('minerva_schedule_notifications', JSON.stringify(next));
+        set({ notifications: next });
+    },
+
+    dismissNotification: (id: string) => {
+        const { notifications } = get();
+        const next = notifications.filter(n => n.id !== id);
         localStorage.setItem('minerva_schedule_notifications', JSON.stringify(next));
         set({ notifications: next });
     },

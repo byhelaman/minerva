@@ -77,6 +77,7 @@ import {
     MAX_POSITIVE_POOL_INSTRUCTORS,
 } from "@/features/schedules/utils/pool-utils";
 import {
+    formatDayInstructorPools,
     normalizeDayInstructorPools,
     WEEKDAY_OPTIONS,
 } from "@/features/schedules/utils/weekdays";
@@ -575,22 +576,27 @@ export function PoolsPage() {
             toast.error("Failed to delete pool rule(s)");
         } finally {
             setIsDeleting(false);
+            await loadRules();
             setPendingDeleteIds((prev) => {
                 const next = new Set(prev);
                 ids.forEach((id) => next.delete(id));
                 return next;
             });
-            await loadRules();
         }
     };
 
     const handleExportRules = async (data: PoolRule[]) => {
         try {
             const rows: Record<string, string>[] = data.map((rule) => ({
+
                 branch: rule.branch,
                 program: rule.program_name,
                 positive_pool: rule.allowed_instructors.join(", "),
-                positive_pool_by_day: "",
+                positive_pool_by_day: formatDayInstructorPools(
+                    rule.day_overrides.reduce<Record<string, string[]>>(
+                        (acc, o) => { acc[String(o.day_of_week)] = o.allowed_instructors; return acc; }, {}
+                    )
+                ),
                 negative_pool: rule.blocked_instructors.join(", "),
                 hard_lock: rule.hard_lock ? "TRUE" : "FALSE",
                 is_active: rule.is_active ? "TRUE" : "FALSE",
@@ -772,7 +778,7 @@ export function PoolsPage() {
                 <div className="flex gap-2">
                     <Button size="sm" variant="outline" onClick={() => { setHistoryProgramQuery(""); setHistoryModalOpen(true); }}>
                         <History />
-                        Historial
+                        History
                     </Button>
                     <Button size="sm" onClick={openCreateDialog}>
                         <Plus />

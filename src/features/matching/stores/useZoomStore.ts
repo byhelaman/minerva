@@ -31,7 +31,7 @@ interface ZoomState {
     // Acciones
     fetchZoomData: (options?: { force?: boolean; silent?: boolean }) => Promise<void>;
     fetchActiveMeetings: () => Promise<void>;
-    triggerSync: () => Promise<void>;
+    triggerSync: () => Promise<{ users_synced: number; meetings_synced: number }>;
     runMatching: (schedules: Schedule[]) => Promise<void>;
     resolveConflict: (schedule: Schedule, selectedMeeting: ZoomMeetingCandidate) => void;
     createMeetings: (items: (string | { topic: string; startTime?: string; selectedDate?: string; schedule_for?: string })[], options?: { dailyOnly?: boolean }) => Promise<{ succeeded: number; failed: number; errors: string[] }>;
@@ -226,6 +226,11 @@ export const useZoomStore = create<ZoomState>((set, get) => ({
                 syncProgress: 100,
                 lastSyncedAt: new Date().toISOString()
             });
+
+            return {
+                users_synced: data.users_synced as number,
+                meetings_synced: data.meetings_synced as number,
+            };
 
         } catch (error: unknown) {
             console.error('Fallo en sincronización:', error);
